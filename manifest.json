@@ -1,0 +1,39 @@
+{
+  "manifest_version": 3,
+  "name": "Eternal Summary",
+  "version": "1.0",
+  "description": "Summarize the tab you are currently in with the click of a button",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://ai-extension-backend.fly.dev/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "icons": {
+    "16": "eternal summary icon.png",
+    "48": "eternal summary icon.png",
+    "128": "eternal summary icon.png"
+  },
+  "action": {
+    "default_title": "AI Summarizer"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["listener.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["content.js"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}
