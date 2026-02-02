@@ -39,7 +39,6 @@
 
   // === Container ===
   const container = document.createElement("div");
-  container.style.position = "relative";
   container.style.display = "flex";
   container.style.flexDirection = "column";
   container.style.alignItems = "center";
@@ -50,10 +49,9 @@
   const closeBtn = document.createElement("button");
   closeBtn.textContent = "Close";
   Object.assign(closeBtn.style, {
-    position: "absolute",
-    top: "0",
-    right: "0",
-    transform: "translate(40%, -40%)",
+    position: "fixed",
+    top: "18px",
+    right: "18px",
     padding: "0.45rem 0.8rem",
     borderRadius: "999px",
     border: "1px solid rgba(199, 210, 254, 0.35)",
@@ -61,9 +59,10 @@
     color: "#e0e7ff",
     cursor: "pointer",
     fontSize: "0.85rem",
+    zIndex: "1000000",
   });
   closeBtn.addEventListener("click", () => overlay.remove());
-  container.appendChild(closeBtn);
+  overlay.appendChild(closeBtn);
 
   // === Glowing ring ===
   const glowingRing = document.createElement("div");
@@ -170,6 +169,18 @@
 
   selectionRow.appendChild(selectionText);
   selectionRow.appendChild(askSelectionBtn);
+  const summarizeSelectionBtn = document.createElement("button");
+  summarizeSelectionBtn.textContent = "Summarize selection";
+  Object.assign(summarizeSelectionBtn.style, {
+    padding: "0.35rem 0.6rem",
+    borderRadius: "999px",
+    border: "1px solid rgba(199, 210, 254, 0.35)",
+    background: "rgba(99, 102, 241, 0.2)",
+    color: "#e0e7ff",
+    cursor: "pointer",
+    fontSize: "0.8rem",
+  });
+  selectionRow.appendChild(summarizeSelectionBtn);
 
   const inputRow = document.createElement("div");
   Object.assign(inputRow.style, {
@@ -240,6 +251,26 @@
   };
 
   const messages = [];
+  const cacheKey = `eternal_summary:${location.href}`;
+
+  const showToast = (label) => {
+    const toast = document.createElement("div");
+    toast.textContent = label;
+    Object.assign(toast.style, {
+      position: "fixed",
+      bottom: "24px",
+      right: "24px",
+      background: "rgba(10, 10, 30, 0.85)",
+      color: "#e0e7ff",
+      padding: "0.6rem 0.9rem",
+      borderRadius: "10px",
+      border: "1px solid rgba(199, 210, 254, 0.25)",
+      zIndex: "1000001",
+      fontSize: "0.85rem",
+    });
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 1600);
+  };
 
   const showInputRow = () => {
     if (inputRow.style.opacity === "1") return;
@@ -248,7 +279,37 @@
     inputRow.style.transform = "translateY(0)";
   };
 
-  const addMessage = (role, textValue, typing = false) => {
+  const addSourcesRow = (sources) => {
+    if (!Array.isArray(sources) || sources.length === 0) return;
+    const row = document.createElement("div");
+    Object.assign(row.style, {
+      display: "flex",
+      flexWrap: "wrap",
+      gap: "0.4rem",
+      marginTop: "0.2rem",
+    });
+    sources.slice(0, 6).forEach((snippet) => {
+      const chip = document.createElement("button");
+      chip.textContent = snippet.length > 80 ? `${snippet.slice(0, 80)}…` : snippet;
+      Object.assign(chip.style, {
+        padding: "0.25rem 0.6rem",
+        borderRadius: "999px",
+        border: "1px solid rgba(199, 210, 254, 0.35)",
+        background: "rgba(99, 102, 241, 0.2)",
+        color: "#e0e7ff",
+        cursor: "pointer",
+        fontSize: "0.75rem",
+      });
+      chip.addEventListener("click", () => {
+        const p = findParagraphForSnippet(snippet);
+        highlightParagraph(p);
+      });
+      row.appendChild(chip);
+    });
+    messagesEl.appendChild(row);
+  };
+
+  const addMessage = (role, textValue, typing = false, sources = []) => {
     const bubble = document.createElement("div");
     Object.assign(bubble.style, {
       alignSelf: role === "user" ? "flex-end" : "flex-start",
@@ -276,6 +337,7 @@
     } else {
       bubble.textContent = textValue;
     }
+    if (sources.length) addSourcesRow(sources);
   };
 
   const stopThinking = () => {
@@ -303,6 +365,19 @@
 
   const runSummary = async () => {
     chatWrap.style.opacity = "1";
+    const cached = localStorage.getItem(cacheKey);
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        if (parsed?.summary) {
+      stopThinking();
+      addMessage("assistant", parsed.summary, true, parsed.sources || []);
+          showToast("Showing cached summary");
+        }
+      } catch {
+        // ignore cache parse errors
+      }
+    }
     try {
       const pageText = document.body.innerText.slice(0, 3000);
       const response = await fetch("https://ai-extension-backend.fly.dev/api/summarize", {
@@ -315,7 +390,11 @@
       const aiResponse = data.summary || "No summary received.";
       messages.push({ role: "assistant", content: aiResponse });
       stopThinking();
-      addMessage("assistant", aiResponse, true);
+      addMessage("assistant", aiResponse, true, data.sources || []);
+      localStorage.setItem(
+        cacheKey,
+        JSON.stringify({ summary: aiResponse, sources: data.sources || [], ts: Date.now() })
+      );
     } catch (err) {
       stopThinking();
       addMessage("assistant", "⚠️ Could not reach the AI server.");
@@ -369,7 +448,7 @@
       const data = await response.json();
       const answer = data.answer || "No answer received.";
       messages.push({ role: "assistant", content: answer });
-      addMessage("assistant", answer, true);
+      addMessage("assistant", answer, true, data.sources || []);
     } catch (err) {
       addMessage("assistant", "⚠️ Could not reach the AI server.");
       console.error(err);
@@ -389,6 +468,37 @@
     const prompt = "Explain the highlighted text.";
     askQuestion(prompt);
   });
+  summarizeSelectionBtn.addEventListener("click", async () => {
+    if (!selectedText) return;
+    addMessage("user", "Summarize the highlighted text.");
+    messages.push({ role: "user", content: "Summarize the highlighted text." });
+
+    sendBtn.disabled = true;
+    input.disabled = true;
+    sendBtn.style.opacity = "0.6";
+
+    try {
+      const response = await fetch("https://ai-extension-backend.fly.dev/api/summarize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: selectedText }),
+      });
+
+      const data = await response.json();
+      const aiResponse = data.summary || "No summary received.";
+      messages.push({ role: "assistant", content: aiResponse });
+      addMessage("assistant", aiResponse, true, data.sources || []);
+    } catch (err) {
+      addMessage("assistant", "⚠️ Could not reach the AI server.");
+      console.error(err);
+    } finally {
+      sendBtn.disabled = false;
+      input.disabled = false;
+      sendBtn.style.opacity = "1";
+      input.focus();
+    }
+  });
+
 
   // No click-to-close. Use Close button or Esc.
 
@@ -415,15 +525,18 @@
     }
     #ai-overlay .thinking-dots span {
       display: inline-block;
-      opacity: 0.2;
+      opacity: 0.15;
       transform: translateY(0);
-      animation: dotBounce 1.1s ease-in-out infinite;
+      animation: dotPulse 1.25s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+      will-change: transform, opacity;
     }
-    #ai-overlay .thinking-dots span:nth-child(2) { animation-delay: 0.15s; }
-    #ai-overlay .thinking-dots span:nth-child(3) { animation-delay: 0.3s; }
-    @keyframes dotBounce {
-      0%, 80%, 100% { opacity: 0.25; transform: translateY(0); }
-      40% { opacity: 1; transform: translateY(-2px); }
+    #ai-overlay .thinking-dots span:nth-child(2) { animation-delay: 0.2s; }
+    #ai-overlay .thinking-dots span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes dotPulse {
+      0% { opacity: 0.2; transform: translateY(0); }
+      35% { opacity: 0.95; transform: translateY(-2px); }
+      60% { opacity: 0.45; transform: translateY(0); }
+      100% { opacity: 0.2; transform: translateY(0); }
     }
   `;
   document.head.appendChild(style);

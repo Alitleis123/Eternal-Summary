@@ -8,55 +8,131 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+const chunkText = (text, maxChars = 2200, overlap = 200) => {
+  if (!text) return [];
+  const chunks = [];
+  let start = 0;
+  while (start < text.length) {
+    const end = Math.min(start + maxChars, text.length);
+    const chunk = text.slice(start, end);
+    chunks.push(chunk);
+    start = end - overlap;
+    if (start < 0) start = 0;
+    if (start >= text.length) break;
+  }
+  return chunks;
+};
+
+const callDeepSeek = async (messages) => {
+  const response = await fetch("https://api.deepseek.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${process.env.DEEPSEEK_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "deepseek-chat",
+      messages,
+    }),
+  });
+  return response.json();
+};
+
+const safeJsonParse = (content, fallback) => {
+  try {
+    return JSON.parse(content);
+  } catch {
+    return fallback;
+  }
+};
+
 // POST /api/summarize — calls DeepSeek API
 app.post("/api/summarize", async (req, res) => {
   try {
     const { text, mode } = req.body;
     const safeMode = typeof mode === "string" && mode.trim() ? mode.trim() : "TL;DR";
+    const safeText = typeof text === "string" ? text : "";
 
-    const response = await fetch("https://api.deepseek.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${process.env.DEEPSEEK_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "deepseek-chat",
-        messages: [
-          {
-            role: "system",
-            content:
-              "You are an intelligent summarizer. Return STRICT JSON only with keys: summary (string), entities (array of strings), timeline (array of strings), questions (array of strings), sources (array of short snippets from the text)."
-          },
-          {
-            role: "user",
-            content:
-              `Mode: ${safeMode}\n` +
-              "Summarize the following text. Keep summary concise. " +
-              "For entities include people/orgs/places. For timeline include dated events if present. " +
-              "For questions include 3-5 thoughtful follow-ups. " +
-              "For sources include 3-6 short snippets copied from the text.\n\n" +
-              `${text}`
-          }
-        ],
-      }),
-    });
+    const chunks = chunkText(safeText, 2200, 200);
 
-    const data = await response.json();
-    console.log("DeepSeek response:", data);
-    const content =
-      data?.choices?.[0]?.message?.content ||
-      data?.error?.message ||
-      "No summary generated.";
+    if (chunks.length <= 1) {
+      const data = await callDeepSeek([
+        {
+          role: "system",
+          content:
+            "You are an intelligent summarizer. Return STRICT JSON only with keys: summary (string), sources (array of short snippets from the text)."
+        },
+        {
+          role: "user",
+          content:
+            `Mode: ${safeMode}\n` +
+            "Summarize the following text. Keep summary concise. " +
+            "For sources include 3-6 short snippets copied from the text.\n\n" +
+            `${safeText}`
+        }
+      ]);
 
-    let payload = { summary: content };
-    try {
-      payload = JSON.parse(content);
-    } catch {
-      // Keep fallback
+      console.log("DeepSeek response:", data);
+      const content =
+        data?.choices?.[0]?.message?.content ||
+        data?.error?.message ||
+        "No summary generated.";
+
+      const payload = safeJsonParse(content, { summary: content, sources: [] });
+      res.json(payload);
+      return;
     }
 
-    res.json(payload);
+    // Chunked summarization
+    const chunkSummaries = [];
+    let sources = [];
+
+    for (const chunk of chunks) {
+      const data = await callDeepSeek([
+        {
+          role: "system",
+          content:
+            "Summarize this chunk. Return STRICT JSON only with keys: summary (string), sources (array of short snippets from the text)."
+        },
+        {
+          role: "user",
+          content: chunk
+        }
+      ]);
+
+      const content =
+        data?.choices?.[0]?.message?.content ||
+        data?.error?.message ||
+        "";
+      const payload = safeJsonParse(content, { summary: content, sources: [] });
+      if (payload.summary) chunkSummaries.push(payload.summary);
+      if (Array.isArray(payload.sources)) sources = sources.concat(payload.sources);
+    }
+
+    const merged = chunkSummaries.join("\n\n");
+    const finalData = await callDeepSeek([
+      {
+        role: "system",
+        content:
+          "You are an intelligent summarizer. Return STRICT JSON only with keys: summary (string)."
+      },
+      {
+        role: "user",
+        content:
+          `Mode: ${safeMode}\nSummarize the following combined summaries concisely:\n\n${merged}`
+      }
+    ]);
+
+    const finalContent =
+      finalData?.choices?.[0]?.message?.content ||
+      finalData?.error?.message ||
+      "No summary generated.";
+    const finalPayload = safeJsonParse(finalContent, { summary: finalContent });
+
+    res.json({
+      summary: finalPayload.summary || finalContent,
+      sources: sources.slice(0, 6),
+    });
   } catch (error) {
     console.error("Error:", error);
     res.status(500).json({ error: "Failed to summarize text." });
