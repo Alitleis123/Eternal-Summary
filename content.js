@@ -89,23 +89,75 @@
     transition: "opacity 1.2s cubic-bezier(0.4, 0, 0.2, 1) 0.6s",
   });
 
-  // === AI Summary Placeholder ===
-  const summary = document.createElement("div");
-  Object.assign(summary.style, {
-    fontFamily: "Inter, system-ui, sans-serif",
-    fontSize: "1.1rem",
-    color: "#c7d2fe",
-    marginTop: "1rem",
-    maxWidth: "600px",
-    lineHeight: "1.6",
+  // === Chat Container ===
+  const chatWrap = document.createElement("div");
+  Object.assign(chatWrap.style, {
+    display: "flex",
+    flexDirection: "column",
+    gap: "0.9rem",
+    width: "min(720px, 86vw)",
+    maxHeight: "52vh",
+    overflow: "hidden",
     opacity: "0",
     transition: "opacity 1s ease-out 0.8s",
-    whiteSpace: "pre-wrap",
   });
+
+  const messagesEl = document.createElement("div");
+  Object.assign(messagesEl.style, {
+    display: "flex",
+    flexDirection: "column",
+    gap: "0.6rem",
+    padding: "0.4rem 0.2rem",
+    overflowY: "auto",
+    maxHeight: "40vh",
+  });
+
+  const inputRow = document.createElement("div");
+  Object.assign(inputRow.style, {
+    display: "flex",
+    gap: "0.6rem",
+    alignItems: "center",
+    opacity: "0",
+    pointerEvents: "none",
+    transform: "translateY(6px)",
+    transition: "opacity 0.4s ease, transform 0.4s ease",
+  });
+
+  const input = document.createElement("input");
+  input.type = "text";
+  input.placeholder = "Ask a question about this page...";
+  Object.assign(input.style, {
+    flex: "1",
+    padding: "0.7rem 0.9rem",
+    borderRadius: "999px",
+    border: "1px solid rgba(199, 210, 254, 0.35)",
+    background: "rgba(10, 10, 30, 0.7)",
+    color: "#e0e7ff",
+    fontSize: "0.95rem",
+    outline: "none",
+  });
+
+  const sendBtn = document.createElement("button");
+  sendBtn.textContent = "Send";
+  Object.assign(sendBtn.style, {
+    padding: "0.7rem 1.1rem",
+    borderRadius: "999px",
+    border: "none",
+    cursor: "pointer",
+    background: "linear-gradient(135deg, #6366f1, #a855f7)",
+    color: "#fff",
+    fontWeight: "600",
+    letterSpacing: "0.2px",
+  });
+
+  inputRow.appendChild(input);
+  inputRow.appendChild(sendBtn);
+  chatWrap.appendChild(messagesEl);
+  chatWrap.appendChild(inputRow);
 
   container.appendChild(glowingRing);
   container.appendChild(text);
-  container.appendChild(summary);
+  container.appendChild(chatWrap);
   overlay.appendChild(container);
 
   // Animate fade-ins
@@ -115,7 +167,7 @@
   });
 
   // === Typewriter effect for AI response ===
-  const typeWriter = (el, text, delay = 28) => {
+  const typeWriter = (el, text, delay = 22) => {
     el.textContent = "";
     let i = 0;
     const type = () => {
@@ -127,10 +179,49 @@
     type();
   };
 
+  const messages = [];
+
+  const showInputRow = () => {
+    if (inputRow.style.opacity === "1") return;
+    inputRow.style.opacity = "1";
+    inputRow.style.pointerEvents = "auto";
+    inputRow.style.transform = "translateY(0)";
+  };
+
+  const addMessage = (role, textValue, typing = false) => {
+    const bubble = document.createElement("div");
+    Object.assign(bubble.style, {
+      alignSelf: role === "user" ? "flex-end" : "flex-start",
+      background:
+        role === "user"
+          ? "rgba(99, 102, 241, 0.25)"
+          : "rgba(17, 24, 39, 0.65)",
+      color: "#e0e7ff",
+      padding: "0.6rem 0.9rem",
+      borderRadius: "14px",
+      maxWidth: "86%",
+      fontFamily: "Inter, system-ui, sans-serif",
+      fontSize: "0.98rem",
+      lineHeight: "1.5",
+      whiteSpace: "pre-wrap",
+      boxShadow: "0 10px 30px rgba(8,8,20,0.25)",
+    });
+
+    messagesEl.appendChild(bubble);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+
+    if (typing) {
+      showInputRow();
+      typeWriter(bubble, textValue, 16);
+    } else {
+      bubble.textContent = textValue;
+    }
+  };
+
   // === Fetch summary from backend ===
   setTimeout(async () => {
     text.style.opacity = "0";
-    summary.style.opacity = "1";
+    chatWrap.style.opacity = "1";
 
     try {
       const pageText = document.body.innerText.slice(0, 3000);
@@ -142,12 +233,53 @@
 
       const data = await response.json();
       const aiResponse = data.summary || "No summary received.";
-      typeWriter(summary, aiResponse, 22);
+      messages.push({ role: "assistant", content: aiResponse });
+      addMessage("assistant", aiResponse, true);
     } catch (err) {
-      typeWriter(summary, "⚠️ Could not reach the AI server.", 30);
+      addMessage("assistant", "⚠️ Could not reach the AI server.");
       console.error(err);
     }
   }, 2000);
+
+  const askQuestion = async () => {
+    const question = input.value.trim();
+    if (!question) return;
+
+    input.value = "";
+    addMessage("user", question);
+    messages.push({ role: "user", content: question });
+
+    sendBtn.disabled = true;
+    input.disabled = true;
+    sendBtn.style.opacity = "0.6";
+
+    try {
+      const pageText = document.body.innerText.slice(0, 3000);
+      const response = await fetch("https://ai-extension-backend.fly.dev/api/ask", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: pageText, messages }),
+      });
+
+      const data = await response.json();
+      const answer = data.answer || "No answer received.";
+      messages.push({ role: "assistant", content: answer });
+      addMessage("assistant", answer, true);
+    } catch (err) {
+      addMessage("assistant", "⚠️ Could not reach the AI server.");
+      console.error(err);
+    } finally {
+      sendBtn.disabled = false;
+      input.disabled = false;
+      sendBtn.style.opacity = "1";
+      input.focus();
+    }
+  };
+
+  sendBtn.addEventListener("click", askQuestion);
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") askQuestion();
+  });
 
   // === Click to close ===
   overlay.addEventListener("click", () => {

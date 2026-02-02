@@ -3,12 +3,33 @@
 // When the extension icon is clicked
 chrome.action.onClicked.addListener((tab) => {
   console.log("🌀 Eternal Summary icon clicked!");
-  // Send a message to the active tab
-  chrome.tabs.sendMessage(tab.id, { action: "showOverlay" }, () => {
-    if (chrome.runtime.lastError) {
-      console.error("❌ Could not establish connection:", chrome.runtime.lastError.message);
+  if (!tab?.id || !tab?.url) {
+    console.warn("⚠️ No active tab to inject into.");
+    return;
+  }
+
+  // Chrome blocks content scripts on these schemes.
+  const blockedSchemes = ["chrome://", "chrome-extension://", "edge://", "about:", "view-source:"];
+  if (blockedSchemes.some((scheme) => tab.url.startsWith(scheme))) {
+    console.warn("⚠️ This page does not allow content scripts:", tab.url);
+    return;
+  }
+
+  // Ensure the listener is present, then trigger the overlay.
+  chrome.scripting.executeScript(
+    { target: { tabId: tab.id }, files: ["listener.js"] },
+    () => {
+      if (chrome.runtime.lastError) {
+        console.error("❌ Script inject failed:", chrome.runtime.lastError.message);
+        return;
+      }
+      chrome.tabs.sendMessage(tab.id, { action: "showOverlay" }, () => {
+        if (chrome.runtime.lastError) {
+          console.error("❌ Could not establish connection:", chrome.runtime.lastError.message);
+        }
+      });
     }
-  });
+  );
 });
 
 // Optional: backend summarizer call
