@@ -39,11 +39,31 @@
 
   // === Container ===
   const container = document.createElement("div");
+  container.style.position = "relative";
   container.style.display = "flex";
   container.style.flexDirection = "column";
   container.style.alignItems = "center";
   container.style.gap = "1.5rem";
   container.style.textAlign = "center";
+  container.style.padding = "1.2rem 1.4rem 1.4rem";
+
+  const closeBtn = document.createElement("button");
+  closeBtn.textContent = "Close";
+  Object.assign(closeBtn.style, {
+    position: "absolute",
+    top: "0",
+    right: "0",
+    transform: "translate(40%, -40%)",
+    padding: "0.45rem 0.8rem",
+    borderRadius: "999px",
+    border: "1px solid rgba(199, 210, 254, 0.35)",
+    background: "rgba(10, 10, 30, 0.7)",
+    color: "#e0e7ff",
+    cursor: "pointer",
+    fontSize: "0.85rem",
+  });
+  closeBtn.addEventListener("click", () => overlay.remove());
+  container.appendChild(closeBtn);
 
   // === Glowing ring ===
   const glowingRing = document.createElement("div");
@@ -76,7 +96,7 @@
 
   // === Text (Thinking...) ===
   const text = document.createElement("div");
-  text.innerText = "Thinking...";
+  text.innerText = "Thinking";
   Object.assign(text.style, {
     fontFamily:
       "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
@@ -88,6 +108,11 @@
     opacity: "0",
     transition: "opacity 1.2s cubic-bezier(0.4, 0, 0.2, 1) 0.6s",
   });
+  text.classList.add("thinking");
+  const dotsWrap = document.createElement("span");
+  dotsWrap.className = "thinking-dots";
+  dotsWrap.innerHTML = "<span>.</span><span>.</span><span>.</span>";
+  text.appendChild(dotsWrap);
 
   // === Chat Container ===
   const chatWrap = document.createElement("div");
@@ -111,6 +136,40 @@
     overflowY: "auto",
     maxHeight: "40vh",
   });
+
+  const selectionRow = document.createElement("div");
+  Object.assign(selectionRow.style, {
+    display: "none",
+    alignItems: "center",
+    gap: "0.6rem",
+    padding: "0.5rem 0.8rem",
+    borderRadius: "12px",
+    border: "1px solid rgba(199, 210, 254, 0.25)",
+    background: "rgba(10, 10, 30, 0.7)",
+    color: "#c7d2fe",
+    fontSize: "0.85rem",
+  });
+
+  const selectionText = document.createElement("div");
+  selectionText.style.flex = "1";
+  selectionText.style.overflow = "hidden";
+  selectionText.style.textOverflow = "ellipsis";
+  selectionText.style.whiteSpace = "nowrap";
+
+  const askSelectionBtn = document.createElement("button");
+  askSelectionBtn.textContent = "Ask about selection";
+  Object.assign(askSelectionBtn.style, {
+    padding: "0.35rem 0.6rem",
+    borderRadius: "999px",
+    border: "1px solid rgba(199, 210, 254, 0.35)",
+    background: "rgba(99, 102, 241, 0.2)",
+    color: "#e0e7ff",
+    cursor: "pointer",
+    fontSize: "0.8rem",
+  });
+
+  selectionRow.appendChild(selectionText);
+  selectionRow.appendChild(askSelectionBtn);
 
   const inputRow = document.createElement("div");
   Object.assign(inputRow.style, {
@@ -153,6 +212,7 @@
   inputRow.appendChild(input);
   inputRow.appendChild(sendBtn);
   chatWrap.appendChild(messagesEl);
+  chatWrap.appendChild(selectionRow);
   chatWrap.appendChild(inputRow);
 
   container.appendChild(glowingRing);
@@ -167,12 +227,12 @@
   });
 
   // === Typewriter effect for AI response ===
-  const typeWriter = (el, text, delay = 22) => {
+  const typeWriter = (el, textValue, delay = 22) => {
     el.textContent = "";
     let i = 0;
     const type = () => {
-      if (i < text.length) {
-        el.textContent += text[i++];
+      if (i < textValue.length) {
+        el.textContent += textValue[i++];
         setTimeout(type, delay);
       }
     };
@@ -218,11 +278,31 @@
     }
   };
 
-  // === Fetch summary from backend ===
-  setTimeout(async () => {
+  const stopThinking = () => {
     text.style.opacity = "0";
-    chatWrap.style.opacity = "1";
+  };
 
+  const showRetry = () => {
+    const retry = document.createElement("button");
+    retry.textContent = "Retry";
+    Object.assign(retry.style, {
+      marginTop: "0.4rem",
+      padding: "0.5rem 0.9rem",
+      borderRadius: "999px",
+      border: "1px solid rgba(199, 210, 254, 0.35)",
+      background: "rgba(10, 10, 30, 0.7)",
+      color: "#e0e7ff",
+      cursor: "pointer",
+    });
+    retry.addEventListener("click", () => {
+      retry.remove();
+      runSummary();
+    });
+    chatWrap.appendChild(retry);
+  };
+
+  const runSummary = async () => {
+    chatWrap.style.opacity = "1";
     try {
       const pageText = document.body.innerText.slice(0, 3000);
       const response = await fetch("https://ai-extension-backend.fly.dev/api/summarize", {
@@ -234,15 +314,40 @@
       const data = await response.json();
       const aiResponse = data.summary || "No summary received.";
       messages.push({ role: "assistant", content: aiResponse });
+      stopThinking();
       addMessage("assistant", aiResponse, true);
     } catch (err) {
+      stopThinking();
       addMessage("assistant", "⚠️ Could not reach the AI server.");
+      showRetry();
       console.error(err);
     }
-  }, 2000);
+  };
 
-  const askQuestion = async () => {
-    const question = input.value.trim();
+  // === Fetch summary from backend ===
+  setTimeout(runSummary, 2000);
+
+  let selectedText = "";
+
+  const updateSelection = () => {
+    const sel = window.getSelection();
+    const textValue = sel ? sel.toString().trim() : "";
+    selectedText = textValue;
+    if (textValue) {
+      selectionText.textContent = `Selected: ${textValue.slice(0, 120)}${
+        textValue.length > 120 ? "…" : ""
+      }`;
+      selectionRow.style.display = "flex";
+    } else {
+      selectionText.textContent = "";
+      selectionRow.style.display = "none";
+    }
+  };
+
+  document.addEventListener("selectionchange", updateSelection);
+
+  const askQuestion = async (overrideQuestion) => {
+    const question = (overrideQuestion || input.value).trim();
     if (!question) return;
 
     input.value = "";
@@ -258,7 +363,7 @@
       const response = await fetch("https://ai-extension-backend.fly.dev/api/ask", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: pageText, messages }),
+        body: JSON.stringify({ text: pageText, messages, selection: selectedText }),
       });
 
       const data = await response.json();
@@ -280,13 +385,15 @@
   input.addEventListener("keydown", (e) => {
     if (e.key === "Enter") askQuestion();
   });
+  askSelectionBtn.addEventListener("click", () => {
+    const prompt = "Explain the highlighted text.";
+    askQuestion(prompt);
+  });
 
-  // === Click to close ===
-  overlay.addEventListener("click", () => {
-    overlay.style.opacity = "0";
-    overlay.style.backdropFilter = "blur(0px)";
-    overlay.style.background = "rgba(0,0,0,0)";
-    setTimeout(() => overlay.remove(), 1200);
+  // No click-to-close. Use Close button or Esc.
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") overlay.remove();
   });
 
   // === Keyframes ===
@@ -299,6 +406,24 @@
     @keyframes glowShift {
       0%, 100% { filter: drop-shadow(0 0 25px rgba(99,102,241,0.6)); }
       50% { filter: drop-shadow(0 0 40px rgba(168,85,247,0.8)); }
+    }
+    #ai-overlay .thinking-dots {
+      display: inline-flex;
+      gap: 0.2em;
+      margin-left: 0.2em;
+      vertical-align: bottom;
+    }
+    #ai-overlay .thinking-dots span {
+      display: inline-block;
+      opacity: 0.2;
+      transform: translateY(0);
+      animation: dotBounce 1.1s ease-in-out infinite;
+    }
+    #ai-overlay .thinking-dots span:nth-child(2) { animation-delay: 0.15s; }
+    #ai-overlay .thinking-dots span:nth-child(3) { animation-delay: 0.3s; }
+    @keyframes dotBounce {
+      0%, 80%, 100% { opacity: 0.25; transform: translateY(0); }
+      40% { opacity: 1; transform: translateY(-2px); }
     }
   `;
   document.head.appendChild(style);
