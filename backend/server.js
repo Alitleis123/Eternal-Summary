@@ -146,39 +146,52 @@ app.post("/api/ask", async (req, res) => {
 
     const safeMessages = Array.isArray(messages) ? messages : [];
     const safeSelection = typeof selection === "string" ? selection.trim() : "";
+    const safeText = typeof text === "string" ? text : "";
 
-    const response = await fetch("https://api.deepseek.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${process.env.DEEPSEEK_API_KEY}`,
-        "Content-Type": "application/json",
+    const lastUser = [...safeMessages].reverse().find((m) => m?.role === "user");
+    const question = lastUser?.content || "";
+
+    const pickRelevantChunks = (fullText, q) => {
+      const chunks = chunkText(fullText, 1800, 150);
+      if (chunks.length <= 1 || !q) return fullText;
+      const terms = q
+        .toLowerCase()
+        .split(/\\W+/)
+        .filter((t) => t.length > 3);
+      const scored = chunks.map((c) => {
+        const lc = c.toLowerCase();
+        const score = terms.reduce((acc, t) => acc + (lc.includes(t) ? 1 : 0), 0);
+        return { c, score };
+      });
+      scored.sort((a, b) => b.score - a.score);
+      const top = scored.slice(0, 3).map((s) => s.c);
+      return top.join(\"\\n\\n\");
+    };
+
+    const scopedText = pickRelevantChunks(safeText, question);
+
+    const response = await callDeepSeek([
+      {
+        role: "system",
+        content:
+          "You answer questions about the provided page text. Return STRICT JSON only with keys: answer (string), sources (array of short snippets from the text). Be concise and say when the answer is not in the text."
       },
-      body: JSON.stringify({
-        model: "deepseek-chat",
-        messages: [
-          {
-            role: "system",
-            content:
-              "You answer questions about the provided page text. Return STRICT JSON only with keys: answer (string), sources (array of short snippets from the text). Be concise and say when the answer is not in the text."
-          },
-          {
-            role: "system",
-            content: `Page text:\n${text || ""}`
-          },
-          ...(safeSelection
-            ? [
-                {
-                  role: "system",
-                  content: `User selected text:\n${safeSelection}`
-                }
-              ]
-            : []),
-          ...safeMessages
-        ],
-      }),
-    });
+      {
+        role: "system",
+        content: `Page text:\n${scopedText || ""}`
+      },
+      ...(safeSelection
+        ? [
+            {
+              role: "system",
+              content: `User selected text:\n${safeSelection}`
+            }
+          ]
+        : []),
+      ...safeMessages
+    ]);
 
-    const data = await response.json();
+    const data = response;
     console.log("DeepSeek response (ask):", data);
     const content =
       data?.choices?.[0]?.message?.content ||

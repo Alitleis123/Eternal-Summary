@@ -16,20 +16,19 @@ chrome.action.onClicked.addListener((tab) => {
   }
 
   // Ensure the listener is present, then trigger the overlay.
-  chrome.scripting.executeScript(
-    { target: { tabId: tab.id }, files: ["listener.js"] },
-    () => {
-      if (chrome.runtime.lastError) {
-        console.error("❌ Script inject failed:", chrome.runtime.lastError.message);
+  const sendShowOverlay = (attempt = 0) => {
+    chrome.tabs.sendMessage(tab.id, { action: "showOverlay" }, () => {
+      if (!chrome.runtime.lastError) return;
+      if (attempt >= 2) {
+        console.error("❌ Could not establish connection:", chrome.runtime.lastError.message);
         return;
       }
-      chrome.tabs.sendMessage(tab.id, { action: "showOverlay" }, () => {
-        if (chrome.runtime.lastError) {
-          console.error("❌ Could not establish connection:", chrome.runtime.lastError.message);
-        }
-      });
-    }
-  );
+      setTimeout(() => sendShowOverlay(attempt + 1), 200);
+    });
+  };
+
+  // listener.js is already loaded via manifest content_scripts.
+  sendShowOverlay();
 });
 
 // Optional: backend summarizer call
