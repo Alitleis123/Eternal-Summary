@@ -8,6 +8,10 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+app.get("/healthz", (_req, res) => {
+  res.status(200).send("ok");
+});
+
 const chunkText = (text, maxChars = 2200, overlap = 200) => {
   if (!text) return [];
   const chunks = [];
@@ -46,7 +50,7 @@ const safeJsonParse = (content, fallback) => {
   }
 };
 
-// POST /api/summarize — calls DeepSeek API
+// POST /api/summarize - calls DeepSeek API
 app.post("/api/summarize", async (req, res) => {
   try {
     const { text, mode } = req.body;
@@ -139,7 +143,7 @@ app.post("/api/summarize", async (req, res) => {
   }
 });
 
-// POST /api/ask — multi-turn Q&A grounded in provided text
+// POST /api/ask - multi-turn Q&A grounded in provided text
 app.post("/api/ask", async (req, res) => {
   try {
     const { text, messages, selection } = req.body;
@@ -165,7 +169,7 @@ app.post("/api/ask", async (req, res) => {
       });
       scored.sort((a, b) => b.score - a.score);
       const top = scored.slice(0, 3).map((s) => s.c);
-      return top.join(\"\\n\\n\");
+      return top.join("\n\n");
     };
 
     const scopedText = pickRelevantChunks(safeText, question);
@@ -212,6 +216,7 @@ app.post("/api/ask", async (req, res) => {
   }
 });
 
-// ✅ Use Fly.io dynamic port or default to 3000 locally
+// Use Fly.io dynamic port or default to 3000 locally
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`✅ DeepSeek backend running on port ${PORT}`));
+const HOST = "0.0.0.0";
+app.listen(PORT, HOST, () => console.log(`DeepSeek backend running on ${HOST}:${PORT}`));

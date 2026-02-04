@@ -226,7 +226,7 @@ chrome.runtime.onMessage.addListener((msg) => {
 
     const text = pageText.slice(0, 8000);
     try {
-      const response = await fetch("https://ai-extension-backend.fly.dev/api/summarize", {
+      const response = await fetch("https://ai-extension-backend-twilight-forest-3247.fly.dev/api/summarize", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text }),

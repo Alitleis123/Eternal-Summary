@@ -200,7 +200,7 @@
       body.textContent = "Thinking…";
       clarifyInput.value = "";
       try {
-        const response = await fetch("https://ai-extension-backend.fly.dev/api/ask", {
+        const response = await fetch("https://ai-extension-backend-twilight-forest-3247.fly.dev/api/ask", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -224,7 +224,7 @@
 
     (async () => {
       try {
-        const response = await fetch("https://ai-extension-backend.fly.dev/api/ask", {
+        const response = await fetch("https://ai-extension-backend-twilight-forest-3247.fly.dev/api/ask", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -660,7 +660,7 @@
     }
     try {
       const pageText = document.body.innerText.slice(0, 3000);
-      const response = await fetch("https://ai-extension-backend.fly.dev/api/summarize", {
+      const response = await fetch("https://ai-extension-backend-twilight-forest-3247.fly.dev/api/summarize", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: pageText }),
@@ -722,7 +722,7 @@
 
     try {
       const pageText = document.body.innerText.slice(0, 3000);
-      const response = await fetch("https://ai-extension-backend.fly.dev/api/ask", {
+      const response = await fetch("https://ai-extension-backend-twilight-forest-3247.fly.dev/api/ask", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: pageText, messages, selection: selectedText }),
@@ -761,7 +761,7 @@
     sendBtn.style.opacity = "0.6";
 
     try {
-      const response = await fetch("https://ai-extension-backend.fly.dev/api/summarize", {
+      const response = await fetch("https://ai-extension-backend-twilight-forest-3247.fly.dev/api/summarize", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: selectedText }),

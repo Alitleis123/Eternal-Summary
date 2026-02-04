@@ -1,12 +1,15 @@
-# fly.toml app configuration file generated for ai-extension-backend on 2025-10-13T20:07:21-04:00
+# fly.toml app configuration file generated for ai-extension-backend-twilight-forest-3247 on 2026-02-03T14:03:28-05:00
 #
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
 
-app = 'ai-extension-backend'
+app = 'ai-extension-backend-twilight-forest-3247'
 primary_region = 'iad'
 
 [build]
+
+[env]
+  NODE_OPTIONS = "--max-old-space-size=512"
 
 [http_service]
   internal_port = 3000
@@ -17,6 +20,7 @@ primary_region = 'iad'
   processes = ['app']
 
 [[vm]]
-  memory = '1gb'
+  memory = '2gb'
   cpu_kind = 'shared'
   cpus = 1
+  memory_mb = 2048
