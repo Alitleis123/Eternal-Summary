@@ -5,14 +5,23 @@ import cors from "cors";
 
 dotenv.config();
 const app = express();
-app.use(cors());
+app.use((req, res, next) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  if (req.method === "OPTIONS") {
+    res.status(204).end();
+    return;
+  }
+  next();
+});
 app.use(express.json());
 
 app.get("/healthz", (_req, res) => {
   res.status(200).send("ok");
 });
 
-const chunkText = (text, maxChars = 2200, overlap = 200) => {
+const chunkText = (text, maxChars = 1200, overlap = 120) => {
   if (!text) return [];
   const chunks = [];
   let start = 0;
@@ -55,7 +64,9 @@ app.post("/api/summarize", async (req, res) => {
   try {
     const { text, mode } = req.body;
     const safeMode = typeof mode === "string" && mode.trim() ? mode.trim() : "TL;DR";
-    const safeText = typeof text === "string" ? text : "";
+    const rawText = typeof text === "string" ? text : "";
+    const MAX_INPUT_CHARS = 6000;
+    const safeText = rawText.slice(0, MAX_INPUT_CHARS);
 
     const chunks = chunkText(safeText, 2200, 200);
 
@@ -150,7 +161,9 @@ app.post("/api/ask", async (req, res) => {
 
     const safeMessages = Array.isArray(messages) ? messages : [];
     const safeSelection = typeof selection === "string" ? selection.trim() : "";
-    const safeText = typeof text === "string" ? text : "";
+    const rawText = typeof text === "string" ? text : "";
+    const MAX_INPUT_CHARS = 6000;
+    const safeText = rawText.slice(0, MAX_INPUT_CHARS);
 
     const lastUser = [...safeMessages].reverse().find((m) => m?.role === "user");
     const question = lastUser?.content || "";
