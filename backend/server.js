@@ -15,7 +15,7 @@ app.use((req, res, next) => {
   }
   next();
 });
-app.use(express.json());
+app.use(express.json({ limit: "200kb" }));
 
 app.get("/healthz", (_req, res) => {
   res.status(200).send("ok");
@@ -36,19 +36,60 @@ const chunkText = (text, maxChars = 1200, overlap = 120) => {
   return chunks;
 };
 
+const clampText = (value, maxChars) => {
+  const str = typeof value === "string" ? value : "";
+  return str.length > maxChars ? str.slice(0, maxChars) : str;
+};
+
+const readResponseWithLimit = async (response, byteLimit = 512_000) => {
+  if (!response.body || !response.body.getReader) {
+    const text = await response.text();
+    if (text.length > byteLimit) {
+      throw new Error(`Upstream response too large: ${text.length} chars`);
+    }
+    return text;
+  }
+  const reader = response.body.getReader();
+  let received = 0;
+  const chunks = [];
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    received += value.byteLength;
+    if (received > byteLimit) {
+      throw new Error(`Upstream response too large: ${received} bytes`);
+    }
+    chunks.push(Buffer.from(value));
+  }
+  return Buffer.concat(chunks).toString("utf8");
+};
+
 const callDeepSeek = async (messages) => {
-  const response = await fetch("https://api.deepseek.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${process.env.DEEPSEEK_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "deepseek-chat",
-      messages,
-    }),
-  });
-  return response.json();
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000);
+  try {
+    const response = await fetch("https://api.deepseek.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${process.env.DEEPSEEK_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "deepseek-chat",
+        messages,
+        max_tokens: 200,
+        temperature: 0.2,
+      }),
+      signal: controller.signal,
+    });
+    const text = await readResponseWithLimit(response, 512_000);
+    if (!response.ok) {
+      throw new Error(`Upstream error ${response.status}: ${text.slice(0, 200)}`);
+    }
+    return JSON.parse(text);
+  } finally {
+    clearTimeout(timeoutId);
+  }
 };
 
 const safeJsonParse = (content, fallback) => {
@@ -59,16 +100,44 @@ const safeJsonParse = (content, fallback) => {
   }
 };
 
+const logMem = (label) => {
+  const mem = process.memoryUsage();
+  console.log(
+    "%s heapUsed=%dMB heapTotal=%dMB rss=%dMB node_options=%s",
+    label,
+    Math.round(mem.heapUsed / 1024 / 1024),
+    Math.round(mem.heapTotal / 1024 / 1024),
+    Math.round(mem.rss / 1024 / 1024),
+    process.env.NODE_OPTIONS || ""
+  );
+};
+
+let aiBusy = false;
+const withSingleFlight = async (res, fn) => {
+  if (aiBusy) {
+    res.status(429).json({ error: "AI busy, try again shortly." });
+    return;
+  }
+  aiBusy = true;
+  try {
+    await fn();
+  } finally {
+    aiBusy = false;
+  }
+};
+
 // POST /api/summarize - calls DeepSeek API
 app.post("/api/summarize", async (req, res) => {
-  try {
+  await withSingleFlight(res, async () => {
+    try {
+    logMem("summarize:start");
     const { text, mode } = req.body;
     const safeMode = typeof mode === "string" && mode.trim() ? mode.trim() : "TL;DR";
-    const rawText = typeof text === "string" ? text : "";
-    const MAX_INPUT_CHARS = 6000;
-    const safeText = rawText.slice(0, MAX_INPUT_CHARS);
+    const MAX_INPUT_CHARS = 4000;
+    const safeText = clampText(text, MAX_INPUT_CHARS);
 
-    const chunks = chunkText(safeText, 2200, 200);
+    const chunks = chunkText(safeText, 1600, 150);
+    console.log("summarize: chars=%d chunks=%d", safeText.length, chunks.length);
 
     if (chunks.length <= 1) {
       const data = await callDeepSeek([
@@ -87,22 +156,22 @@ app.post("/api/summarize", async (req, res) => {
         }
       ]);
 
-      console.log("DeepSeek response:", data);
       const content =
         data?.choices?.[0]?.message?.content ||
         data?.error?.message ||
         "No summary generated.";
 
       const payload = safeJsonParse(content, { summary: content, sources: [] });
-      res.json(payload);
-      return;
+    res.json(payload);
+    logMem("summarize:end");
+    return;
     }
 
     // Chunked summarization
     const chunkSummaries = [];
     let sources = [];
 
-    for (const chunk of chunks) {
+    for (const chunk of chunks.slice(0, 4)) {
       const data = await callDeepSeek([
         {
           role: "system",
@@ -148,22 +217,37 @@ app.post("/api/summarize", async (req, res) => {
       summary: finalPayload.summary || finalContent,
       sources: sources.slice(0, 6),
     });
-  } catch (error) {
-    console.error("Error:", error);
-    res.status(500).json({ error: "Failed to summarize text." });
-  }
+    logMem("summarize:end");
+    } catch (error) {
+      console.error("Error:", error);
+      res.status(500).json({ error: "Failed to summarize text." });
+    }
+  });
 });
 
 // POST /api/ask - multi-turn Q&A grounded in provided text
 app.post("/api/ask", async (req, res) => {
-  try {
+  await withSingleFlight(res, async () => {
+    try {
+    logMem("ask:start");
     const { text, messages, selection } = req.body;
 
-    const safeMessages = Array.isArray(messages) ? messages : [];
-    const safeSelection = typeof selection === "string" ? selection.trim() : "";
-    const rawText = typeof text === "string" ? text : "";
-    const MAX_INPUT_CHARS = 6000;
-    const safeText = rawText.slice(0, MAX_INPUT_CHARS);
+    const rawMessages = Array.isArray(messages) ? messages : [];
+    const safeMessages = rawMessages
+      .slice(-6)
+      .map((m) => ({
+        role: m?.role === "assistant" ? "assistant" : "user",
+        content: clampText(m?.content || "", 800),
+      }));
+    const safeSelection = clampText(selection, 1200).trim();
+    const MAX_INPUT_CHARS = 4000;
+    const safeText = clampText(text, MAX_INPUT_CHARS);
+    console.log(
+      "ask: chars=%d messages=%d selection=%d",
+      safeText.length,
+      safeMessages.length,
+      safeSelection.length
+    );
 
     const lastUser = [...safeMessages].reverse().find((m) => m?.role === "user");
     const question = lastUser?.content || "";
@@ -209,7 +293,6 @@ app.post("/api/ask", async (req, res) => {
     ]);
 
     const data = response;
-    console.log("DeepSeek response (ask):", data);
     const content =
       data?.choices?.[0]?.message?.content ||
       data?.error?.message ||
@@ -223,10 +306,12 @@ app.post("/api/ask", async (req, res) => {
     }
 
     res.json(payload);
-  } catch (error) {
-    console.error("Error:", error);
-    res.status(500).json({ error: "Failed to answer question." });
-  }
+    logMem("ask:end");
+    } catch (error) {
+      console.error("Error:", error);
+      res.status(500).json({ error: "Failed to answer question." });
+    }
+  });
 });
 
 // Use Fly.io dynamic port or default to 3000 locally
