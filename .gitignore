@@ -17,3 +17,5 @@ yarn-error.log*
 # Build and output directories
 dist/
 build/
+# Claude worktrees
+.claude/
