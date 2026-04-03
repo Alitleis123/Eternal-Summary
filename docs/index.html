@@ -4,6 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Eternal Summary — AI Page Summarizer</title>
+  <link rel="icon" type="image/png" sizes="32x32" href="es-icon-32.png">
+  <link rel="icon" type="image/png" sizes="128x128" href="eternal-summary-icon.png">
+  <link rel="apple-touch-icon" href="eternal-summary-icon.png">
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
@@ -70,9 +73,15 @@
     }
 
     .sidebar-logo img {
-      width: 28px;
-      height: 28px;
-      border-radius: 6px;
+      width: 30px;
+      height: 30px;
+      border-radius: 8px;
+      filter: drop-shadow(0 0 6px rgba(99, 102, 241, 0.4));
+      transition: filter 0.3s ease;
+    }
+
+    .sidebar-logo:hover img {
+      filter: drop-shadow(0 0 10px rgba(99, 102, 241, 0.7));
     }
 
     .sidebar-nav {
@@ -108,9 +117,16 @@
 
     .sidebar-nav .nav-icon {
       width: 18px;
-      text-align: center;
-      font-size: 0.85rem;
+      height: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       flex-shrink: 0;
+    }
+
+    .sidebar-nav .nav-icon svg {
+      width: 16px;
+      height: 16px;
     }
 
     .sidebar-footer {
@@ -189,6 +205,16 @@
       height: calc(100% - 14px);
       border-radius: 50%;
       background: var(--bg-deep);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .hero-ring-inner img {
+      width: 60%;
+      height: 60%;
+      object-fit: contain;
+      border-radius: 50%;
     }
 
     @keyframes ringSpin {
@@ -281,12 +307,14 @@
       border-radius: 14px;
       border: 1px solid var(--border);
       background: var(--bg-card);
-      transition: border-color 0.3s ease, background 0.3s ease;
+      transition: border-color 0.3s ease, background 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease;
     }
 
     .feature-card:hover {
       border-color: var(--border-hover);
       background: var(--bg-card-hover);
+      transform: translateY(-3px);
+      box-shadow: 0 8px 24px rgba(99, 102, 241, 0.1);
     }
 
     .feature-icon {
@@ -548,40 +576,40 @@
   <!-- SIDEBAR -->
   <aside class="sidebar">
     <a href="#hero" class="sidebar-logo">
-      <img src="../eternal summary icon.png" alt="Eternal Summary">
+      <img src="eternal-summary-icon.png" alt="Eternal Summary">
       Eternal Summary
     </a>
 
     <nav class="sidebar-nav">
       <a href="#hero" class="active">
-        <span class="nav-icon">&#8962;</span>
+        <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></span>
         <span class="nav-label">Home</span>
       </a>
       <a href="#features">
-        <span class="nav-icon">&#10024;</span>
+        <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></span>
         <span class="nav-label">Features</span>
       </a>
       <a href="#demo">
-        <span class="nav-icon">&#9654;</span>
+        <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg></span>
         <span class="nav-label">Demo</span>
       </a>
       <a href="#how-it-works">
-        <span class="nav-icon">&#9881;</span>
+        <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>
         <span class="nav-label">How It Works</span>
       </a>
       <a href="#install">
-        <span class="nav-icon">&#10515;</span>
+        <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>
         <span class="nav-label">Install</span>
       </a>
       <a href="#about">
-        <span class="nav-icon">&#9432;</span>
+        <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span>
         <span class="nav-label">About</span>
       </a>
     </nav>
 
     <div class="sidebar-footer">
       <a href="https://github.com/Alitleis123/Eternal-Summary">GitHub Repository</a>
-      <p>&copy; 2025 Ali Tleis<br>CS @ Northeastern University</p>
+      <p>&copy; 2026 Ali Tleis<br>CS @ Northeastern University</p>
     </div>
   </aside>
 
@@ -591,7 +619,9 @@
     <!-- HERO -->
     <section class="hero" id="hero">
       <div class="hero-ring">
-        <div class="hero-ring-inner"></div>
+        <div class="hero-ring-inner">
+          <img src="eternal-summary-icon.png" alt="Eternal Summary">
+        </div>
       </div>
       <h1>Summarize any page<br><span class="gradient-text">in one click.</span></h1>
       <p>Eternal Summary uses AI to instantly distill web pages into clear, concise summaries. Highlight text, ask follow-up questions, and explore sources.</p>
