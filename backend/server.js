@@ -1,20 +1,15 @@
 import express from "express";
-import fetch from "node-fetch";
 import dotenv from "dotenv";
 import cors from "cors";
 
 dotenv.config();
+
+if (!process.env.DEEPSEEK_API_KEY) {
+  console.error("DEEPSEEK_API_KEY is not set. Backend will not be able to call the AI API.");
+}
+
 const app = express();
-app.use((req, res, next) => {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  if (req.method === "OPTIONS") {
-    res.status(204).end();
-    return;
-  }
-  next();
-});
+app.use(cors());
 app.use(express.json({ limit: "200kb" }));
 
 app.get("/healthz", (_req, res) => {
@@ -27,11 +22,10 @@ const chunkText = (text, maxChars = 1200, overlap = 120) => {
   let start = 0;
   while (start < text.length) {
     const end = Math.min(start + maxChars, text.length);
-    const chunk = text.slice(start, end);
-    chunks.push(chunk);
+    chunks.push(text.slice(start, end));
+    if (end === text.length) break;
     start = end - overlap;
     if (start < 0) start = 0;
-    if (start >= text.length) break;
   }
   return chunks;
 };
@@ -41,27 +35,12 @@ const clampText = (value, maxChars) => {
   return str.length > maxChars ? str.slice(0, maxChars) : str;
 };
 
-const readResponseWithLimit = async (response, byteLimit = 512_000) => {
-  if (!response.body || !response.body.getReader) {
-    const text = await response.text();
-    if (text.length > byteLimit) {
-      throw new Error(`Upstream response too large: ${text.length} chars`);
-    }
-    return text;
+const readResponseWithLimit = async (response, charLimit = 100_000) => {
+  const text = await response.text();
+  if (text.length > charLimit) {
+    throw new Error(`Upstream response too large: ${text.length} chars`);
   }
-  const reader = response.body.getReader();
-  let received = 0;
-  const chunks = [];
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    received += value.byteLength;
-    if (received > byteLimit) {
-      throw new Error(`Upstream response too large: ${received} bytes`);
-    }
-    chunks.push(Buffer.from(value));
-  }
-  return Buffer.concat(chunks).toString("utf8");
+  return text;
 };
 
 const callDeepSeek = async (messages) => {
@@ -92,9 +71,15 @@ const callDeepSeek = async (messages) => {
   }
 };
 
+const stripCodeFences = (text) => {
+  const trimmed = text.trim();
+  const match = trimmed.match(/^```(?:json)?\s*\n?([\s\S]*?)\n?\s*```$/);
+  return match ? match[1].trim() : trimmed;
+};
+
 const safeJsonParse = (content, fallback) => {
   try {
-    return JSON.parse(content);
+    return JSON.parse(stripCodeFences(content));
   } catch {
     return fallback;
   }
@@ -112,206 +97,181 @@ const logMem = (label) => {
   );
 };
 
-let aiBusy = false;
-const withSingleFlight = async (res, fn) => {
-  if (aiBusy) {
-    res.status(429).json({ error: "AI busy, try again shortly." });
-    return;
-  }
-  aiBusy = true;
-  try {
-    await fn();
-  } finally {
-    aiBusy = false;
-  }
-};
-
 // POST /api/summarize - calls DeepSeek API
 app.post("/api/summarize", async (req, res) => {
-  await withSingleFlight(res, async () => {
     try {
-    logMem("summarize:start");
-    const { text, mode } = req.body;
-    const safeMode = typeof mode === "string" && mode.trim() ? mode.trim() : "TL;DR";
-    const MAX_INPUT_CHARS = 4000;
-    const safeText = clampText(text, MAX_INPUT_CHARS);
+      logMem("summarize:start");
+      const { text, mode } = req.body;
+      const safeMode = typeof mode === "string" && mode.trim() ? mode.trim() : "TL;DR";
+      const MAX_INPUT_CHARS = 4000;
+      const safeText = clampText(text, MAX_INPUT_CHARS);
 
-    const chunks = chunkText(safeText, 1600, 150);
-    console.log("summarize: chars=%d chunks=%d", safeText.length, chunks.length);
+      const chunks = chunkText(safeText, 1600, 150);
+      console.log("summarize: chars=%d chunks=%d", safeText.length, chunks.length);
 
-    if (chunks.length <= 1) {
-      const data = await callDeepSeek([
-        {
-          role: "system",
-          content:
-            "You are an intelligent summarizer. Return STRICT JSON only with keys: summary (string), sources (array of short snippets from the text)."
-        },
-        {
-          role: "user",
-          content:
-            `Mode: ${safeMode}\n` +
-            "Summarize the following text. Keep summary concise. " +
-            "For sources include 3-6 short snippets copied from the text.\n\n" +
-            `${safeText}`
+      if (chunks.length <= 1) {
+        const data = await callDeepSeek([
+          {
+            role: "system",
+            content:
+              "You are an intelligent summarizer. Return STRICT JSON only with keys: summary (string), sources (array of short snippets from the text)."
+          },
+          {
+            role: "user",
+            content:
+              `Mode: ${safeMode}\n` +
+              "Summarize the following text. Keep summary concise. " +
+              "For sources include 3-6 short snippets copied from the text.\n\n" +
+              `${safeText}`
+          }
+        ]);
+
+        const content = data?.choices?.[0]?.message?.content || "";
+        if (!content) {
+          res.status(502).json({ error: "No summary generated." });
+          return;
         }
-      ]);
 
-      const content =
-        data?.choices?.[0]?.message?.content ||
-        data?.error?.message ||
-        "No summary generated.";
-
-      const payload = safeJsonParse(content, { summary: content, sources: [] });
-    res.json(payload);
-    logMem("summarize:end");
-    return;
-    }
-
-    // Chunked summarization
-    const chunkSummaries = [];
-    let sources = [];
-
-    for (const chunk of chunks.slice(0, 4)) {
-      const data = await callDeepSeek([
-        {
-          role: "system",
-          content:
-            "Summarize this chunk. Return STRICT JSON only with keys: summary (string), sources (array of short snippets from the text)."
-        },
-        {
-          role: "user",
-          content: chunk
-        }
-      ]);
-
-      const content =
-        data?.choices?.[0]?.message?.content ||
-        data?.error?.message ||
-        "";
-      const payload = safeJsonParse(content, { summary: content, sources: [] });
-      if (payload.summary) chunkSummaries.push(payload.summary);
-      if (Array.isArray(payload.sources)) sources = sources.concat(payload.sources);
-    }
-
-    const merged = chunkSummaries.join("\n\n");
-    const finalData = await callDeepSeek([
-      {
-        role: "system",
-        content:
-          "You are an intelligent summarizer. Return STRICT JSON only with keys: summary (string)."
-      },
-      {
-        role: "user",
-        content:
-          `Mode: ${safeMode}\nSummarize the following combined summaries concisely:\n\n${merged}`
+        const payload = safeJsonParse(content, { summary: content, sources: [] });
+        res.json(payload);
+        logMem("summarize:end");
+        return;
       }
-    ]);
 
-    const finalContent =
-      finalData?.choices?.[0]?.message?.content ||
-      finalData?.error?.message ||
-      "No summary generated.";
-    const finalPayload = safeJsonParse(finalContent, { summary: finalContent });
+      // Chunked summarization
+      const chunkSummaries = [];
+      let sources = [];
 
-    res.json({
-      summary: finalPayload.summary || finalContent,
-      sources: sources.slice(0, 6),
-    });
-    logMem("summarize:end");
+      for (const chunk of chunks.slice(0, 4)) {
+        const data = await callDeepSeek([
+          {
+            role: "system",
+            content:
+              "Summarize this chunk. Return STRICT JSON only with keys: summary (string), sources (array of short snippets from the text)."
+          },
+          {
+            role: "user",
+            content: chunk
+          }
+        ]);
+
+        const content = data?.choices?.[0]?.message?.content || "";
+        const payload = safeJsonParse(content, { summary: content, sources: [] });
+        if (payload.summary) chunkSummaries.push(payload.summary);
+        if (Array.isArray(payload.sources)) sources = sources.concat(payload.sources);
+      }
+
+      const merged = chunkSummaries.join("\n\n");
+      const finalData = await callDeepSeek([
+        {
+          role: "system",
+          content:
+            "You are an intelligent summarizer. Return STRICT JSON only with keys: summary (string)."
+        },
+        {
+          role: "user",
+          content:
+            `Mode: ${safeMode}\nSummarize the following combined summaries concisely:\n\n${merged}`
+        }
+      ]);
+
+      const finalContent = finalData?.choices?.[0]?.message?.content || "";
+      if (!finalContent) {
+        res.status(502).json({ error: "No summary generated." });
+        return;
+      }
+      const finalPayload = safeJsonParse(finalContent, { summary: finalContent });
+
+      res.json({
+        summary: finalPayload.summary || finalContent,
+        sources: sources.slice(0, 6),
+      });
+      logMem("summarize:end");
     } catch (error) {
       console.error("Error:", error);
       res.status(500).json({ error: "Failed to summarize text." });
     }
-  });
 });
 
 // POST /api/ask - multi-turn Q&A grounded in provided text
 app.post("/api/ask", async (req, res) => {
-  await withSingleFlight(res, async () => {
     try {
-    logMem("ask:start");
-    const { text, messages, selection } = req.body;
+      logMem("ask:start");
+      const { text, messages, selection } = req.body;
 
-    const rawMessages = Array.isArray(messages) ? messages : [];
-    const safeMessages = rawMessages
-      .slice(-6)
-      .map((m) => ({
-        role: m?.role === "assistant" ? "assistant" : "user",
-        content: clampText(m?.content || "", 800),
-      }));
-    const safeSelection = clampText(selection, 1200).trim();
-    const MAX_INPUT_CHARS = 4000;
-    const safeText = clampText(text, MAX_INPUT_CHARS);
-    console.log(
-      "ask: chars=%d messages=%d selection=%d",
-      safeText.length,
-      safeMessages.length,
-      safeSelection.length
-    );
+      const rawMessages = Array.isArray(messages) ? messages : [];
+      const safeMessages = rawMessages
+        .slice(-6)
+        .map((m) => ({
+          role: m?.role === "assistant" ? "assistant" : "user",
+          content: clampText(m?.content || "", 800),
+        }));
+      const safeSelection = clampText(selection, 1200).trim();
+      const MAX_INPUT_CHARS = 4000;
+      const safeText = clampText(text, MAX_INPUT_CHARS);
+      console.log(
+        "ask: chars=%d messages=%d selection=%d",
+        safeText.length,
+        safeMessages.length,
+        safeSelection.length
+      );
 
-    const lastUser = [...safeMessages].reverse().find((m) => m?.role === "user");
-    const question = lastUser?.content || "";
+      const lastUser = [...safeMessages].reverse().find((m) => m?.role === "user");
+      const question = lastUser?.content || "";
 
-    const pickRelevantChunks = (fullText, q) => {
-      const chunks = chunkText(fullText, 1800, 150);
-      if (chunks.length <= 1 || !q) return fullText;
-      const terms = q
-        .toLowerCase()
-        .split(/\\W+/)
-        .filter((t) => t.length > 3);
-      const scored = chunks.map((c) => {
-        const lc = c.toLowerCase();
-        const score = terms.reduce((acc, t) => acc + (lc.includes(t) ? 1 : 0), 0);
-        return { c, score };
-      });
-      scored.sort((a, b) => b.score - a.score);
-      const top = scored.slice(0, 3).map((s) => s.c);
-      return top.join("\n\n");
-    };
+      const pickRelevantChunks = (fullText, q) => {
+        const chunks = chunkText(fullText, 1800, 150);
+        if (chunks.length <= 1 || !q) return fullText;
+        const terms = q
+          .toLowerCase()
+          .split(/\W+/)
+          .filter((t) => t.length > 3);
+        const scored = chunks.map((c) => {
+          const lc = c.toLowerCase();
+          const score = terms.reduce((acc, t) => acc + (lc.includes(t) ? 1 : 0), 0);
+          return { c, score };
+        });
+        scored.sort((a, b) => b.score - a.score);
+        const top = scored.slice(0, 3).map((s) => s.c);
+        return top.join("\n\n");
+      };
 
-    const scopedText = pickRelevantChunks(safeText, question);
+      const scopedText = pickRelevantChunks(safeText, question);
 
-    const response = await callDeepSeek([
-      {
-        role: "system",
-        content:
-          "You answer questions about the provided page text. Return STRICT JSON only with keys: answer (string), sources (array of short snippets from the text). Be concise and say when the answer is not in the text."
-      },
-      {
-        role: "system",
-        content: `Page text:\n${scopedText || ""}`
-      },
-      ...(safeSelection
-        ? [
-            {
-              role: "system",
-              content: `User selected text:\n${safeSelection}`
-            }
-          ]
-        : []),
-      ...safeMessages
-    ]);
+      const data = await callDeepSeek([
+        {
+          role: "system",
+          content:
+            "You answer questions about the provided page text. Return STRICT JSON only with keys: answer (string), sources (array of short snippets from the text). Be concise and say when the answer is not in the text."
+        },
+        {
+          role: "system",
+          content: `Page text:\n${scopedText || ""}`
+        },
+        ...(safeSelection
+          ? [
+              {
+                role: "system",
+                content: `User selected text:\n${safeSelection}`
+              }
+            ]
+          : []),
+        ...safeMessages
+      ]);
 
-    const data = response;
-    const content =
-      data?.choices?.[0]?.message?.content ||
-      data?.error?.message ||
-      "No answer generated.";
+      const content = data?.choices?.[0]?.message?.content || "";
+      if (!content) {
+        res.json({ answer: "No answer generated.", sources: [] });
+        return;
+      }
 
-    let payload = { answer: content };
-    try {
-      payload = JSON.parse(content);
-    } catch {
-      // Keep fallback
-    }
-
-    res.json(payload);
-    logMem("ask:end");
+      const payload = safeJsonParse(content, { answer: content, sources: [] });
+      res.json(payload);
+      logMem("ask:end");
     } catch (error) {
       console.error("Error:", error);
       res.status(500).json({ error: "Failed to answer question." });
     }
-  });
 });
 
 // Use Fly.io dynamic port or default to 3000 locally

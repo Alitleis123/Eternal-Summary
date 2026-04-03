@@ -23,10 +23,60 @@ const showOverlay = () => {
   });
 };
 
-chrome.runtime.onMessage.addListener((msg) => {
+chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg.action === "showOverlay") {
     showOverlay();
+    sendResponse({ ok: true });
+    return;
   }
+  sendResponse({ ok: false });
+});
+
+// Bridge page-context requests (content.js) to extension background.
+window.addEventListener("message", async (event) => {
+  if (event.source !== window) return;
+  const msg = event.data;
+  if (!msg || msg.type !== "ES_API_REQUEST") return;
+  const { requestId, url, options } = msg;
+  try {
+    const result = await chrome.runtime.sendMessage({
+      type: "ES_API_REQUEST",
+      url,
+      options,
+    });
+    window.postMessage({ type: "ES_API_RESPONSE", requestId, result }, "*");
+  } catch (err) {
+    window.postMessage(
+      {
+        type: "ES_API_RESPONSE",
+        requestId,
+        result: { ok: false, error: err?.message || String(err) },
+      },
+      "*"
+    );
+  }
+});
+
+window.addEventListener("message", (event) => {
+  if (event.source !== window) return;
+  const msg = event.data;
+  if (!msg || msg.type !== "ES_RESTORE_SELECTION_POPUP") return;
+  const popup = document.getElementById("es-selection-popup");
+  if (!popup) return;
+  if (popup.__esOriginalChildren) {
+    popup.replaceChildren(...popup.__esOriginalChildren);
+  }
+  if (popup.__esOriginalStyle) {
+    popup.setAttribute("style", popup.__esOriginalStyle);
+  }
+  if (popup.__esOriginalParent && popup.parentNode !== popup.__esOriginalParent) {
+    if (popup.__esOriginalNextSibling && popup.__esOriginalNextSibling.parentNode === popup.__esOriginalParent) {
+      popup.__esOriginalParent.insertBefore(popup, popup.__esOriginalNextSibling);
+    } else {
+      popup.__esOriginalParent.appendChild(popup);
+    }
+  }
+  popup.dataset.expanded = "false";
 });
 
 // Floating popup on text selection (no need to click extension icon)
@@ -126,16 +176,58 @@ chrome.runtime.onMessage.addListener((msg) => {
     popup.addEventListener("click", (e) => {
       e.preventDefault();
       e.stopPropagation();
+      if (popup.dataset.expanded === "true") return;
       const selection = window.getSelection();
       const textValue = selection ? selection.toString().trim() : "";
+      let anchorId = "";
+      let anchorOffset = "";
+      if (selection && selection.rangeCount) {
+        try {
+          const range = selection.getRangeAt(0).cloneRange();
+          const selectionRect = range.getBoundingClientRect();
+          const anchor = document.createElement("span");
+          anchorId = `es-selection-anchor-${Date.now()}-${Math.random()
+            .toString(36)
+            .slice(2)}`;
+          anchor.id = anchorId;
+          anchor.setAttribute("data-es-anchor", "true");
+          Object.assign(anchor.style, {
+            display: "inline-block",
+            width: "0px",
+            height: "0px",
+            overflow: "hidden",
+            padding: "0",
+            margin: "0",
+            border: "0",
+            lineHeight: "0",
+          });
+          range.collapse(true);
+          range.insertNode(anchor);
+          const anchorRect = anchor.getBoundingClientRect();
+          anchorOffset = JSON.stringify({
+            top: selectionRect.top - anchorRect.top,
+            bottom: selectionRect.bottom - anchorRect.top,
+            left: selectionRect.left - anchorRect.left,
+          });
+        } catch {
+          anchorId = "";
+          anchorOffset = "";
+        }
+      }
       const store = ensureStore();
       store.dataset.text = textValue;
       store.dataset.mode = "selection";
       store.dataset.rect = JSON.stringify(lastRect || {});
+      store.dataset.anchorId = anchorId;
+      store.dataset.anchorOffset = anchorOffset;
       showOverlay();
     });
 
     (document.documentElement || document.body).appendChild(popup);
+    popup.__esOriginalChildren = Array.from(popup.childNodes);
+    popup.__esOriginalStyle = popup.getAttribute("style") || "";
+    popup.__esOriginalParent = popup.parentNode;
+    popup.__esOriginalNextSibling = popup.nextSibling;
     return popup;
   };
 
@@ -157,6 +249,12 @@ chrome.runtime.onMessage.addListener((msg) => {
     const selection = window.getSelection();
     const textValue = selection ? selection.toString().trim() : "";
     const popup = ensurePopup();
+
+    if (popup.dataset.expanded === "true") {
+      popup.style.display = "inline-flex";
+      popup.style.alignItems = "stretch";
+      return;
+    }
 
     if (textValue) {
       const range = selection.rangeCount ? selection.getRangeAt(0) : null;
@@ -213,9 +311,41 @@ chrome.runtime.onMessage.addListener((msg) => {
 
 // Precompute summary on page load for instant overlay
 (() => {
+  // TEMP: disable precompute to reduce background load while diagnosing OOM.
+  return;
   const cacheKey = `summary:${location.href}`;
   const now = Date.now();
   const TTL = 10 * 60 * 1000;
+
+  const readJson = async (response) => {
+    if (!response.ok) {
+      const err = new Error(`HTTP ${response.status}`);
+      err.code = "http";
+      err.status = response.status;
+      throw err;
+    }
+    const ct = response.headers.get("content-type") || "";
+    if (!ct.includes("application/json")) {
+      const err = new Error("Non-JSON response");
+      err.code = "non_json";
+      throw err;
+    }
+    return response.json();
+  };
+
+  const fetchJsonWithTimeout = async (url, options = {}, timeoutMs = 15000) => {
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetch(url, { ...options, signal: controller.signal });
+      const data = await readJson(response);
+      return { ok: true, data };
+    } catch (err) {
+      return { ok: false, error: err };
+    } finally {
+      clearTimeout(id);
+    }
+  };
 
   chrome.storage.local.get(cacheKey, async (res) => {
     const cached = res?.[cacheKey];
@@ -225,14 +355,20 @@ chrome.runtime.onMessage.addListener((msg) => {
     if (pageText.length < 200) return;
 
     const text = pageText.slice(0, 8000);
-    try {
-      const response = await fetch("https://ai-extension-backend-twilight-forest-3247.fly.dev/api/summarize", {
+    const { ok, data, error } = await fetchJsonWithTimeout(
+      "https://ai-extension-backend-twilight-forest-3247.fly.dev/api/summarize",
+      {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text }),
-      });
-      const data = await response.json();
-      if (!data?.summary) return;
+      }
+    );
+    if (!ok) {
+      // Silent fail for precompute
+      console.error("Precompute failed:", error);
+      return;
+    }
+    if (!data?.summary) return;
       chrome.storage.local.set({
         [cacheKey]: {
           summary: data.summary,
@@ -240,9 +376,5 @@ chrome.runtime.onMessage.addListener((msg) => {
           ts: Date.now(),
         },
       });
-    } catch (err) {
-      // Silent fail for precompute
-      console.error("Precompute failed:", err);
-    }
   });
 })();

@@ -31,6 +31,35 @@ chrome.action.onClicked.addListener((tab) => {
   sendShowOverlay();
 });
 
+// Handle API calls in the extension context to avoid page-origin CORS issues.
+chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  if (msg?.type !== "ES_API_REQUEST") return;
+  (async () => {
+    try {
+      const response = await fetch(msg.url, msg.options || {});
+      const text = await response.text();
+      let data = null;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = null;
+      }
+      sendResponse({
+        ok: response.ok,
+        status: response.status,
+        data,
+        text,
+      });
+    } catch (err) {
+      sendResponse({
+        ok: false,
+        error: err?.message || String(err),
+      });
+    }
+  })();
+  return true;
+});
+
 // Optional: backend summarizer call
 async function getSummaryFromBackend(text) {
   try {

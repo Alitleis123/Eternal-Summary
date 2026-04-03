@@ -4,6 +4,9 @@
   "version": "1.0",
   "description": "Summarize the tab you are currently in with the click of a button",
   "permissions": ["activeTab", "scripting", "storage"],
+  "host_permissions": [
+    "https://ai-extension-backend-twilight-forest-3247.fly.dev/*"
+  ],
   "background": {
     "service_worker": "background.js"
   },

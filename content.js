@@ -3,13 +3,72 @@
 
   const readJson = async (response) => {
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
+      const err = new Error(`HTTP ${response.status}`);
+      err.code = "http";
+      err.status = response.status;
+      throw err;
     }
     const ct = response.headers.get("content-type") || "";
     if (!ct.includes("application/json")) {
-      throw new Error("Non-JSON response");
+      const err = new Error("Non-JSON response");
+      err.code = "non_json";
+      throw err;
     }
     return response.json();
+  };
+
+  const fetchJsonWithTimeout = (url, options = {}, timeoutMs = 15000) => {
+    const requestId = `es_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    return new Promise((resolve) => {
+      let done = false;
+      const timer = setTimeout(() => {
+        if (done) return;
+        done = true;
+        resolve({ ok: false, error: { name: "AbortError" } });
+      }, timeoutMs);
+
+      const onMessage = (event) => {
+        const msg = event.data;
+        if (!msg || msg.type !== "ES_API_RESPONSE" || msg.requestId !== requestId) return;
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        window.removeEventListener("message", onMessage);
+        const result = msg.result || {};
+        if (result.ok && result.data) {
+          resolve({ ok: true, data: result.data });
+          return;
+        }
+        if (result.ok && !result.data) {
+          const err = new Error("Non-JSON response");
+          err.code = "non_json";
+          resolve({ ok: false, error: err });
+          return;
+        }
+        const err = new Error(result.error || "Request failed");
+        err.code = result.status ? "http" : "network";
+        err.status = result.status;
+        resolve({ ok: false, error: err });
+      };
+
+      window.addEventListener("message", onMessage);
+      window.postMessage(
+        {
+          type: "ES_API_REQUEST",
+          requestId,
+          url,
+          options,
+        },
+        "*"
+      );
+    });
+  };
+
+  const friendlyFetchError = (err) => {
+    if (err?.name === "AbortError") return "⚠️ Request timed out. Try again.";
+    if (err?.code === "http") return "⚠️ Server error. Try again shortly.";
+    if (err?.code === "non_json") return "⚠️ Server returned an unexpected response.";
+    return "⚠️ Could not reach the AI server.";
   };
 
   const readSelectionStore = () => {
@@ -17,6 +76,15 @@
     if (!store?.dataset) return null;
     const mode = store.dataset.mode || "";
     const text = store.dataset.text || "";
+    const anchorId = store.dataset.anchorId || "";
+    let anchorOffset = null;
+    try {
+      anchorOffset = store.dataset.anchorOffset
+        ? JSON.parse(store.dataset.anchorOffset)
+        : null;
+    } catch {
+      anchorOffset = null;
+    }
     let rect = {};
     try {
       rect = store.dataset.rect ? JSON.parse(store.dataset.rect) : {};
@@ -24,30 +92,34 @@
       rect = {};
     }
     store.dataset.mode = "";
-    return { mode, text, rect };
+    return { mode, text, rect, anchorId, anchorOffset };
   };
 
   const selectionStore = readSelectionStore();
 
-  // If mini overlay already exists, remove it (toggle behavior)
   const existingMini = document.getElementById("ai-overlay-mini");
   if (existingMini) {
     existingMini.remove();
     if (selectionStore?.mode === "selection") return;
   }
 
-  if (selectionStore?.mode === "selection" && selectionStore.text) {
-    const selectedText = selectionStore.text;
-    const rect = selectionStore.rect || {};
+  const expandSelectionPopup = (selectedText, rect, anchorId, anchorOffset) => {
+    const popup = document.getElementById("es-selection-popup");
+    if (!popup) return null;
 
-    const mini = document.createElement("div");
-    mini.id = "ai-overlay-mini";
-    Object.assign(mini.style, {
-      position: "fixed",
+    if (!popup.__esOriginalChildren) {
+      popup.__esOriginalChildren = Array.from(popup.childNodes);
+      popup.__esOriginalStyle = popup.getAttribute("style") || "";
+    }
+
+    popup.dataset.expanded = "true";
+    popup.replaceChildren();
+    Object.assign(popup.style, {
+      position: "absolute",
       zIndex: 1000003,
-      maxWidth: "420px",
-      width: "min(420px, 86vw)",
-      padding: "0.8rem 0.9rem",
+      maxWidth: "460px",
+      width: "min(460px, 86vw)",
+      padding: "0.85rem 0.95rem",
       borderRadius: "14px",
       border: "1px solid rgba(199, 210, 254, 0.35)",
       background: "rgba(10, 10, 30, 0.92)",
@@ -55,6 +127,10 @@
       boxShadow: "0 16px 40px rgba(8, 8, 20, 0.45)",
       backdropFilter: "blur(10px)",
       WebkitBackdropFilter: "blur(10px)",
+      display: "flex",
+      flexDirection: "column",
+      gap: "0.5rem",
+      alignItems: "stretch",
       opacity: "0",
       transform: "translateY(8px) scale(0.98)",
       transition: "opacity 0.22s ease, transform 0.22s ease",
@@ -65,7 +141,6 @@
       display: "flex",
       alignItems: "center",
       gap: "0.5rem",
-      marginBottom: "0.5rem",
     });
 
     const icon = document.createElement("img");
@@ -100,7 +175,20 @@
       cursor: "pointer",
       fontSize: "0.75rem",
     });
-    closeBtn.addEventListener("click", () => mini.remove());
+
+    const restorePopup = () => {
+      if (popup.__esCleanup) popup.__esCleanup();
+      if (anchorId) {
+        const anchor = document.getElementById(anchorId);
+        if (anchor) anchor.remove();
+      }
+      window.postMessage({ type: "ES_RESTORE_SELECTION_POPUP" }, "*");
+    };
+    closeBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      restorePopup();
+    });
 
     header.appendChild(icon);
     header.appendChild(title);
@@ -152,32 +240,67 @@
     clarify.appendChild(clarifyInput);
     clarify.appendChild(clarifyBtn);
 
-    mini.appendChild(header);
-    mini.appendChild(body);
-    mini.appendChild(clarify);
-    document.body.appendChild(mini);
+    popup.appendChild(header);
+    popup.appendChild(body);
+    popup.appendChild(clarify);
 
-    const positionMini = () => {
+    const positionPopup = () => {
       const offset = 12;
-      const miniRect = mini.getBoundingClientRect();
-      const topCandidate = (rect.top || 0) - miniRect.height - offset;
-      let top = topCandidate > 8 ? topCandidate : (rect.bottom || 0) + offset;
-      let left = rect.left || 0;
-      if (left + miniRect.width > window.innerWidth - 8) {
-        left = window.innerWidth - miniRect.width - 8;
+      const popupRect = popup.getBoundingClientRect();
+      const scrollY = window.scrollY || window.pageYOffset || 0;
+      const scrollX = window.scrollX || window.pageXOffset || 0;
+      let baseRect = rect || {};
+      if (anchorId) {
+        const anchor = document.getElementById(anchorId);
+        if (anchor) {
+          const r = anchor.getBoundingClientRect();
+          if (anchorOffset) {
+            baseRect = {
+              top: r.top + (anchorOffset.top || 0),
+              bottom: r.top + (anchorOffset.bottom || 0),
+              left: r.left + (anchorOffset.left || 0),
+            };
+          } else {
+            baseRect = { top: r.top, bottom: r.bottom, left: r.left };
+          }
+        }
       }
-      if (left < 8) left = 8;
-      mini.style.top = `${Math.round(top)}px`;
-      mini.style.left = `${Math.round(left)}px`;
+      const docTop = (baseRect.top || 0) + scrollY;
+      const docBottom = (baseRect.bottom || 0) + scrollY;
+      const docLeft = (baseRect.left || 0) + scrollX;
+      const topCandidate = docTop - popupRect.height - offset;
+      let top = topCandidate > scrollY + 8 ? topCandidate : docBottom + offset;
+      let left = docLeft;
+      const viewportRight = (window.innerWidth - 8) + scrollX;
+      if (left + popupRect.width > viewportRight) {
+        left = viewportRight - popupRect.width;
+      }
+      if (left < scrollX + 8) left = scrollX + 8;
+      popup.style.top = `${Math.round(top)}px`;
+      popup.style.left = `${Math.round(left)}px`;
     };
 
     requestAnimationFrame(() => {
-      positionMini();
-      mini.style.opacity = "1";
-      mini.style.transform = "translateY(0) scale(1)";
+      positionPopup();
+      popup.style.opacity = "1";
+      popup.style.transform = "translateY(0) scale(1)";
     });
-    window.addEventListener("scroll", positionMini, { passive: true });
-    window.addEventListener("resize", positionMini);
+
+    let rafId = 0;
+    const onScroll = () => {
+      if (rafId) return;
+      rafId = requestAnimationFrame(() => {
+        rafId = 0;
+        positionPopup();
+      });
+    };
+    document.addEventListener("scroll", onScroll, true);
+    window.addEventListener("resize", onScroll);
+    popup.__esCleanup = () => {
+      document.removeEventListener("scroll", onScroll, true);
+      window.removeEventListener("resize", onScroll);
+      if (rafId) cancelAnimationFrame(rafId);
+    };
 
     const style = document.createElement("style");
     style.textContent = `
@@ -195,12 +318,20 @@
     };
 
     const askClarify = async () => {
+      if (mini.dataset.busy === "true") return;
+      mini.dataset.busy = "true";
+      clarifyBtn.disabled = true;
       const question = clarifyInput.value.trim();
-      if (!question) return;
+      if (!question) {
+        mini.dataset.busy = "false";
+        clarifyBtn.disabled = false;
+        return;
+      }
       body.textContent = "Thinking…";
       clarifyInput.value = "";
-      try {
-        const response = await fetch("https://ai-extension-backend-twilight-forest-3247.fly.dev/api/ask", {
+      const { ok, data, error } = await fetchJsonWithTimeout(
+        "https://ai-extension-backend-twilight-forest-3247.fly.dev/api/ask",
+        {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -208,13 +339,18 @@
             messages: [{ role: "user", content: question }],
             selection: selectedText,
           }),
-        });
-        const data = await readJson(response);
+        }
+      );
+      if (ok) {
         body.textContent = data.answer || "No answer received.";
-      } catch (err) {
-        body.textContent = "⚠️ Could not reach the AI server.";
-        console.error(err);
+        mini.dataset.busy = "false";
+        clarifyBtn.disabled = false;
+        return;
       }
+      body.textContent = friendlyFetchError(error);
+      console.error("Ask failed:", error);
+      mini.dataset.busy = "false";
+      clarifyBtn.disabled = false;
     };
 
     clarifyBtn.addEventListener("click", askClarify);
@@ -223,8 +359,11 @@
     });
 
     (async () => {
-      try {
-        const response = await fetch("https://ai-extension-backend-twilight-forest-3247.fly.dev/api/ask", {
+      if (mini.dataset.busy === "true") return;
+      mini.dataset.busy = "true";
+      const { ok, data, error } = await fetchJsonWithTimeout(
+        "https://ai-extension-backend-twilight-forest-3247.fly.dev/api/ask",
+        {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -234,30 +373,42 @@
             ],
             selection: selectedText,
           }),
-        });
-        const data = await readJson(response);
-        const answer = data.answer || "";
-        body.textContent = answer || "No summary received.";
-        const answerWords = answer.trim() ? answer.trim().split(/\s+/).length : 0;
-        const selectionWords = selectedText.trim()
-          ? selectedText.trim().split(/\s+/).length
-          : 0;
-        const selectionLooksNonsensical =
-          selectionWords > 0 &&
-          (!/[a-zA-Z]/.test(selectedText) ||
-            (selectedText.match(/[a-zA-Z]{2,}/g)?.length || 0) < 3);
-        const needsClarify =
-          !answer || answerWords < 10 || selectionWords < 10 || selectionLooksNonsensical;
-        if (needsClarify) {
-          showClarify("I need a bit more direction. What should I focus on?");
         }
-      } catch (err) {
-        body.textContent = "⚠️ Could not reach the AI server.";
-        console.error(err);
+      );
+      if (!ok) {
+        body.textContent = friendlyFetchError(error);
+        console.error("Auto-ask failed:", error);
+        mini.dataset.busy = "false";
+        return;
       }
+      const answer = data.answer || "";
+      body.textContent = answer || "No summary received.";
+      const answerWords = answer.trim() ? answer.trim().split(/\s+/).length : 0;
+      const selectionWords = selectedText.trim()
+        ? selectedText.trim().split(/\s+/).length
+        : 0;
+      const selectionLooksNonsensical =
+        selectionWords > 0 &&
+        (!/[a-zA-Z]/.test(selectedText) ||
+          (selectedText.match(/[a-zA-Z]{2,}/g)?.length || 0) < 3);
+      const needsClarify =
+        !answer || answerWords < 10 || selectionWords < 10 || selectionLooksNonsensical;
+      if (needsClarify) {
+        showClarify("I need a bit more direction. What should I focus on?");
+      }
+      mini.dataset.busy = "false";
     })();
 
-    return;
+    return { body, clarify };
+  };
+
+  if (selectionStore?.mode === "selection" && selectionStore.text) {
+    const selectedText = selectionStore.text;
+    const rect = selectionStore.rect || {};
+    const anchorId = selectionStore.anchorId || "";
+    const anchorOffset = selectionStore.anchorOffset || null;
+    const expanded = expandSelectionPopup(selectedText, rect, anchorId, anchorOffset);
+    if (expanded) return;
   }
 
   // If overlay already exists, remove it
