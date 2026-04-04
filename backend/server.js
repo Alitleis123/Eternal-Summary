@@ -2,10 +2,25 @@ import express from "express";
 import dotenv from "dotenv";
 import cors from "cors";
 
-dotenv.config();
+// Only load .env file in non-production environments.
+// On Fly.io, secrets are injected directly into the environment —
+// running dotenv in production could mask or override them.
+if (process.env.NODE_ENV !== "production") {
+  dotenv.config();
+}
 
 if (!process.env.GEMINI_API_KEY) {
-  console.error("GEMINI_API_KEY is not set. Backend will not be able to call the AI API.");
+  console.error(
+    "\n" +
+    "ERROR: GEMINI_API_KEY is not set. All Gemini API calls will fail.\n" +
+    "\n" +
+    "  For Fly.io deployment:\n" +
+    "    fly secrets set GEMINI_API_KEY=your_key_here\n" +
+    "\n" +
+    "  For local development:\n" +
+    "    Copy backend/.env.example to backend/.env and fill in your key.\n" +
+    "\n"
+  );
 }
 
 const app = express();
@@ -36,7 +51,8 @@ const clampText = (value, maxChars) => {
 };
 
 const GEMINI_MODEL = "gemini-2.5-flash";
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${process.env.GEMINI_API_KEY}`;
+const getGeminiUrl = () =>
+  `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${process.env.GEMINI_API_KEY}`;
 
 const fetchWithRetry = async (url, options, retries = 3) => {
   for (let i = 0; i < retries; i++) {
@@ -64,7 +80,7 @@ const fetchWithRetry = async (url, options, retries = 3) => {
 };
 
 const callGemini = async (systemPrompt, userPrompt) => {
-  return fetchWithRetry(GEMINI_URL, {
+  return fetchWithRetry(getGeminiUrl(), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -91,7 +107,7 @@ const callGeminiMultiTurn = async (systemPrompt, messages) => {
     role: m.role === "assistant" ? "model" : "user",
     parts: [{ text: m.content }],
   }));
-  return fetchWithRetry(GEMINI_URL, {
+  return fetchWithRetry(getGeminiUrl(), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({

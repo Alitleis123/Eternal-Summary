@@ -49,12 +49,33 @@ AI-extension/
    - Click **Load unpacked**
    - Select your `Eternal Summary` folder
 
-3. Start the backend server (optional for testing summaries):
+3. Set up the backend:
    ```bash
    cd backend
    npm install
+   ```
+
+4. Configure your Gemini API key:
+
+   **For local development:**
+   ```bash
+   cp .env.example .env
+   # Edit .env and replace the placeholder with your real Gemini API key
+   ```
+
+   **For Fly.io deployment:**
+   ```bash
+   fly launch          # first-time setup (or fly deploy for subsequent deploys)
+   fly secrets set GEMINI_API_KEY=your_gemini_api_key_here
+   ```
+   Fly.io injects secrets as environment variables at runtime. The `.env` file is never deployed (it is excluded via `.dockerignore`).
+
+5. Start the backend server:
+   ```bash
    npm start
    ```
+
+> **Note:** The `GEMINI_API_KEY` is required. If it is missing the server will start but all summarization requests will fail. The server logs a clear error message explaining how to set the key.
 
 ---
 
