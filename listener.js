@@ -109,21 +109,21 @@ window.addEventListener("message", (event) => {
     Object.assign(popup.style, {
       position: "fixed",
       zIndex: "1000002",
-      padding: "0.3rem 0.55rem 0.3rem 0.45rem",
-      borderRadius: "999px",
-      border: "1px solid rgba(199, 210, 254, 0.35)",
-      background: "rgba(10, 10, 30, 0.92)",
+      padding: "0.35rem 0.65rem 0.35rem 0.5rem",
+      borderRadius: "12px",
+      border: "1px solid rgba(99, 102, 241, 0.3)",
+      background: "rgba(10, 10, 30, 0.95)",
       color: "#e0e7ff",
-      fontSize: "0.76rem",
+      fontSize: "0.78rem",
       letterSpacing: "0.2px",
-      boxShadow: "0 10px 30px rgba(8, 8, 20, 0.35)",
+      boxShadow: "0 8px 24px rgba(8, 8, 20, 0.4), 0 0 0 1px rgba(99, 102, 241, 0.08)",
       cursor: "pointer",
       display: "none",
-      transition: "opacity 0.22s ease, transform 0.22s ease, box-shadow 0.22s ease",
+      transition: "opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1), transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease",
       opacity: "0",
-      transform: "translateY(6px) scale(0.98)",
-      backdropFilter: "blur(8px)",
-      WebkitBackdropFilter: "blur(8px)",
+      transform: "translateY(6px) scale(0.96)",
+      backdropFilter: "blur(12px)",
+      WebkitBackdropFilter: "blur(12px)",
     });
 
     const icon = document.createElement("img");
@@ -160,23 +160,27 @@ window.addEventListener("message", (event) => {
     style.textContent = `
       @keyframes esPulse {
         0%, 100% { transform: scale(1); filter: brightness(1); }
-        50% { transform: scale(1.08); filter: brightness(1.15); }
+        50% { transform: scale(1.06); filter: brightness(1.1); }
       }
       @keyframes esFloat {
         0%, 100% { transform: translateY(0); }
         50% { transform: translateY(-2px); }
       }
       #${POPUP_ID}:hover {
-        box-shadow: 0 12px 34px rgba(8, 8, 20, 0.5);
-        transform: translateY(2px) scale(1);
+        box-shadow: 0 12px 32px rgba(8, 8, 20, 0.5), 0 0 0 1px rgba(99, 102, 241, 0.2);
+        border-color: rgba(99, 102, 241, 0.5) !important;
+        transform: translateY(1px) scale(1.02) !important;
       }
     `;
     document.head.appendChild(style);
 
     popup.addEventListener("click", (e) => {
+      // If already expanded (showing summary/follow-up), don't re-trigger
+      if (popup.dataset.expanded === "true") {
+        return;
+      }
       e.preventDefault();
       e.stopPropagation();
-      if (popup.dataset.expanded === "true") return;
       const selection = window.getSelection();
       const textValue = selection ? selection.toString().trim() : "";
       let anchorId = "";
