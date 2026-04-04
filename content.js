@@ -1058,7 +1058,10 @@
     glowingRing.style.transform = "scale(0.6)";
   };
 
-  const showRetry = () => {
+  let lastErrorDetails = null;
+
+  const showRetry = (errorInfo) => {
+    if (errorInfo) lastErrorDetails = errorInfo;
     const retry = document.createElement("button");
     retry.textContent = "Retry";
     Object.assign(retry.style, {
@@ -1082,9 +1085,95 @@
     });
     retry.addEventListener("click", () => {
       retry.remove();
+      const logsBtn = chatWrap.querySelector("[data-es-logs]");
+      if (logsBtn) logsBtn.remove();
       runSummary();
     });
     chatWrap.appendChild(retry);
+  };
+
+  const showErrorLogs = (errorInfo) => {
+    lastErrorDetails = errorInfo;
+    // Show/update the logs button in the header
+    let logsBtn = container.querySelector("[data-es-logs]");
+    if (!logsBtn) {
+      logsBtn = document.createElement("button");
+      logsBtn.setAttribute("data-es-logs", "true");
+      logsBtn.textContent = "Logs";
+      Object.assign(logsBtn.style, {
+        position: "absolute",
+        top: "0.75rem",
+        left: "0.85rem",
+        padding: "0.3rem 0.6rem",
+        borderRadius: "8px",
+        border: "1px solid rgba(239, 68, 68, 0.3)",
+        background: "rgba(239, 68, 68, 0.1)",
+        color: "#f87171",
+        cursor: "pointer",
+        fontSize: "0.7rem",
+        fontWeight: "600",
+        letterSpacing: "0.3px",
+        transition: "all 0.2s ease",
+        zIndex: "10",
+      });
+      logsBtn.addEventListener("mouseenter", () => {
+        logsBtn.style.background = "rgba(239, 68, 68, 0.2)";
+        logsBtn.style.borderColor = "rgba(239, 68, 68, 0.5)";
+      });
+      logsBtn.addEventListener("mouseleave", () => {
+        logsBtn.style.background = "rgba(239, 68, 68, 0.1)";
+        logsBtn.style.borderColor = "rgba(239, 68, 68, 0.3)";
+      });
+      logsBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const existing = container.querySelector("[data-es-log-panel]");
+        if (existing) { existing.remove(); return; }
+        const panel = document.createElement("div");
+        panel.setAttribute("data-es-log-panel", "true");
+        Object.assign(panel.style, {
+          position: "absolute",
+          top: "2.5rem",
+          left: "0.85rem",
+          right: "0.85rem",
+          maxHeight: "200px",
+          overflowY: "auto",
+          padding: "0.75rem",
+          borderRadius: "10px",
+          border: "1px solid rgba(239, 68, 68, 0.2)",
+          background: "rgba(10, 10, 20, 0.95)",
+          backdropFilter: "blur(12px)",
+          fontSize: "0.75rem",
+          fontFamily: "monospace",
+          color: "#fca5a5",
+          lineHeight: "1.5",
+          whiteSpace: "pre-wrap",
+          wordBreak: "break-word",
+          zIndex: "20",
+        });
+        const details = lastErrorDetails || {};
+        const lines = [
+          `Timestamp: ${new Date().toISOString()}`,
+          `URL: ${location.href}`,
+          `Error: ${details.message || "Unknown"}`,
+          `Code: ${details.code || "N/A"}`,
+          `Status: ${details.status || "N/A"}`,
+          `Server: ${details.serverError || "N/A"}`,
+          `Endpoint: ${details.endpoint || "N/A"}`,
+        ];
+        panel.textContent = lines.join("\n");
+        container.appendChild(panel);
+        // Close when clicking outside
+        const closePanel = (ev) => {
+          if (!panel.contains(ev.target) && ev.target !== logsBtn) {
+            panel.remove();
+            document.removeEventListener("click", closePanel, true);
+          }
+        };
+        setTimeout(() => document.addEventListener("click", closePanel, true), 0);
+      });
+      container.style.position = "relative";
+      container.appendChild(logsBtn);
+    }
   };
 
   const runSummary = async () => {
@@ -1137,7 +1226,15 @@
     } else {
       stopThinking();
       addMessage("assistant", "Could not reach the AI server.");
-      showRetry();
+      const errorInfo = {
+        message: error?.message || String(error),
+        code: error?.code || (error?.name === "AbortError" ? "TIMEOUT" : "NETWORK"),
+        status: error?.status || null,
+        serverError: data?.error || null,
+        endpoint: "/api/summarize",
+      };
+      showRetry(errorInfo);
+      showErrorLogs(errorInfo);
       console.error(error);
     }
   };
@@ -1191,6 +1288,13 @@
       addMessage("assistant", answer, true, data.sources || []);
     } else {
       addMessage("assistant", "Could not reach the AI server.");
+      showErrorLogs({
+        message: error?.message || String(error),
+        code: error?.code || (error?.name === "AbortError" ? "TIMEOUT" : "NETWORK"),
+        status: error?.status || null,
+        serverError: data?.error || null,
+        endpoint: "/api/ask",
+      });
       console.error(error);
     }
     sendBtn.disabled = false;
@@ -1229,6 +1333,13 @@
       addMessage("assistant", aiResponse, true, selData.sources || []);
     } else {
       addMessage("assistant", "Could not reach the AI server.");
+      showErrorLogs({
+        message: selError?.message || String(selError),
+        code: selError?.code || (selError?.name === "AbortError" ? "TIMEOUT" : "NETWORK"),
+        status: selError?.status || null,
+        serverError: selData?.error || null,
+        endpoint: "/api/summarize (selection)",
+      });
       console.error(selError);
     }
     sendBtn.disabled = false;
