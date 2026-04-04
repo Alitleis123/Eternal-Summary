@@ -4,8 +4,8 @@ import cors from "cors";
 
 dotenv.config();
 
-if (!process.env.DEEPSEEK_API_KEY) {
-  console.error("DEEPSEEK_API_KEY is not set. Backend will not be able to call the AI API.");
+if (!process.env.GEMINI_API_KEY) {
+  console.error("GEMINI_API_KEY is not set. Backend will not be able to call the AI API.");
 }
 
 const app = express();
@@ -35,40 +35,77 @@ const clampText = (value, maxChars) => {
   return str.length > maxChars ? str.slice(0, maxChars) : str;
 };
 
-const readResponseWithLimit = async (response, charLimit = 100_000) => {
-  const text = await response.text();
-  if (text.length > charLimit) {
-    throw new Error(`Upstream response too large: ${text.length} chars`);
+const GEMINI_MODEL = "gemini-2.5-flash";
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${process.env.GEMINI_API_KEY}`;
+
+const fetchWithRetry = async (url, options, retries = 3) => {
+  for (let i = 0; i < retries; i++) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 20000);
+    try {
+      const response = await fetch(url, { ...options, signal: controller.signal });
+      const text = await response.text();
+      if (response.status === 429 && i < retries - 1) {
+        const delay = Math.min(2000 * 2 ** i, 30000);
+        console.log(`Rate limited, retrying in ${delay}ms (attempt ${i + 2}/${retries})`);
+        await new Promise((r) => setTimeout(r, delay));
+        continue;
+      }
+      if (!response.ok) {
+        throw new Error(`Gemini error ${response.status}: ${text.slice(0, 300)}`);
+      }
+      const data = JSON.parse(text);
+      const content = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      return content;
+    } finally {
+      clearTimeout(timeoutId);
+    }
   }
-  return text;
 };
 
-const callDeepSeek = async (messages) => {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 15000);
-  try {
-    const response = await fetch("https://api.deepseek.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${process.env.DEEPSEEK_API_KEY}`,
-        "Content-Type": "application/json",
+const callGemini = async (systemPrompt, userPrompt) => {
+  return fetchWithRetry(GEMINI_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      system_instruction: {
+        parts: [{ text: systemPrompt }],
       },
-      body: JSON.stringify({
-        model: "deepseek-chat",
-        messages,
-        max_tokens: 200,
-        temperature: 0.2,
-      }),
-      signal: controller.signal,
-    });
-    const text = await readResponseWithLimit(response, 512_000);
-    if (!response.ok) {
-      throw new Error(`Upstream error ${response.status}: ${text.slice(0, 200)}`);
-    }
-    return JSON.parse(text);
-  } finally {
-    clearTimeout(timeoutId);
-  }
+      contents: [
+        {
+          role: "user",
+          parts: [{ text: userPrompt }],
+        },
+      ],
+      generationConfig: {
+        temperature: 0.1,
+        maxOutputTokens: 800,
+        responseMimeType: "application/json",
+      },
+    }),
+  });
+};
+
+const callGeminiMultiTurn = async (systemPrompt, messages) => {
+  const contents = messages.map((m) => ({
+    role: m.role === "assistant" ? "model" : "user",
+    parts: [{ text: m.content }],
+  }));
+  return fetchWithRetry(GEMINI_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      system_instruction: {
+        parts: [{ text: systemPrompt }],
+      },
+      contents,
+      generationConfig: {
+        temperature: 0.1,
+        maxOutputTokens: 800,
+        responseMimeType: "application/json",
+      },
+    }),
+  });
 };
 
 const stripCodeFences = (text) => {
@@ -88,193 +125,154 @@ const safeJsonParse = (content, fallback) => {
 const logMem = (label) => {
   const mem = process.memoryUsage();
   console.log(
-    "%s heapUsed=%dMB heapTotal=%dMB rss=%dMB node_options=%s",
+    "%s heapUsed=%dMB heapTotal=%dMB rss=%dMB",
     label,
     Math.round(mem.heapUsed / 1024 / 1024),
     Math.round(mem.heapTotal / 1024 / 1024),
-    Math.round(mem.rss / 1024 / 1024),
-    process.env.NODE_OPTIONS || ""
+    Math.round(mem.rss / 1024 / 1024)
   );
 };
 
-// POST /api/summarize - calls DeepSeek API
+// POST /api/summarize
 app.post("/api/summarize", async (req, res) => {
-    try {
-      logMem("summarize:start");
-      const { text, mode } = req.body;
-      const safeMode = typeof mode === "string" && mode.trim() ? mode.trim() : "TL;DR";
-      const MAX_INPUT_CHARS = 4000;
-      const safeText = clampText(text, MAX_INPUT_CHARS);
+  try {
+    logMem("summarize:start");
+    const { text, mode } = req.body;
+    const safeMode = typeof mode === "string" && mode.trim() ? mode.trim() : "TL;DR";
+    const MAX_INPUT_CHARS = 4000;
+    const safeText = clampText(text, MAX_INPUT_CHARS);
 
-      const chunks = chunkText(safeText, 1600, 150);
-      console.log("summarize: chars=%d chunks=%d", safeText.length, chunks.length);
+    const chunks = chunkText(safeText, 3800, 200);
+    console.log("summarize: chars=%d chunks=%d", safeText.length, chunks.length);
 
-      if (chunks.length <= 1) {
-        const data = await callDeepSeek([
-          {
-            role: "system",
-            content:
-              "You are an intelligent summarizer. Return STRICT JSON only with keys: summary (string), sources (array of short snippets from the text)."
-          },
-          {
-            role: "user",
-            content:
-              `Mode: ${safeMode}\n` +
-              "Summarize the following text. Keep summary concise. " +
-              "For sources include 3-6 short snippets copied from the text.\n\n" +
-              `${safeText}`
-          }
-        ]);
+    if (chunks.length <= 1) {
+      const content = await callGemini(
+        "You are an intelligent summarizer. Return JSON only with keys: summary (string), sources (array of short snippets from the text). Do not include markdown formatting.",
+        `Mode: ${safeMode}\nSummarize the following text. Keep summary concise. For sources include 3-6 short snippets copied from the text.\n\n${safeText}`
+      );
 
-        const content = data?.choices?.[0]?.message?.content || "";
-        if (!content) {
-          res.status(502).json({ error: "No summary generated." });
-          return;
-        }
-
-        const payload = safeJsonParse(content, { summary: content, sources: [] });
-        res.json(payload);
-        logMem("summarize:end");
-        return;
-      }
-
-      // Chunked summarization
-      const chunkSummaries = [];
-      let sources = [];
-
-      for (const chunk of chunks.slice(0, 4)) {
-        const data = await callDeepSeek([
-          {
-            role: "system",
-            content:
-              "Summarize this chunk. Return STRICT JSON only with keys: summary (string), sources (array of short snippets from the text)."
-          },
-          {
-            role: "user",
-            content: chunk
-          }
-        ]);
-
-        const content = data?.choices?.[0]?.message?.content || "";
-        const payload = safeJsonParse(content, { summary: content, sources: [] });
-        if (payload.summary) chunkSummaries.push(payload.summary);
-        if (Array.isArray(payload.sources)) sources = sources.concat(payload.sources);
-      }
-
-      const merged = chunkSummaries.join("\n\n");
-      const finalData = await callDeepSeek([
-        {
-          role: "system",
-          content:
-            "You are an intelligent summarizer. Return STRICT JSON only with keys: summary (string)."
-        },
-        {
-          role: "user",
-          content:
-            `Mode: ${safeMode}\nSummarize the following combined summaries concisely:\n\n${merged}`
-        }
-      ]);
-
-      const finalContent = finalData?.choices?.[0]?.message?.content || "";
-      if (!finalContent) {
+      if (!content) {
         res.status(502).json({ error: "No summary generated." });
         return;
       }
-      const finalPayload = safeJsonParse(finalContent, { summary: finalContent });
 
-      res.json({
-        summary: finalPayload.summary || finalContent,
-        sources: sources.slice(0, 6),
-      });
+      const payload = safeJsonParse(content, { summary: content, sources: [] });
+      res.json(payload);
       logMem("summarize:end");
-    } catch (error) {
-      console.error("Error:", error);
-      res.status(500).json({ error: "Failed to summarize text." });
+      return;
     }
+
+    // Chunked summarization
+    const chunkSummaries = [];
+    let sources = [];
+
+    for (let i = 0; i < Math.min(chunks.length, 3); i++) {
+      if (i > 0) await new Promise((r) => setTimeout(r, 1500)); // rate limit delay
+      const content = await callGemini(
+        "Summarize this chunk. Return JSON only with keys: summary (string), sources (array of short snippets from the text).",
+        chunks[i]
+      );
+
+      const payload = safeJsonParse(content, { summary: content, sources: [] });
+      if (payload.summary) chunkSummaries.push(payload.summary);
+      if (Array.isArray(payload.sources)) sources = sources.concat(payload.sources);
+    }
+
+    const merged = chunkSummaries.join("\n\n");
+    const finalContent = await callGemini(
+      "You are an intelligent summarizer. Return JSON only with keys: summary (string).",
+      `Mode: ${safeMode}\nSummarize the following combined summaries concisely:\n\n${merged}`
+    );
+
+    if (!finalContent) {
+      res.status(502).json({ error: "No summary generated." });
+      return;
+    }
+    const finalPayload = safeJsonParse(finalContent, { summary: finalContent });
+
+    res.json({
+      summary: finalPayload.summary || finalContent,
+      sources: sources.slice(0, 6),
+    });
+    logMem("summarize:end");
+  } catch (error) {
+    console.error("Error:", error);
+    res.status(500).json({ error: "Failed to summarize text." });
+  }
 });
 
 // POST /api/ask - multi-turn Q&A grounded in provided text
 app.post("/api/ask", async (req, res) => {
-    try {
-      logMem("ask:start");
-      const { text, messages, selection } = req.body;
+  try {
+    logMem("ask:start");
+    const { text, messages, selection } = req.body;
 
-      const rawMessages = Array.isArray(messages) ? messages : [];
-      const safeMessages = rawMessages
-        .slice(-6)
-        .map((m) => ({
-          role: m?.role === "assistant" ? "assistant" : "user",
-          content: clampText(m?.content || "", 800),
-        }));
-      const safeSelection = clampText(selection, 1200).trim();
-      const MAX_INPUT_CHARS = 4000;
-      const safeText = clampText(text, MAX_INPUT_CHARS);
-      console.log(
-        "ask: chars=%d messages=%d selection=%d",
-        safeText.length,
-        safeMessages.length,
-        safeSelection.length
-      );
+    const rawMessages = Array.isArray(messages) ? messages : [];
+    const safeMessages = rawMessages
+      .slice(-6)
+      .map((m) => ({
+        role: m?.role === "assistant" ? "assistant" : "user",
+        content: clampText(m?.content || "", 800),
+      }));
+    const safeSelection = clampText(selection, 1200).trim();
+    const MAX_INPUT_CHARS = 4000;
+    const safeText = clampText(text, MAX_INPUT_CHARS);
+    console.log(
+      "ask: chars=%d messages=%d selection=%d",
+      safeText.length,
+      safeMessages.length,
+      safeSelection.length
+    );
 
-      const lastUser = [...safeMessages].reverse().find((m) => m?.role === "user");
-      const question = lastUser?.content || "";
+    const lastUser = [...safeMessages].reverse().find((m) => m?.role === "user");
+    const question = lastUser?.content || "";
 
-      const pickRelevantChunks = (fullText, q) => {
-        const chunks = chunkText(fullText, 1800, 150);
-        if (chunks.length <= 1 || !q) return fullText;
-        const terms = q
-          .toLowerCase()
-          .split(/\W+/)
-          .filter((t) => t.length > 3);
-        const scored = chunks.map((c) => {
-          const lc = c.toLowerCase();
-          const score = terms.reduce((acc, t) => acc + (lc.includes(t) ? 1 : 0), 0);
-          return { c, score };
-        });
-        scored.sort((a, b) => b.score - a.score);
-        const top = scored.slice(0, 3).map((s) => s.c);
-        return top.join("\n\n");
-      };
+    const pickRelevantChunks = (fullText, q) => {
+      const chunks = chunkText(fullText, 1800, 150);
+      if (chunks.length <= 1 || !q) return fullText;
+      const terms = q
+        .toLowerCase()
+        .split(/\W+/)
+        .filter((t) => t.length > 3);
+      const scored = chunks.map((c) => {
+        const lc = c.toLowerCase();
+        const score = terms.reduce((acc, t) => acc + (lc.includes(t) ? 1 : 0), 0);
+        return { c, score };
+      });
+      scored.sort((a, b) => b.score - a.score);
+      const top = scored.slice(0, 3).map((s) => s.c);
+      return top.join("\n\n");
+    };
 
-      const scopedText = pickRelevantChunks(safeText, question);
+    const scopedText = pickRelevantChunks(safeText, question);
 
-      const data = await callDeepSeek([
-        {
-          role: "system",
-          content:
-            "You answer questions about the provided page text. Return STRICT JSON only with keys: answer (string), sources (array of short snippets from the text). Be concise and say when the answer is not in the text."
-        },
-        {
-          role: "system",
-          content: `Page text:\n${scopedText || ""}`
-        },
-        ...(safeSelection
-          ? [
-              {
-                role: "system",
-                content: `User selected text:\n${safeSelection}`
-              }
-            ]
-          : []),
-        ...safeMessages
-      ]);
+    const systemPrompt =
+      "You answer questions about the provided page text. Return JSON only with keys: answer (string), sources (array of short snippets from the text). Be concise and say when the answer is not in the text." +
+      `\n\nPage text:\n${scopedText || ""}` +
+      (safeSelection ? `\n\nUser selected text:\n${safeSelection}` : "");
 
-      const content = data?.choices?.[0]?.message?.content || "";
-      if (!content) {
-        res.json({ answer: "No answer generated.", sources: [] });
-        return;
-      }
+    // Build conversation for multi-turn
+    const geminiMessages = safeMessages.length > 0
+      ? safeMessages
+      : [{ role: "user", content: question || "Summarize the page." }];
 
-      const payload = safeJsonParse(content, { answer: content, sources: [] });
-      res.json(payload);
-      logMem("ask:end");
-    } catch (error) {
-      console.error("Error:", error);
-      res.status(500).json({ error: "Failed to answer question." });
+    const content = await callGeminiMultiTurn(systemPrompt, geminiMessages);
+
+    if (!content) {
+      res.json({ answer: "No answer generated.", sources: [] });
+      return;
     }
+
+    const payload = safeJsonParse(content, { answer: content, sources: [] });
+    res.json(payload);
+    logMem("ask:end");
+  } catch (error) {
+    console.error("Error:", error);
+    res.status(500).json({ error: "Failed to answer question." });
+  }
 });
 
 // Use Fly.io dynamic port or default to 3000 locally
 const PORT = process.env.PORT || 3000;
 const HOST = "0.0.0.0";
-app.listen(PORT, HOST, () => console.log(`DeepSeek backend running on ${HOST}:${PORT}`));
+app.listen(PORT, HOST, () => console.log(`Gemini backend running on ${HOST}:${PORT}`));
