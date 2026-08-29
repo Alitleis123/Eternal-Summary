@@ -1,11 +1,29 @@
-Privacy Policy – Eternal Summary
+# Privacy Policy - Eternal Summary
 
-Eternal Summary does not collect, store, or sell personal user data.
+Eternal Summary does not collect, store, or sell personal data.
 
-The extension processes user-selected webpage text only when the user explicitly requests a summary. Selected text is sent to a remote AI service solely to generate a summary and is not retained after processing.
+## What gets sent, and when
 
-No personally identifiable information, browsing history, or background activity is collected or stored.
+Nothing is sent anywhere until you ask for something. When you open the panel, ask a question, or use the Summarize button on a highlight, the extension sends the relevant text to its backend, which forwards it to the Gemini API to produce a response:
 
-The extension does not use tracking, analytics, advertising, or profiling technologies.
+- Opening the panel on a page sends up to 6,000 characters of that page's visible text.
+- Summarizing a highlight sends only the highlighted text.
+- Asking a question sends your question, the recent messages in that conversation, and the page text needed to answer it.
 
-If you have questions about this privacy policy, you may contact the developer at: alitleis2006icloud@gmail.com
+The backend keeps none of this. Text is used to generate the response and is discarded when the request finishes. Requests are rate limited per IP address, which requires reading the IP of the request but not recording it.
+
+## What stays on your device
+
+Summaries are cached in your browser's extension storage for thirty minutes so that reopening a page you already summarized does not cost another request. This cache never leaves your device, and clearing the extension's data removes it.
+
+## What is never collected
+
+No accounts, no browsing history, no analytics, no advertising, no tracking, and no profiling. The extension does nothing in the background and makes no requests on pages you have not acted on.
+
+## Third parties
+
+Text you submit is processed by Google's Gemini API under Google's terms. No other third party receives it.
+
+## Contact
+
+Questions about this policy: alitleis2006icloud@gmail.com

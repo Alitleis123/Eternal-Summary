@@ -1,7 +1,5 @@
-# fly.toml app configuration file generated for ai-extension-backend-twilight-forest-3247 on 2026-02-03T14:03:28-05:00
-#
-# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
-#
+# Fly.io configuration for the Eternal Summary backend.
+# Reference: https://fly.io/docs/reference/configuration/
 
 app = 'ai-extension-backend-twilight-forest-3247'
 primary_region = 'iad'
@@ -9,7 +7,8 @@ primary_region = 'iad'
 [build]
 
 [env]
-  NODE_OPTIONS = "--max-old-space-size=1024"
+  NODE_ENV = "production"
+  NODE_OPTIONS = "--max-old-space-size=768"
 
 [http_service]
   internal_port = 3000
@@ -20,7 +19,6 @@ primary_region = 'iad'
   processes = ['app']
 
 [[vm]]
-  memory = '2gb'
+  memory = '1gb'
   cpu_kind = 'shared'
   cpus = 1
-  memory_mb = 2048

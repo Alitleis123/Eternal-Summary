@@ -1,92 +1,93 @@
-// background.js
+// Service worker: owns the backend address and brokers every network call.
+// Page-context code never sees a URL, it only names an endpoint.
 
-// When the extension icon is clicked
-chrome.action.onClicked.addListener((tab) => {
-  console.log("🌀 Eternal Summary icon clicked!");
-  if (!tab?.id || !tab?.url) {
-    console.warn("⚠️ No active tab to inject into.");
-    return;
-  }
+const API_BASE = "https://ai-extension-backend-twilight-forest-3247.fly.dev";
+const ALLOWED_ENDPOINTS = new Set(["summarize", "ask"]);
+const REQUEST_TIMEOUT_MS = 20000;
 
-  // Chrome blocks content scripts on these schemes.
-  const blockedSchemes = ["chrome://", "chrome-extension://", "edge://", "about:", "view-source:"];
-  if (blockedSchemes.some((scheme) => tab.url.startsWith(scheme))) {
-    console.warn("⚠️ This page does not allow content scripts:", tab.url);
-    return;
-  }
+// Schemes where Chrome refuses to run content scripts.
+const BLOCKED_SCHEMES = [
+  "chrome://",
+  "chrome-extension://",
+  "edge://",
+  "brave://",
+  "about:",
+  "view-source:",
+  "devtools://",
+];
+const BLOCKED_HOSTS = ["chromewebstore.google.com", "chrome.google.com/webstore"];
 
-  // Try sending the message; if the content script isn't there yet, inject it first.
-  const sendShowOverlay = () => {
+const canInject = (url) => {
+  if (!url) return false;
+  if (BLOCKED_SCHEMES.some((scheme) => url.startsWith(scheme))) return false;
+  return !BLOCKED_HOSTS.some((host) => url.includes(host));
+};
+
+const openOverlay = (tab) => {
+  if (!tab?.id || !canInject(tab.url)) return;
+
+  const send = (onFail) =>
     chrome.tabs.sendMessage(tab.id, { action: "showOverlay" }, () => {
-      if (!chrome.runtime.lastError) return;
-
-      // Content script not present — inject it, then retry once.
-      chrome.scripting.executeScript(
-        { target: { tabId: tab.id }, files: ["listener.js"] },
-        () => {
-          if (chrome.runtime.lastError) {
-            console.error("❌ Could not inject content script:", chrome.runtime.lastError.message);
-            return;
-          }
-          setTimeout(() => {
-            chrome.tabs.sendMessage(tab.id, { action: "showOverlay" }, () => {
-              if (chrome.runtime.lastError) {
-                console.error("❌ Could not establish connection after injection:", chrome.runtime.lastError.message);
-              }
-            });
-          }, 100);
-        }
-      );
+      if (chrome.runtime.lastError && onFail) onFail();
     });
-  };
 
-  sendShowOverlay();
-});
-
-// Handle API calls in the extension context to avoid page-origin CORS issues.
-chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-  if (msg?.type !== "ES_API_REQUEST") return;
-  (async () => {
-    try {
-      const response = await fetch(msg.url, msg.options || {});
-      const text = await response.text();
-      let data = null;
-      try {
-        data = JSON.parse(text);
-      } catch {
-        data = null;
+  // The content script may not be present yet on pages loaded before install.
+  send(() => {
+    chrome.scripting.executeScript(
+      { target: { tabId: tab.id }, files: ["listener.js"] },
+      () => {
+        if (chrome.runtime.lastError) return;
+        setTimeout(() => send(null), 100);
       }
-      sendResponse({
-        ok: response.ok,
-        status: response.status,
-        data,
-        text,
-      });
-    } catch (err) {
-      sendResponse({
-        ok: false,
-        error: err?.message || String(err),
-      });
-    }
-  })();
-  return true;
+    );
+  });
+};
+
+chrome.action.onClicked.addListener(openOverlay);
+
+chrome.commands.onCommand.addListener((command) => {
+  if (command !== "toggle-overlay") return;
+  chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
+    if (tab) openOverlay(tab);
+  });
 });
 
-// Optional: backend summarizer call
-async function getSummaryFromBackend(text) {
+const callBackend = async (endpoint, payload) => {
+  if (!ALLOWED_ENDPOINTS.has(endpoint)) {
+    return { ok: false, error: "Unknown endpoint" };
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
-    const response = await fetch("https://ai-extension-backend-twilight-forest-3247.fly.dev/api/summarize", {
+    const response = await fetch(`${API_BASE}/api/${endpoint}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text }),
+      body: JSON.stringify(payload ?? {}),
+      signal: controller.signal,
     });
-
-    if (!response.ok) throw new Error("Backend returned an error");
-
-    const data = await response.json();
-    return data.summary;
+    const text = await response.text();
+    let data = null;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = null;
+    }
+    return { ok: response.ok && data !== null, status: response.status, data };
   } catch (err) {
-    console.error("⚠️ Failed to connect to backend:", err);
-    return "⚠️ Failed to connect to backend.";
+    const timedOut = err?.name === "AbortError";
+    return {
+      ok: false,
+      error: timedOut ? "Request timed out" : err?.message || String(err),
+      timedOut,
+    };
+  } finally {
+    clearTimeout(timer);
   }
-}
+};
+
+chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  if (msg?.type !== "ES_API_REQUEST") return;
+  callBackend(msg.endpoint, msg.payload).then(sendResponse);
+  return true;
+});

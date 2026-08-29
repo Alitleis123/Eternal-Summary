@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Eternal Summary",
-  "version": "1.0",
-  "description": "Summarize the tab you are currently in with the click of a button",
+  "version": "1.1.0",
+  "description": "Summarize any page or selection with one click, then ask follow-up questions without leaving the tab.",
   "permissions": ["activeTab", "scripting", "storage"],
   "host_permissions": [
     "https://ai-extension-backend-twilight-forest-3247.fly.dev/*"
@@ -12,16 +12,27 @@
   },
   "action": {
     "default_icon": {
-      "16": "eternal summary icon.png",
-      "48": "eternal summary icon.png",
-      "128": "eternal summary icon.png"
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
     },
     "default_title": "Eternal Summary"
   },
   "icons": {
-    "16": "eternal summary icon.png",
-    "48": "eternal summary icon.png",
-    "128": "eternal summary icon.png"
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "commands": {
+    "toggle-overlay": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+S",
+        "mac": "Command+Shift+S"
+      },
+      "description": "Toggle the Eternal Summary overlay"
+    }
   },
   "content_scripts": [
     {
@@ -32,7 +43,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["content.js", "eternal summary icon.png"],
+      "resources": ["content.js", "icons/icon-32.png"],
       "matches": ["<all_urls>"]
     }
   ]

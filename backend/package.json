@@ -1,16 +1,19 @@
 {
-  "name": "ai-extension-backend",
-  "version": "1.0.0",
+  "name": "eternal-summary-backend",
+  "version": "1.1.0",
+  "description": "Express service that proxies Eternal Summary requests to the Gemini API.",
   "type": "module",
-  "description": "",
   "main": "server.js",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "start": "node server.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "node --watch server.js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "author": "Ali Tleis",
+  "license": "SEE LICENSE IN ../LICENSE",
+  "private": true,
   "dependencies": {
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",

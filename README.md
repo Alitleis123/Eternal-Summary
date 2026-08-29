@@ -1,109 +1,91 @@
-# 🌀 Eternal Summary
+# Eternal Summary
 
-**Eternal Summary** is a minimal, futuristic Chrome extension that uses AI to summarize the content of the tab you’re currently viewing — all with a single click.
+A Chrome extension that summarizes the page you are reading, explains anything you highlight, and answers follow-up questions without leaving the tab.
 
----
+Live site: https://alitleis123.github.io/Eternal-Summary/
 
-## ✨ Features
+## Features
 
-- 🧠 **Instant Summaries:** Quickly generate concise, intelligent summaries of web pages.
-- 🎨 **Modern Interface:** Clean, dark-themed design with smooth, responsive animations.
-- ⚡ **One-Click Functionality:** Summarize any webpage instantly from the toolbar.
-- 🌐 **Secure Backend:** Powered by a Node.js + Express backend hosted on Fly.io.
+- **Page summaries.** Click the toolbar icon or press the shortcut and the extension reads the page and returns a summary.
+- **Four modes.** TL;DR, bullets, key points, or plain English. Switching modes re-reads the page in that style.
+- **Selection summaries.** Highlight text and a floating Summarize button appears next to it. The card that opens follows the highlight as you scroll.
+- **Follow-up questions.** Ask anything about the page in the same panel. Answers stay grounded in the page text.
+- **Clickable sources.** Every answer lists the passages it drew on. Clicking one closes the panel and highlights that passage on the page.
+- **Local caching.** Summaries are kept in extension storage for thirty minutes, so reopening a page you already read costs nothing.
 
----
+## Keyboard shortcut
 
-## 🧩 Project Structure
+`Cmd+Shift+S` on macOS, `Ctrl+Shift+S` elsewhere. `Esc` or a click outside closes the panel. Reassign it at `chrome://extensions/shortcuts`.
 
-```
-AI-extension/
-│
-├── backend/                # Node.js backend (Express + Fly.io)
-│   ├── server.js
-│   ├── package.json
-│   ├── Dockerfile
-│   └── ...
-│
-├── background.js           # Handles background events
-├── content.js              # Injected into the webpage to capture content
-├── listener.js             # Manages communication between background and content scripts
-├── manifest.json           # Chrome extension configuration
-├── eternal summary icon.png# Extension logo
-├── LICENSE                 # License file
-└── README.md               # Project documentation
-```
-
----
-
-## 🚀 Installation
+## Install
 
 1. Clone the repository:
    ```bash
    git clone https://github.com/Alitleis123/Eternal-Summary.git
-   cd Eternal-Summary
    ```
+2. Open `chrome://extensions` and turn on **Developer mode**.
+3. Click **Load unpacked** and select the cloned folder.
 
-2. Load the extension in Chrome:
-   - Go to `chrome://extensions/`
-   - Enable **Developer Mode**
-   - Click **Load unpacked**
-   - Select your `Eternal Summary` folder
+The extension talks to a hosted backend by default, so there is nothing else to configure. Works in Chrome, Brave, Edge, and other Chromium browsers.
 
-3. Set up the backend:
-   ```bash
-   cd backend
-   npm install
-   ```
+## Running your own backend
 
-4. Configure your Gemini API key:
+The backend is a small Express service that proxies requests to the Gemini API. Run it if you would rather not use the hosted one.
 
-   **For local development:**
-   ```bash
-   cp .env.example .env
-   # Edit .env and replace the placeholder with your real Gemini API key
-   ```
+```bash
+cd backend
+npm install
+cp .env.example .env       # then put your Gemini API key in it
+npm start                  # listens on port 3000
+```
 
-   **For Fly.io deployment:**
-   ```bash
-   fly launch          # first-time setup (or fly deploy for subsequent deploys)
-   fly secrets set GEMINI_API_KEY=your_gemini_api_key_here
-   ```
-   Fly.io injects secrets as environment variables at runtime. The `.env` file is never deployed (it is excluded via `.dockerignore`).
+Deploying to Fly.io:
 
-5. Start the backend server:
-   ```bash
-   npm start
-   ```
+```bash
+fly launch                                  # first time only
+fly secrets set GEMINI_API_KEY=your_key_here
+fly deploy
+```
 
-> **Note:** The `GEMINI_API_KEY` is required. If it is missing the server will start but all summarization requests will fail. The server logs a clear error message explaining how to set the key.
+Fly injects secrets as environment variables at runtime, and `.env` is excluded from the image by `.dockerignore`, so the key never ships in a build.
 
----
+`GEMINI_API_KEY` is required. Without it the server still starts and serves `/healthz`, but every summarize and ask request fails with a clear message in the logs.
 
-## 🧠 Usage
+To point the extension at your own deployment, change `API_BASE` in `background.js` and the matching entry in `host_permissions` in `manifest.json`.
 
-1. Navigate to any webpage.
-2. Click the **Eternal Summary** icon in your Chrome toolbar.
-3. Wait a moment while the AI processes the page.
-4. View your summary instantly in a sleek popup overlay.
+### Endpoints
 
----
+| Method | Path | Body | Returns |
+| --- | --- | --- | --- |
+| `GET` | `/healthz` | | `ok` |
+| `POST` | `/api/summarize` | `{ text, mode }` | `{ summary, sources }` |
+| `POST` | `/api/ask` | `{ text, messages, selection }` | `{ answer, sources }` |
 
-## 🖼️ Icon & Design
+`mode` is one of `tldr`, `bullets`, `key-points`, or `simple`. Both endpoints are rate limited to 30 requests per minute per IP.
 
-The logo features an abstract **infinity loop** in a **blue-to-purple gradient** — symbolizing continuous knowledge and clarity.  
-Designed to match the extension’s futuristic visual style.
+## Layout
 
----
+```
+Eternal-Summary/
+├── manifest.json      Extension manifest (MV3)
+├── background.js      Service worker. Owns the backend address and every network call.
+├── listener.js        Content script. Selection button, and the bridge to the page.
+├── content.js         The panel itself. Runs in page context, injected on demand.
+├── icons/             Extension icons, 16 through 512
+├── backend/           Express service that calls the Gemini API
+└── docs/              Project site, published with GitHub Pages
+```
 
-## 🛡️ License
+Page-context code never sees the backend URL. It names an endpoint, `listener.js` forwards that to the service worker, and the worker rejects anything outside its allow list before making a request.
 
-This project is licensed under the **Eternal Summary License** (© 2025 Ali Tleis).  
-You may not redistribute, modify, or commercially use this project without explicit permission.
+## Privacy
 
----
+Page text is sent to the backend only when you ask for a summary or an answer. Nothing is stored server side, and summaries are cached only in your own browser. See [Privacy.md](Privacy.md).
 
-## 👨‍💻 Author
+## License
 
-**Ali Tleis**  
-Computer Science @ Northeastern University  
-[GitHub](https://github.com/Alitleis123)
+Eternal Summary License, copyright 2025 Ali Tleis. See [LICENSE](LICENSE). You may not redistribute, modify for public use, or use this project commercially without permission.
+
+## Author
+
+Ali Tleis, Computer Science at Northeastern University. [GitHub](https://github.com/Alitleis123)

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Eternal Summary — AI Page Summarizer</title>
+  <title>Eternal Summary - AI Page Summarizer</title>
   <link rel="icon" type="image/png" sizes="32x32" href="es-icon-32.png">
   <link rel="icon" type="image/png" sizes="128x128" href="eternal-summary-icon.png">
   <link rel="apple-touch-icon" href="eternal-summary-icon.png">
@@ -133,11 +133,13 @@
       padding: 1.2rem 1.4rem 0;
       border-top: 1px solid var(--border);
       margin-top: auto;
-      padding-top: 1.2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
     }
 
     .sidebar-footer a {
-      display: inline-flex;
+      display: flex;
       align-items: center;
       gap: 0.4rem;
       color: var(--text-muted);
@@ -609,7 +611,8 @@
 
     <div class="sidebar-footer">
       <a href="https://github.com/Alitleis123/Eternal-Summary">GitHub Repository</a>
-      <p>&copy; 2026 Ali Tleis<br>CS @ Northeastern University</p>
+      <a href="https://github.com/Alitleis123/Eternal-Summary/blob/main/Privacy.md">Privacy Policy</a>
+      <p>&copy; 2025 Ali Tleis<br>CS @ Northeastern University</p>
     </div>
   </aside>
 
@@ -651,14 +654,24 @@
           <p>Ask the AI anything about the page in a conversational chat interface, right in the overlay.</p>
         </div>
         <div class="feature-card">
-          <div class="feature-icon">&#128209;</div>
-          <h3>Collapsible Sources</h3>
-          <p>See the exact passages the AI referenced. Click any source to jump to that section on the page.</p>
+          <div class="feature-icon">&#127920;</div>
+          <h3>Four Summary Modes</h3>
+          <p>Switch between TL;DR, bullets, key points, and plain English with one click. The page is re-read in the style you picked.</p>
         </div>
         <div class="feature-card">
-          <div class="feature-icon">&#9889;</div>
-          <h3>Smart Caching</h3>
-          <p>Summaries are cached locally and pre-computed in the background, so the overlay loads instantly on repeat visits.</p>
+          <div class="feature-icon">&#9000;</div>
+          <h3>Keyboard Shortcut</h3>
+          <p>Open and close the overlay with Cmd+Shift+S on macOS or Ctrl+Shift+S elsewhere. Escape closes it too.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">&#128209;</div>
+          <h3>Collapsible Sources</h3>
+          <p>See the exact passages the AI referenced. Click any source and the overlay steps aside and highlights that passage on the page.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">&#128190;</div>
+          <h3>Local Caching</h3>
+          <p>Summaries are cached in extension storage for thirty minutes, so reopening a page you already read is instant and free.</p>
         </div>
         <div class="feature-card">
           <div class="feature-icon">&#127912;</div>
@@ -698,7 +711,7 @@
           <div class="step-number">1</div>
           <div class="step-content">
             <h3>Full Page Summary</h3>
-            <p>Click the Eternal Summary icon in your toolbar. The overlay opens with a spinning ring animation while the AI reads the page. Within seconds, a clean summary appears in a chat bubble.</p>
+            <p>Click the Eternal Summary icon in your toolbar, or press the keyboard shortcut. A panel opens and the AI reads the page. Within seconds a summary appears, and you can switch modes from the chips along the top.</p>
           </div>
         </div>
         <div class="step">
@@ -712,7 +725,7 @@
           <div class="step-number">3</div>
           <div class="step-content">
             <h3>Ask Follow-Up Questions</h3>
-            <p>After a summary loads, type any question in the input field at the bottom. The AI responds with context from the full page. You can also expand the "Sources" panel to see the key passages it referenced.</p>
+            <p>After a summary loads, type any question in the input field at the bottom. The AI responds with context from the page. Expand the "Sources" panel to see the passages it drew on, and click one to jump straight there.</p>
           </div>
         </div>
       </div>
@@ -753,7 +766,7 @@
       <div class="about-content">
         <div class="about-text">
           <p>Eternal Summary started as a personal project to solve a simple problem: reading long articles takes too long. I wanted a tool that could distill a page into its key points without leaving the tab.</p>
-          <p>The extension is built with vanilla JavaScript for the frontend and a Node.js/Express backend hosted on Fly.io that communicates with the DeepSeek API for AI summarization.</p>
+          <p>The extension is built with vanilla JavaScript for the frontend and a Node.js and Express backend hosted on Fly.io that calls the Gemini API for summarization.</p>
           <p>The design follows a dark glassmorphism aesthetic with indigo and purple accents, optimized to overlay cleanly on any website without visual clutter.</p>
         </div>
         <div class="about-stats">
