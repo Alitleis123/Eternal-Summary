@@ -7,9 +7,9 @@ Live site: https://alitleis123.github.io/Eternal-Summary/
 ## Features
 
 - **Page summaries.** Click the toolbar icon or press the shortcut and the extension reads the page and returns a summary.
-- **Four modes.** TL;DR, bullets, key points, or plain English. Switching modes re-reads the page in that style.
+- **Four modes.** TL;DR, bullets, key points, or plain English. Switching modes re-reads the page in that style and appends the result, so the conversation above it stays intact.
 - **Selection summaries.** Highlight text and a floating Summarize button appears next to it. The card that opens follows the highlight as you scroll.
-- **Follow-up questions.** Ask anything about the page in the same panel. Answers stay grounded in the page text.
+- **Follow-up questions.** Ask anything about the page in the same panel. The thread scrolls on its own, keeps every turn, and only follows new messages when you are already at the bottom.
 - **Clickable sources.** Every answer lists the passages it drew on. Clicking one closes the panel and highlights that passage on the page.
 - **Local caching.** Summaries are kept in extension storage for thirty minutes, so reopening a page you already read costs nothing.
 
@@ -71,12 +71,15 @@ Eternal-Summary/
 ├── background.js      Service worker. Owns the backend address and every network call.
 ├── listener.js        Content script. Selection button, and the bridge to the page.
 ├── content.js         The panel itself. Runs in page context, injected on demand.
+├── ui.css             Styles for the panel and the selection card
 ├── icons/             Extension icons, 16 through 512
 ├── backend/           Express service that calls the Gemini API
 └── docs/              Project site, published with GitHub Pages
 ```
 
 Page-context code never sees the backend URL. It names an endpoint, `listener.js` forwards that to the service worker, and the worker rejects anything outside its allow list before making a request.
+
+The UI renders inside a shadow root, with `ui.css` loaded into it. Page stylesheets cannot cross that boundary, so a site rule like `* { line-height: 1 !important }` cannot collapse the panel's text, and the panel cannot leak styles onto the page either.
 
 ## Privacy
 

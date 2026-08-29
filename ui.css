@@ -1,0 +1,193 @@
+/* Shared styles for the Eternal Summary UI. Loaded into every shadow root. */
+:host { all: initial; }
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+.root {
+  --ink: #0B0B14;
+  --panel: #101019;
+  --raise: #1A1A28;
+  --line: rgba(255, 255, 255, 0.09);
+  --line-soft: rgba(255, 255, 255, 0.05);
+  --txt: #E7E8F3;
+  --dim: #888DA6;
+  --iris: #7C6BF5;
+  --iris-dim: rgba(124, 107, 245, 0.14);
+  --iris-line: rgba(124, 107, 245, 0.42);
+  --danger: #F2777A;
+
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--txt);
+  -webkit-font-smoothing: antialiased;
+  letter-spacing: 0;
+  text-transform: none;
+  font-weight: 400;
+  font-style: normal;
+}
+
+button { font: inherit; color: inherit; background: none; border: none; cursor: pointer; letter-spacing: 0; text-transform: none; }
+input { font: inherit; color: inherit; background: none; border: none; outline: none; letter-spacing: 0; }
+svg { display: block; flex: none; }
+
+/* ---------- overlay shell ---------- */
+.scrim {
+  position: fixed; inset: 0; pointer-events: auto;
+  background: rgba(6, 6, 12, 0.62);
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  opacity: 0; transition: opacity 220ms ease;
+}
+.root.in .scrim { opacity: 1; }
+
+.stage { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; padding: 24px; pointer-events: none; }
+
+.panel {
+  pointer-events: auto;
+  display: flex; flex-direction: column;
+  width: min(680px, 100%); height: min(660px, 100%);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55);
+  overflow: hidden;
+  opacity: 0; transform: translateY(10px) scale(0.99);
+  transition: opacity 200ms ease, transform 200ms cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+.root.in .panel { opacity: 1; transform: none; }
+.root.out .scrim, .root.out .panel { opacity: 0; }
+.root.out .panel { transform: translateY(6px) scale(0.99); }
+
+/* ---------- header ---------- */
+.bar { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--line-soft); flex: none; }
+.mark { width: 26px; height: 26px; border-radius: 7px; flex: none; background: var(--iris) center / cover no-repeat; }
+.titles { flex: 1; min-width: 0; }
+.t1 { font-size: 13.5px; font-weight: 600; line-height: 1.3; }
+.t2 { font-size: 12px; color: var(--dim); line-height: 1.35; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.icon-btn {
+  width: 30px; height: 30px; border-radius: 8px; flex: none;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--dim); transition: background 140ms ease, color 140ms ease;
+}
+.icon-btn:hover { background: rgba(255, 255, 255, 0.07); color: var(--txt); }
+.icon-btn:focus-visible { outline: 2px solid var(--iris); outline-offset: 1px; }
+
+/* ---------- mode chips ---------- */
+.modes { display: flex; gap: 6px; padding: 10px 14px; border-bottom: 1px solid var(--line-soft); flex: none; overflow-x: auto; scrollbar-width: none; }
+.modes::-webkit-scrollbar { display: none; }
+.chip {
+  padding: 5px 11px; border-radius: 8px; font-size: 12.5px; font-weight: 500; white-space: nowrap;
+  color: var(--dim); border: 1px solid transparent; transition: background 140ms ease, color 140ms ease, border-color 140ms ease;
+}
+.chip:hover { background: rgba(255, 255, 255, 0.05); color: var(--txt); }
+.chip[aria-pressed="true"] { background: var(--iris-dim); border-color: var(--iris-line); color: var(--txt); }
+.modes[data-busy="true"] { opacity: 0.45; pointer-events: none; }
+
+/* ---------- thread ---------- */
+.thread-wrap { position: relative; flex: 1; min-height: 0; display: flex; }
+.thread { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 16px 14px 8px; display: flex; flex-direction: column; gap: 14px; }
+.thread::-webkit-scrollbar { width: 10px; }
+.thread::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.11); border-radius: 99px; border: 3px solid var(--panel); }
+.thread::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.2); }
+
+.turn { display: flex; flex-direction: column; gap: 4px; max-width: 100%; animation: rise 220ms cubic-bezier(0.2, 0.9, 0.3, 1) both; }
+.turn.user { align-items: flex-end; }
+@keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+.bubble { max-width: 86%; padding: 10px 13px; border-radius: 14px; font-size: 14.5px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+.turn.assistant .bubble { background: var(--raise); border: 1px solid var(--line-soft); border-bottom-left-radius: 5px; }
+.turn.user .bubble { background: var(--iris); color: #fff; border-bottom-right-radius: 5px; }
+.turn.error .bubble { background: rgba(242, 119, 122, 0.1); border: 1px solid rgba(242, 119, 122, 0.28); color: #FFD9DA; }
+
+.actions { display: flex; align-items: center; gap: 6px; min-height: 20px; }
+.actions .mini { opacity: 0; transition: opacity 140ms ease, background 140ms ease, color 140ms ease; }
+.turn:hover .actions .mini, .turn:focus-within .actions .mini, .actions.always .mini { opacity: 1; }
+.mini {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 8px; border-radius: 7px; font-size: 11.5px; font-weight: 500; color: var(--dim);
+  transition: background 140ms ease, color 140ms ease;
+}
+.mini:hover { background: rgba(255, 255, 255, 0.06); color: var(--txt); }
+.mini:focus-visible { outline: 2px solid var(--iris); outline-offset: 1px; opacity: 1; }
+
+/* ---------- system divider ---------- */
+.rule { display: flex; align-items: center; gap: 10px; color: var(--dim); font-size: 11.5px; font-weight: 500; }
+.rule::before, .rule::after { content: ""; height: 1px; background: var(--line-soft); flex: 1; }
+
+/* ---------- sources ---------- */
+.src-toggle { display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px; border-radius: 8px; font-size: 11.5px; font-weight: 500; color: var(--dim); border: 1px solid var(--line-soft); transition: background 140ms ease, color 140ms ease; }
+.src-toggle:hover { background: rgba(255, 255, 255, 0.05); color: var(--txt); }
+.src-toggle svg { transition: transform 180ms ease; }
+.src-toggle[aria-expanded="true"] svg { transform: rotate(90deg); }
+.src-list { display: none; flex-direction: column; gap: 5px; margin-top: 2px; }
+.src-list.open { display: flex; }
+.src {
+  text-align: left; padding: 8px 10px; border-radius: 9px; font-size: 12.5px; line-height: 1.5;
+  color: var(--dim); background: rgba(255, 255, 255, 0.03); border: 1px solid var(--line-soft);
+  transition: background 140ms ease, color 140ms ease, border-color 140ms ease;
+}
+.src:hover { background: var(--iris-dim); border-color: var(--iris-line); color: var(--txt); }
+
+/* ---------- thinking ---------- */
+.dots { display: inline-flex; gap: 4px; padding: 4px 2px; }
+.dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--dim); animation: blink 1.2s ease-in-out infinite; }
+.dots i:nth-child(2) { animation-delay: 0.16s; }
+.dots i:nth-child(3) { animation-delay: 0.32s; }
+@keyframes blink { 0%, 70%, 100% { opacity: 0.28; transform: none; } 35% { opacity: 1; transform: translateY(-3px); } }
+
+/* ---------- jump to latest ---------- */
+.jump {
+  position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%) translateY(6px);
+  display: flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 99px;
+  background: var(--raise); border: 1px solid var(--line); color: var(--txt);
+  font-size: 12px; font-weight: 500;
+  /* The ring in the panel colour cuts a gap out of whatever scrolls behind,
+     so the pill never appears to sit on top of a line of text. */
+  box-shadow: 0 0 0 5px var(--panel), 0 6px 20px rgba(0, 0, 0, 0.6);
+  opacity: 0; pointer-events: none; transition: opacity 160ms ease, transform 160ms ease;
+}
+.jump.show { opacity: 1; transform: translateX(-50%); pointer-events: auto; }
+
+/* ---------- selection strip ---------- */
+.sel { display: none; align-items: center; gap: 8px; margin: 0 14px 10px; padding: 8px 10px; border-radius: 10px; background: var(--iris-dim); border: 1px solid var(--iris-line); font-size: 12.5px; flex: none; }
+.sel.show { display: flex; }
+.sel-txt { flex: 1; min-width: 0; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pill { padding: 4px 10px; border-radius: 7px; font-size: 12px; font-weight: 500; white-space: nowrap; border: 1px solid var(--line); transition: background 140ms ease; }
+.pill:hover { background: rgba(255, 255, 255, 0.08); }
+
+/* ---------- composer ---------- */
+.composer { display: flex; align-items: flex-end; gap: 8px; padding: 12px 14px; border-top: 1px solid var(--line-soft); flex: none; }
+.field { flex: 1; min-width: 0; display: flex; align-items: center; padding: 0 13px; height: 42px; border-radius: 11px; background: var(--raise); border: 1px solid var(--line-soft); transition: border-color 140ms ease; }
+.field:focus-within { border-color: var(--iris-line); }
+.field input { width: 100%; font-size: 14px; }
+.field input::placeholder { color: var(--dim); }
+.send { width: 42px; height: 42px; border-radius: 11px; flex: none; display: flex; align-items: center; justify-content: center; background: var(--iris); color: #fff; transition: opacity 140ms ease, filter 140ms ease; }
+.send:hover { filter: brightness(1.12); }
+.send:disabled { opacity: 0.4; cursor: default; filter: none; }
+.send:focus-visible { outline: 2px solid var(--txt); outline-offset: 2px; }
+
+/* ---------- selection card ---------- */
+.card { pointer-events: auto; display: flex; flex-direction: column; width: min(430px, 90vw); max-height: 380px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5); overflow: hidden; }
+.card .thread { padding: 12px; gap: 12px; }
+.card .bubble { max-width: 100%; }
+
+.trigger {
+  position: fixed; pointer-events: auto; display: inline-flex; align-items: center; gap: 7px;
+  padding: 7px 11px 7px 8px; border-radius: 10px;
+  background: var(--panel); border: 1px solid var(--line); color: var(--txt);
+  font-size: 12.5px; font-weight: 600; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  transition: border-color 140ms ease, transform 140ms ease;
+}
+.trigger:hover { border-color: var(--iris-line); transform: translateY(-1px); }
+.trigger .mark { width: 16px; height: 16px; border-radius: 5px; }
+
+/* ---------- toast ---------- */
+.toast {
+  position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%) translateY(8px);
+  padding: 9px 15px; border-radius: 10px; background: var(--raise); border: 1px solid var(--line);
+  color: var(--txt); font-size: 13px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  opacity: 0; transition: opacity 180ms ease, transform 180ms ease;
+}
+.toast.show { opacity: 1; transform: translateX(-50%); }
+
+@media (prefers-reduced-motion: reduce) { * { animation-duration: 1ms !important; transition-duration: 1ms !important; } }

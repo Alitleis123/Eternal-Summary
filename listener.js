@@ -10,7 +10,20 @@ if (window.__esListenerLoaded) {
   const cacheKey = () => `summary:${location.href}`;
   const ICON_URL = chrome.runtime.getURL("icons/icon-32.png");
 
-  const showOverlay = () => {
+  // One stylesheet, shared by the trigger here and the panel in page context.
+  let cssPromise = null;
+  const loadCss = () => {
+    if (!cssPromise) {
+      cssPromise = fetch(chrome.runtime.getURL("ui.css"))
+        .then((r) => r.text())
+        .catch(() => "");
+    }
+    return cssPromise;
+  };
+  loadCss();
+
+  const showOverlay = async () => {
+    const css = await loadCss();
     const key = cacheKey();
     chrome.storage.local.get(key, (res) => {
       const entry = res?.[key];
@@ -25,6 +38,7 @@ if (window.__esListenerLoaded) {
       }
       cacheEl.dataset.payload = JSON.stringify(fresh ? entry : {});
       cacheEl.dataset.iconUrl = ICON_URL;
+      cacheEl.dataset.css = css;
 
       const script = document.createElement("script");
       script.src = chrome.runtime.getURL("content.js");
@@ -89,25 +103,38 @@ if (window.__esListenerLoaded) {
   let lastRect = null;
   let hideTimer = null;
 
+  // The trigger lives in a shadow root so page stylesheets cannot restyle it.
+  const buildTrigger = (shadowRoot) => {
+    const root = shadowRoot.querySelector(".root");
+    root.replaceChildren();
+
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "trigger";
+
+    const mark = document.createElement("span");
+    mark.className = "mark";
+    mark.style.backgroundImage = `url("${ICON_URL}")`;
+
+    const label = document.createElement("span");
+    label.textContent = "Summarize";
+
+    button.append(mark, label);
+    root.appendChild(button);
+    return button;
+  };
+
   const restoreSelectionPopup = () => {
     const popup = document.getElementById(POPUP_ID);
-    if (!popup) return;
+    if (!popup?.shadowRoot) return;
     if (popup.__esCleanup) {
       popup.__esCleanup();
       popup.__esCleanup = null;
     }
-    if (popup.__esOriginalChildren) popup.replaceChildren(...popup.__esOriginalChildren);
-    if (popup.__esOriginalStyle) popup.setAttribute("style", popup.__esOriginalStyle);
-    if (popup.__esOriginalParent && popup.parentNode !== popup.__esOriginalParent) {
-      const next = popup.__esOriginalNextSibling;
-      if (next && next.parentNode === popup.__esOriginalParent) {
-        popup.__esOriginalParent.insertBefore(popup, next);
-      } else {
-        popup.__esOriginalParent.appendChild(popup);
-      }
-    }
     popup.dataset.expanded = "false";
-    popup.style.display = "none";
+    popup.style.setProperty("display", "none", "important");
+    popup.style.setProperty("pointer-events", "none", "important");
+    wireTrigger(buildTrigger(popup.shadowRoot));
   };
 
   const ensureStore = () => {
@@ -115,7 +142,7 @@ if (window.__esListenerLoaded) {
     if (!store) {
       store = document.createElement("div");
       store.id = STORE_ID;
-      store.style.display = "none";
+      store.style.setProperty("display", "none", "important");
       document.documentElement.appendChild(store);
     }
     return store;
@@ -130,7 +157,7 @@ if (window.__esListenerLoaded) {
       const anchorId = `es-anchor-${Date.now()}-${Math.random().toString(36).slice(2)}`;
       anchor.id = anchorId;
       anchor.dataset.esAnchor = "true";
-      Object.assign(anchor.style, {
+      for (const [k, v] of Object.entries({
         display: "inline-block",
         width: "0px",
         height: "0px",
@@ -138,8 +165,10 @@ if (window.__esListenerLoaded) {
         padding: "0",
         margin: "0",
         border: "0",
-        lineHeight: "0",
-      });
+        "line-height": "0",
+      })) {
+        anchor.style.setProperty(k, v, "important");
+      }
       range.collapse(true);
       range.insertNode(anchor);
       const anchorRect = anchor.getBoundingClientRect();
@@ -156,79 +185,8 @@ if (window.__esListenerLoaded) {
     }
   };
 
-  const ensurePopup = () => {
-    let popup = document.getElementById(POPUP_ID);
-    if (popup) return popup;
-
-    popup = document.createElement("button");
-    popup.id = POPUP_ID;
-    popup.type = "button";
-    Object.assign(popup.style, {
-      position: "fixed",
-      zIndex: "1000002",
-      padding: "0.35rem 0.65rem 0.35rem 0.5rem",
-      borderRadius: "12px",
-      border: "1px solid rgba(99, 102, 241, 0.3)",
-      background: "rgba(10, 10, 30, 0.95)",
-      color: "#e0e7ff",
-      fontSize: "0.78rem",
-      letterSpacing: "0.2px",
-      boxShadow: "0 8px 24px rgba(8, 8, 20, 0.4), 0 0 0 1px rgba(99, 102, 241, 0.08)",
-      cursor: "pointer",
-      display: "none",
-      transition:
-        "opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1), transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease",
-      opacity: "0",
-      transform: "translateY(6px) scale(0.96)",
-      backdropFilter: "blur(12px)",
-      WebkitBackdropFilter: "blur(12px)",
-    });
-
-    const icon = document.createElement("img");
-    icon.src = ICON_URL;
-    icon.alt = "";
-    Object.assign(icon.style, {
-      width: "16px",
-      height: "16px",
-      borderRadius: "4px",
-      marginRight: "0.35rem",
-      boxShadow: "0 0 0 1px rgba(255,255,255,0.2), 0 0 12px rgba(99,102,241,0.45)",
-      animation: "esPulse 1.6s ease-in-out infinite",
-    });
-
-    const label = document.createElement("span");
-    label.textContent = "Summarize";
-    Object.assign(label.style, {
-      fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-      fontWeight: "600",
-      display: "inline-block",
-      transform: "translateY(-0.5px)",
-    });
-
-    popup.appendChild(icon);
-    popup.appendChild(label);
-
-    const style = document.createElement("style");
-    style.textContent = `
-      @keyframes esPulse {
-        0%, 100% { transform: scale(1); filter: brightness(1); }
-        50% { transform: scale(1.06); filter: brightness(1.1); }
-      }
-      @keyframes esFloat {
-        0%, 100% { transform: translateY(0); }
-        50% { transform: translateY(-2px); }
-      }
-      #${POPUP_ID}:hover {
-        box-shadow: 0 12px 32px rgba(8, 8, 20, 0.5), 0 0 0 1px rgba(99, 102, 241, 0.2);
-        border-color: rgba(99, 102, 241, 0.5) !important;
-        transform: translateY(1px) scale(1.02) !important;
-      }
-    `;
-    (document.head || document.documentElement).appendChild(style);
-
-    popup.addEventListener("click", (e) => {
-      // Already showing a summary card, let the card handle its own clicks.
-      if (popup.dataset.expanded === "true") return;
+  const wireTrigger = (button) => {
+    button.addEventListener("click", (e) => {
       e.preventDefault();
       e.stopPropagation();
 
@@ -237,6 +195,7 @@ if (window.__esListenerLoaded) {
       // which collapses the live selection.
       const selectedText = selection ? selection.toString().trim() : "";
       const { anchorId, anchorOffset } = markSelectionAnchor(selection);
+
       const store = ensureStore();
       store.dataset.text = selectedText;
       store.dataset.mode = "selection";
@@ -245,77 +204,82 @@ if (window.__esListenerLoaded) {
       store.dataset.anchorOffset = anchorOffset;
       showOverlay();
     });
+  };
 
-    (document.documentElement || document.body).appendChild(popup);
-    popup.__esOriginalChildren = Array.from(popup.childNodes);
-    popup.__esOriginalStyle = popup.getAttribute("style") || "";
-    popup.__esOriginalParent = popup.parentNode;
-    popup.__esOriginalNextSibling = popup.nextSibling;
+  const ensurePopup = async () => {
+    let popup = document.getElementById(POPUP_ID);
+    if (popup) return popup;
+
+    popup = document.createElement("div");
+    popup.id = POPUP_ID;
+    for (const [k, v] of Object.entries({
+      position: "fixed",
+      inset: "0",
+      "z-index": "2147483646",
+      display: "none",
+      margin: "0",
+      padding: "0",
+      border: "0",
+      background: "none",
+      "pointer-events": "none",
+    })) {
+      popup.style.setProperty(k, v, "important");
+    }
+
+    const shadow = popup.attachShadow({ mode: "open" });
+    const style = document.createElement("style");
+    style.textContent = await loadCss();
+    shadow.appendChild(style);
+    const root = document.createElement("div");
+    root.className = "root";
+    shadow.appendChild(root);
+
+    document.documentElement.appendChild(popup);
+    wireTrigger(buildTrigger(shadow));
     return popup;
   };
 
-  const positionPopup = (popup, rect) => {
-    const offset = 10;
-    const popupRect = popup.getBoundingClientRect();
-    let top = rect.top - popupRect.height - offset;
-    if (top < 8) top = rect.bottom + offset;
-    let left = rect.left;
-    if (left + popupRect.width > window.innerWidth - 8) {
-      left = window.innerWidth - popupRect.width - 8;
-    }
+  const placeTrigger = (popup, rect) => {
+    const button = popup.shadowRoot?.querySelector(".trigger");
+    if (!button) return;
+    const gap = 8;
+    const box = button.getBoundingClientRect();
+    let top = rect.top - box.height - gap;
+    if (top < 8) top = rect.bottom + gap;
+    let left = Math.min(rect.left, window.innerWidth - box.width - 8);
     if (left < 8) left = 8;
-    popup.style.top = `${Math.round(top)}px`;
-    popup.style.left = `${Math.round(left)}px`;
+    button.style.top = `${Math.round(top)}px`;
+    button.style.left = `${Math.round(left)}px`;
   };
 
-  const updatePopup = () => {
+  const updatePopup = async () => {
     const selection = window.getSelection();
     const textValue = selection ? selection.toString().trim() : "";
-    const popup = ensurePopup();
+    const popup = await ensurePopup();
 
-    if (popup.dataset.expanded === "true") {
-      popup.style.display = "inline-flex";
-      popup.style.alignItems = "stretch";
-      return;
-    }
+    if (popup.dataset.expanded === "true") return;
 
     if (!textValue) {
-      popup.style.opacity = "0";
-      popup.style.transform = "translateY(6px) scale(0.98)";
-      popup.style.animation = "none";
       if (hideTimer) clearTimeout(hideTimer);
       hideTimer = setTimeout(() => {
-        popup.style.display = "none";
-      }, 220);
+        popup.style.setProperty("display", "none", "important");
+      }, 180);
       return;
     }
 
-    const range = selection.rangeCount ? selection.getRangeAt(0) : null;
     if (hideTimer) {
       clearTimeout(hideTimer);
       hideTimer = null;
     }
-    popup.style.display = "inline-flex";
-    popup.style.alignItems = "center";
-    popup.style.opacity = "0";
-    popup.style.transform = "translateY(6px) scale(0.98)";
-    popup.style.animation = "esFloat 2.6s ease-in-out infinite";
-    requestAnimationFrame(() => {
-      popup.style.opacity = "1";
-      popup.style.transform = "translateY(0) scale(1)";
+    popup.style.setProperty("display", "block", "important");
 
-      let rect = range ? range.getBoundingClientRect() : null;
-      if (!rect || (rect.width === 0 && rect.height === 0)) {
-        rect = {
-          top: lastPointer.y,
-          bottom: lastPointer.y,
-          left: lastPointer.x,
-          right: lastPointer.x,
-        };
-      }
-      lastRect = rect;
-      positionPopup(popup, rect);
-    });
+    const range = selection.rangeCount ? selection.getRangeAt(0) : null;
+    let rect = range ? range.getBoundingClientRect() : null;
+    if (!rect || (rect.width === 0 && rect.height === 0)) {
+      rect = { top: lastPointer.y, bottom: lastPointer.y, left: lastPointer.x };
+    }
+    lastRect = rect;
+    requestAnimationFrame(() => placeTrigger(popup, rect));
   };
 
   // mouseup rather than selectionchange, so the button does not flicker mid-drag.
