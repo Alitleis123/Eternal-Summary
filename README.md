@@ -7,7 +7,7 @@ Live site: https://alitleis123.github.io/Eternal-Summary/
 ## Features
 
 - **Page summaries.** Click the toolbar icon or press the shortcut and the extension reads the page and returns a summary.
-- **Four modes.** TL;DR, bullets, key points, or plain English. Switching modes re-reads the page in that style and appends the result, so the conversation above it stays intact.
+- **Four modes.** TL;DR, bullets, key points, or plain English. Switching modes re-reads the page in that style and appends the result, so the conversation above it stays intact. Your choice is remembered for next time.
 - **Selection summaries.** Highlight text and a floating Summarize button appears next to it. The card that opens follows the highlight as you scroll.
 - **Follow-up questions.** Ask anything about the page in the same panel. The thread scrolls on its own, keeps every turn, and only follows new messages when you are already at the bottom.
 - **Clickable sources.** Every answer lists the passages it drew on. Clicking one closes the panel and highlights that passage on the page.

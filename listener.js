@@ -8,6 +8,7 @@ if (window.__esListenerLoaded) {
 
   const CACHE_TTL_MS = 30 * 60 * 1000;
   const cacheKey = () => `summary:${location.href}`;
+  const MODE_KEY = "es:mode";
   const ICON_URL = chrome.runtime.getURL("icons/icon-32.png");
 
   // One stylesheet, shared by the trigger here and the panel in page context.
@@ -25,7 +26,7 @@ if (window.__esListenerLoaded) {
   const showOverlay = async () => {
     const css = await loadCss();
     const key = cacheKey();
-    chrome.storage.local.get(key, (res) => {
+    chrome.storage.local.get([key, MODE_KEY], (res) => {
       const entry = res?.[key];
       const fresh = entry && Date.now() - (entry.ts || 0) < CACHE_TTL_MS;
 
@@ -39,6 +40,7 @@ if (window.__esListenerLoaded) {
       cacheEl.dataset.payload = JSON.stringify(fresh ? entry : {});
       cacheEl.dataset.iconUrl = ICON_URL;
       cacheEl.dataset.css = css;
+      cacheEl.dataset.mode = res?.[MODE_KEY] || "";
 
       const script = document.createElement("script");
       script.src = chrome.runtime.getURL("content.js");
@@ -80,6 +82,11 @@ if (window.__esListenerLoaded) {
           "*"
         );
       }
+      return;
+    }
+
+    if (msg.type === "ES_PREF_SET") {
+      if (typeof msg.mode === "string" && msg.mode) chrome.storage.local.set({ [MODE_KEY]: msg.mode });
       return;
     }
 

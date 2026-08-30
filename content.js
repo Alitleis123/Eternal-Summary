@@ -114,6 +114,7 @@
   };
 
   const writeCache = (value) => window.postMessage({ type: "ES_CACHE_SET", value }, "*");
+  const writeModePref = (mode) => window.postMessage({ type: "ES_PREF_SET", mode }, "*");
 
   const friendlyError = (err) => {
     if (err?.code === "timeout") return "That took too long. Try again.";
@@ -241,20 +242,33 @@
   // =========================================================
   // Toast
   // =========================================================
-  let toastHost = null;
+  // content.js is re-injected on every open, so the toast host is looked up by
+  // id and torn down afterwards. Otherwise each toast would strand another
+  // full-viewport host, each carrying its own copy of the stylesheet.
+  const TOAST_ID = "es-toast";
+  let toastTimer = 0;
+
   const showToast = (label) => {
-    if (!toastHost) {
-      toastHost = makeHost(null);
-      document.documentElement.appendChild(toastHost.host);
+    let host = document.getElementById(TOAST_ID);
+    let root = host?.shadowRoot?.querySelector(".root");
+    if (!root) {
+      host?.remove();
+      const made = makeHost(TOAST_ID);
+      host = made.host;
+      root = made.root;
+      document.documentElement.appendChild(host);
     }
-    toastHost.root.replaceChildren();
+
+    root.replaceChildren();
     const node = el("div", "toast");
     node.textContent = label;
-    toastHost.root.appendChild(node);
+    root.appendChild(node);
     requestAnimationFrame(() => node.classList.add("show"));
-    setTimeout(() => {
+
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => {
       node.classList.remove("show");
-      setTimeout(() => node.remove(), 200);
+      setTimeout(() => host.remove(), 220);
     }, 1900);
   };
 
@@ -459,6 +473,7 @@
 
     const card = el("div", "card");
     root.appendChild(card);
+    requestAnimationFrame(() => root.classList.add("in"));
 
     const bar = el("div", "bar");
     const mark = el("div", "mark");
@@ -491,9 +506,17 @@
     card.appendChild(composer);
 
     // --- position against the original highlight
+    const GAP = 10;
+    const MARGIN = 8;
+    const MAX_CARD = 380;
+    const MIN_CARD = 130;
+    let placing = false;
+
     const place = () => {
-      const gap = 10;
-      const box = card.getBoundingClientRect();
+      // Resizing the card re-enters through the observer below.
+      if (placing) return;
+      placing = true;
+
       let base = rect || {};
       if (anchorId) {
         const anchor = document.getElementById(anchorId);
@@ -508,15 +531,26 @@
             : { top: r.top, bottom: r.bottom, left: r.left };
         }
       }
-      const above = (base.top || 0) - box.height - gap;
-      let top = above > 8 ? above : (base.bottom || 0) + gap;
-      top = Math.max(8, Math.min(top, window.innerHeight - box.height - 8));
+
+      // Take whichever side of the highlight has more room and cap the card to
+      // it, so a tall conversation scrolls inside the card instead of growing
+      // across the text it is about.
+      const spaceAbove = (base.top || 0) - GAP - MARGIN;
+      const spaceBelow = window.innerHeight - (base.bottom || 0) - GAP - MARGIN;
+      const above = spaceAbove >= spaceBelow;
+      const room = Math.max(MIN_CARD, Math.floor(above ? spaceAbove : spaceBelow));
+      card.style.maxHeight = `${Math.min(MAX_CARD, room)}px`;
+
+      const box = card.getBoundingClientRect();
+      let top = above ? (base.top || 0) - box.height - GAP : (base.bottom || 0) + GAP;
+      top = Math.max(MARGIN, Math.min(top, window.innerHeight - box.height - MARGIN));
       let left = base.left || 0;
-      left = Math.max(8, Math.min(left, window.innerWidth - box.width - 8));
-      root.style.setProperty("--x", `${Math.round(left)}px`);
+      left = Math.max(MARGIN, Math.min(left, window.innerWidth - box.width - MARGIN));
+
       card.style.position = "fixed";
       card.style.left = `${Math.round(left)}px`;
       card.style.top = `${Math.round(top)}px`;
+      placing = false;
     };
 
     let frame = 0;
@@ -530,9 +564,16 @@
     document.addEventListener("scroll", onViewport, true);
     window.addEventListener("resize", onViewport);
 
+    // The card is placed before the answer arrives, so it has to be placed
+    // again as it grows. Without this it drifts down over the text it is
+    // summarizing while the reply types in.
+    const resize = new ResizeObserver(onViewport);
+    resize.observe(card);
+
     popup.__esCleanup = () => {
       document.removeEventListener("scroll", onViewport, true);
       window.removeEventListener("resize", onViewport);
+      resize.disconnect();
       if (frame) cancelAnimationFrame(frame);
       if (anchorId) document.getElementById(anchorId)?.remove();
     };
@@ -689,7 +730,10 @@
   const modeRow = el("div", "modes");
   modeRow.setAttribute("role", "group");
   modeRow.setAttribute("aria-label", "Summary style");
-  let activeMode = MODES[0].id;
+  // Start in whichever style was picked last, so reopening a page reuses the
+  // cached summary instead of silently spending another request.
+  const savedMode = cacheEl?.dataset?.mode || "";
+  let activeMode = MODES.some((m) => m.id === savedMode) ? savedMode : MODES[0].id;
   const chips = new Map();
 
   const paintModes = () => {
@@ -704,6 +748,7 @@
       if (busy || activeMode === mode.id) return;
       activeMode = mode.id;
       paintModes();
+      writeModePref(activeMode);
       runSummary({ force: true, announce: true });
     });
     chips.set(mode.id, chip);
