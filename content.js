@@ -145,35 +145,159 @@
   };
 
   // =========================================================
-  // Typing effect
+  // Markdown
+  //
+  // The model returns "- item" lines for bullets mode and "1." for key points.
+  // Rendering those as plain text showed the literal markers, so the two list
+  // modes never looked like lists.
   // =========================================================
-  const typeWriter = (node, textValue, { onTick, onDone } = {}) => {
-    const full = textValue || "";
+  const INLINE = /(\*\*[^*\n]+\*\*|`[^`\n]+`|\*[^*\n]+\*)/g;
+
+  const renderInline = (text, parent) => {
+    for (const part of text.split(INLINE)) {
+      if (!part) continue;
+      if (part.length > 4 && part.startsWith("**") && part.endsWith("**")) {
+        const strong = document.createElement("strong");
+        strong.textContent = part.slice(2, -2);
+        parent.appendChild(strong);
+      } else if (part.length > 2 && part.startsWith("`") && part.endsWith("`")) {
+        const code = document.createElement("code");
+        code.textContent = part.slice(1, -1);
+        parent.appendChild(code);
+      } else if (part.length > 2 && part.startsWith("*") && part.endsWith("*")) {
+        const em = document.createElement("em");
+        em.textContent = part.slice(1, -1);
+        parent.appendChild(em);
+      } else {
+        parent.appendChild(document.createTextNode(part));
+      }
+    }
+  };
+
+  const renderMarkdown = (text, host) => {
+    host.replaceChildren();
+    let list = null;
+    let listTag = "";
+    let prose = [];
+
+    const flushProse = () => {
+      if (!prose.length) return;
+      const p = document.createElement("p");
+      p.className = "md-p";
+      renderInline(prose.join(" "), p);
+      host.appendChild(p);
+      prose = [];
+    };
+    const endList = () => {
+      list = null;
+      listTag = "";
+    };
+
+    for (const raw of (text || "").split("\n")) {
+      const line = raw.trim();
+      const bullet = line.match(/^[-*\u2022]\s+(.*)$/);
+      const numbered = line.match(/^(\d{1,2})[.)]\s+(.*)$/);
+
+      if (bullet || numbered) {
+        flushProse();
+        const tag = bullet ? "ul" : "ol";
+        if (!list || listTag !== tag) {
+          list = document.createElement(tag);
+          list.className = "md-list";
+          host.appendChild(list);
+          listTag = tag;
+        }
+        const item = document.createElement("li");
+        renderInline(bullet ? bullet[1] : numbered[2], item);
+        list.appendChild(item);
+        continue;
+      }
+
+      endList();
+      if (!line) {
+        flushProse();
+        continue;
+      }
+      // A single newline inside prose is a soft wrap, not a new paragraph.
+      prose.push(line);
+    }
+    flushProse();
+    return host;
+  };
+
+  // =========================================================
+  // Reveal
+  //
+  // Types across the rendered tree one block at a time, so list markers appear
+  // with their text instead of all at once up front.
+  // =========================================================
+  const revealMarkdown = (container, { onTick, onDone } = {}) => {
+    const units = Array.from(container.querySelectorAll("p, li")).map((el) => {
+      const nodes = [];
+      const walk = (node) => {
+        for (const child of node.childNodes) {
+          if (child.nodeType === Node.TEXT_NODE) nodes.push([child, child.nodeValue]);
+          else walk(child);
+        }
+      };
+      walk(el);
+      return { el, nodes, len: nodes.reduce((sum, [, t]) => sum + t.length, 0) };
+    });
+    const total = units.reduce((sum, u) => sum + u.len, 0);
+
     const finish = () => {
-      node.textContent = full;
+      for (const unit of units) {
+        unit.el.style.display = "";
+        for (const [node, text] of unit.nodes) node.nodeValue = text;
+      }
       if (onTick) onTick();
       if (onDone) onDone();
     };
-    // Background tabs do not run animation frames, so render in one shot rather
-    // than leaving the answer blank until the tab is focused again.
-    if (!full || document.hidden) {
+
+    // Background tabs do not run animation frames.
+    if (!total || document.hidden) {
       finish();
       return;
     }
-    const perFrame = Math.max(1, Math.ceil(full.length / 80));
-    let i = 0;
+
+    for (const unit of units) {
+      unit.el.style.display = "none";
+      for (const [node] of unit.nodes) node.nodeValue = "";
+    }
+
+    const perFrame = Math.max(1, Math.ceil(total / 80));
+    let shown = 0;
+
     const step = () => {
       if (document.hidden) {
         finish();
         return;
       }
-      if (i >= full.length) {
+      shown = Math.min(total, shown + perFrame);
+      let left = shown;
+      for (const unit of units) {
+        if (left <= 0) {
+          unit.el.style.display = "none";
+          continue;
+        }
+        unit.el.style.display = "";
+        for (const [node, text] of unit.nodes) {
+          if (left <= 0) {
+            node.nodeValue = "";
+          } else if (left >= text.length) {
+            node.nodeValue = text;
+            left -= text.length;
+          } else {
+            node.nodeValue = text.slice(0, left);
+            left = 0;
+          }
+        }
+      }
+      if (onTick) onTick();
+      if (shown >= total) {
         if (onDone) onDone();
         return;
       }
-      i = Math.min(full.length, i + perFrame);
-      node.textContent = full.slice(0, i);
-      if (onTick) onTick();
       requestAnimationFrame(step);
     };
     requestAnimationFrame(step);
@@ -225,18 +349,36 @@
     return bestScore >= 0.5 ? best : null;
   };
 
+  const HIGHLIGHT = {
+    "background-color": "rgba(124, 107, 245, 0.24)",
+    "box-shadow": "0 0 0 6px rgba(124, 107, 245, 0.16)",
+    "border-radius": "4px",
+    transition: "background-color 300ms ease",
+  };
+  const HIGHLIGHT_MS = 2400;
+
   const highlightParagraph = (node) => {
     if (!node) return;
     node.scrollIntoView({ behavior: "smooth", block: "center" });
-    const previous = node.getAttribute("style") || "";
-    node.style.setProperty("background-color", "rgba(124, 107, 245, 0.24)", "important");
-    node.style.setProperty("box-shadow", "0 0 0 6px rgba(124, 107, 245, 0.16)", "important");
-    node.style.setProperty("border-radius", "4px", "important");
-    node.style.setProperty("transition", "background-color 300ms ease", "important");
+
+    // Restore only the properties we touch. Replacing the whole style attribute
+    // would discard anything the page sets on this element in the meantime.
+    const previous = Object.keys(HIGHLIGHT).map((name) => [
+      name,
+      node.style.getPropertyValue(name),
+      node.style.getPropertyPriority(name),
+    ]);
+    for (const [name, value] of Object.entries(HIGHLIGHT)) {
+      node.style.setProperty(name, value, "important");
+    }
+
     setTimeout(() => {
-      if (previous) node.setAttribute("style", previous);
-      else node.removeAttribute("style");
-    }, 2400);
+      for (const [name, value, priority] of previous) {
+        if (value) node.style.setProperty(name, value, priority);
+        else node.style.removeProperty(name);
+      }
+      if (!node.getAttribute("style")) node.removeAttribute("style");
+    }, HIGHLIGHT_MS);
   };
 
   // =========================================================
@@ -358,7 +500,7 @@
 
     const addTurn = (role, text, { typing = false, sources = [], copyable = true } = {}) => {
       const turn = el("div", `turn ${role}`);
-      const bubble = el("div", "bubble");
+      const bubble = el("div", `bubble ${role === "assistant" ? "rich" : "plain"}`);
       turn.appendChild(bubble);
 
       // One row holds the sources toggle and the copy action, so a turn without
@@ -379,17 +521,22 @@
       thread.appendChild(turn);
       follow(true);
 
-      if (typing) {
-        typeWriter(bubble, text, {
-          onTick: () => follow(),
-          onDone: () => {
-            addSources(turn, sources);
-            follow();
-          },
-        });
+      if (role === "assistant") {
+        renderMarkdown(text, bubble);
+        if (typing) {
+          revealMarkdown(bubble, {
+            onTick: () => follow(),
+            onDone: () => {
+              addSources(turn, sources);
+              follow();
+            },
+          });
+        } else {
+          addSources(turn, sources);
+          follow(true);
+        }
       } else {
         bubble.textContent = text;
-        addSources(turn, sources);
         follow(true);
       }
       return turn;
@@ -677,6 +824,14 @@
   // containing block for our fixed positioning.
   document.documentElement.appendChild(host);
 
+  const pageText = extractPageText();
+
+  // Average adult reading speed, rounded so short pages still read "1 min".
+  const readingMinutes = (text) => {
+    const words = text.trim() ? text.trim().split(/\s+/).length : 0;
+    return words ? Math.max(1, Math.round(words / 230)) : 0;
+  };
+
   const teardown = [];
   const on = (target, event, handler, options) => {
     target.addEventListener(event, handler, options);
@@ -714,7 +869,11 @@
   const t1 = el("div", "t1");
   t1.textContent = "Eternal Summary";
   const t2 = el("div", "t2");
-  t2.textContent = document.title || location.hostname;
+  const minutes = readingMinutes(pageText);
+  t2.textContent = minutes
+    ? `${location.hostname} \u00b7 ${minutes} min read`
+    : location.hostname;
+  t2.title = document.title || location.hostname;
   titles.append(t1, t2);
 
   const closeBtn = el("button", "icon-btn", ICONS.close);
@@ -807,7 +966,6 @@
   // =========================================================
   const history = [];
   let busy = false;
-  let pageText = "";
 
   const setBusy = (value) => {
     busy = value;
@@ -842,7 +1000,6 @@
       }
     }
 
-    pageText = extractPageText();
     if (pageText.length < 40) {
       chat.addTurn("assistant", "There is not enough readable text on this page to summarize.", { copyable: false });
       setBusy(false);
@@ -894,7 +1051,7 @@
     const endpoint = override?.endpoint || "ask";
     const payload =
       override?.payload || {
-        text: pageText || extractPageText(),
+        text: pageText,
         messages: history.slice(-6),
         selection: selectedText,
       };
@@ -932,6 +1089,28 @@
     if (e.key === "Escape") closePanel();
   });
   scrim.addEventListener("click", () => closePanel());
+
+  // Keep Tab inside the dialog. Without this a keyboard user tabs straight out
+  // into the page behind an overlay they cannot see past.
+  panel.addEventListener("keydown", (e) => {
+    if (e.key !== "Tab") return;
+    const focusable = Array.from(
+      panel.querySelectorAll("button:not([disabled]), input:not([disabled])")
+    ).filter((node) => node.getClientRects().length > 0);
+    if (focusable.length < 2) return;
+
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    const active = host.shadowRoot.activeElement;
+
+    if (e.shiftKey && (active === first || !focusable.includes(active))) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && active === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  });
 
   runSummary();
   setTimeout(() => input.focus(), 260);

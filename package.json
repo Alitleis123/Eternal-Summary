@@ -1,0 +1,13 @@
+{
+  "name": "eternal-summary",
+  "version": "1.3.0",
+  "description": "Chrome extension that summarizes the page you are reading and answers questions about it.",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "test": "node --test --test-concurrency=1 test/**/*.test.js",
+    "check": "node --check background.js && node --check listener.js && node --check content.js && node --check backend/server.js"
+  },
+  "author": "Ali Tleis",
+  "license": "SEE LICENSE IN LICENSE"
+}

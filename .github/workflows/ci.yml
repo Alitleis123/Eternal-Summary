@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Extension tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Syntax check
+        run: npm run check
+
+      - name: Install Chrome
+        id: setup-chrome
+        uses: browser-actions/setup-chrome@v1
+        with:
+          chrome-version: stable
+
+      - name: Run tests
+        run: npm test
+        env:
+          CHROME_PATH: ${{ steps.setup-chrome.outputs.chrome-path }}
+
+  backend:
+    name: Backend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - run: npm ci
+
+      - name: Boot and probe the health endpoint
+        run: |
+          node server.js & SERVER=$!
+          for i in $(seq 1 20); do
+            if curl -sf http://127.0.0.1:3000/healthz > /dev/null; then break; fi
+            sleep 0.5
+          done
+          curl -sf http://127.0.0.1:3000/healthz
+          # Requests without text must be rejected before any API call.
+          code=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:3000/api/summarize \
+            -H 'Content-Type: application/json' -d '{}')
+          test "$code" = "400" || { echo "expected 400, got $code"; kill $SERVER; exit 1; }
+          kill $SERVER

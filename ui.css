@@ -92,7 +92,23 @@ svg { display: block; flex: none; }
 .turn.user { align-items: flex-end; }
 @keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 
-.bubble { max-width: 86%; padding: 10px 13px; border-radius: 14px; font-size: 14.5px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+.bubble { max-width: 86%; padding: 10px 13px; border-radius: 14px; font-size: 14.5px; line-height: 1.6; overflow-wrap: anywhere; }
+.bubble.plain { white-space: pre-wrap; }
+
+/* rendered markdown */
+.md-p + .md-p, .md-p + .md-list, .md-list + .md-p, .md-list + .md-list { margin-top: 0.65em; }
+.md-list { padding-left: 1.25em; display: flex; flex-direction: column; gap: 0.3em; }
+.md-list li { padding-left: 0.15em; }
+.md-list li::marker { color: var(--dim); }
+ol.md-list li::marker { font-variant-numeric: tabular-nums; font-size: 0.92em; }
+.bubble strong { font-weight: 650; }
+.bubble em { font-style: italic; }
+.bubble code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.88em; padding: 1px 5px; border-radius: 5px;
+  background: rgba(255, 255, 255, 0.09);
+}
+.turn.user .bubble code { background: rgba(0, 0, 0, 0.22); }
 .turn.assistant .bubble { background: var(--raise); border: 1px solid var(--line-soft); border-bottom-left-radius: 5px; }
 .turn.user .bubble { background: var(--iris); color: #fff; border-bottom-right-radius: 5px; }
 .turn.error .bubble { background: rgba(242, 119, 122, 0.1); border: 1px solid rgba(242, 119, 122, 0.28); color: #FFD9DA; }

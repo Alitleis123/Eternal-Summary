@@ -1,8 +1,12 @@
 # Eternal Summary
 
+[![CI](https://github.com/Alitleis123/Eternal-Summary/actions/workflows/ci.yml/badge.svg)](https://github.com/Alitleis123/Eternal-Summary/actions/workflows/ci.yml)
+
 A Chrome extension that summarizes the page you are reading, explains anything you highlight, and answers follow-up questions without leaving the tab.
 
 Live site: https://alitleis123.github.io/Eternal-Summary/
+
+![The panel open on an article, with sources expanded](docs/shots/panel.png)
 
 ## Features
 
@@ -12,6 +16,17 @@ Live site: https://alitleis123.github.io/Eternal-Summary/
 - **Follow-up questions.** Ask anything about the page in the same panel. The thread scrolls on its own, keeps every turn, and only follows new messages when you are already at the bottom.
 - **Clickable sources.** Every answer lists the passages it drew on. Clicking one closes the panel and highlights that passage on the page.
 - **Local caching.** Summaries are kept in extension storage for thirty minutes, so reopening a page you already read costs nothing.
+- **Reading time.** The header shows how long the page would take to read, so you can see what the summary saved you.
+
+## Screenshots
+
+| Bullets mode | Follow-up questions |
+| --- | --- |
+| ![Bullets mode rendering a real list](docs/shots/bullets.png) | ![A conversation in the panel](docs/shots/chat.png) |
+
+| Highlight a passage | Summarize just that passage |
+| --- | --- |
+| ![The floating Summarize button beside a highlight](docs/shots/trigger.png) | ![The selection card anchored to the highlight](docs/shots/selection.png) |
 
 ## Keyboard shortcut
 
@@ -63,6 +78,17 @@ To point the extension at your own deployment, change `API_BASE` in `background.
 
 `mode` is one of `tldr`, `bullets`, `key-points`, or `simple`. Both endpoints are rate limited to 30 requests per minute per IP.
 
+## Tests
+
+Real Chrome, driven over the DevTools Protocol. Only the `chrome.*` API surface and the network are stubbed, so the tests exercise the actual message path: the page posts to `listener.js`, which forwards to `background.js`, which calls the backend.
+
+```bash
+npm test      # 34 end-to-end tests
+npm run check # syntax check every entry point
+```
+
+The fixture page ships deliberately hostile CSS (`* { line-height: 1 !important }`, uppercase buttons, forced letter spacing) to prove the UI stays isolated. Coverage includes style isolation, markdown rendering, cache expiry and mode persistence, source lookup and highlight cleanup, focus trapping, error and rate-limit paths, and a check that repeated opens strand nothing on the page.
+
 ## Layout
 
 ```
@@ -73,6 +99,7 @@ Eternal-Summary/
 ├── content.js         The panel itself. Runs in page context, injected on demand.
 ├── ui.css             Styles for the panel and the selection card
 ├── icons/             Extension icons, 16 through 512
+├── test/              End-to-end tests and the CDP driver
 ├── backend/           Express service that calls the Gemini API
 └── docs/              Project site, published with GitHub Pages
 ```
