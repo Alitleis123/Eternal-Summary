@@ -97,7 +97,7 @@ describe("panel", () => {
   });
 
   test("shows an estimated reading time", async () => {
-    assert.match(await inPanel("s.querySelector('.t2').textContent"), /^localhost · \d+ min read$/);
+    assert.match(await inPanel("s.querySelector('.wordmark .meta').textContent"), /^localhost · \d+ min read$/);
   });
 
   test("opens from the keyboard shortcut", async () => {
@@ -112,19 +112,27 @@ describe("panel", () => {
     assert.equal(await evaluate("!!document.getElementById('ai-overlay')"), false);
   });
 
-  test("escape and backdrop click close it", async () => {
+  test("escape closes it", async () => {
     await openPanel();
     await evaluate("document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))");
-    await sleep(400);
-    assert.equal(await evaluate("!!document.getElementById('ai-overlay')"), false);
-
-    await openPanel();
-    await inPanel("s.querySelector('.scrim').click()");
-    await sleep(400);
+    await sleep(500);
     assert.equal(await evaluate("!!document.getElementById('ai-overlay')"), false);
   });
 
+  test("the rail leaves the article reachable", async () => {
+    await openPanel();
+    // No backdrop: the page must still take clicks beside the rail.
+    const covered = await evaluate(`(() => {
+      const el = document.elementFromPoint(40, Math.round(innerHeight / 2));
+      return el ? el.id === 'ai-overlay' : true;
+    })()`);
+    assert.equal(covered, false, "the rail should not cover the article");
+  });
+
   test("refuses pages where content scripts cannot run", async () => {
+    // The rail has no backdrop to dismiss, so the previous test leaves it open.
+    await closePanel();
+    await sleep(400);
     await evaluate("window.__injections.length = 0");
     for (const url of ["chrome://settings", "about:blank", "view-source:http://x", "https://chromewebstore.google.com/detail/x"]) {
       await evaluate(`window.__onAction({ id: 1, url: ${JSON.stringify(url)} })`);
@@ -139,10 +147,11 @@ describe("style isolation", () => {
   test("the host page cannot restyle the panel", async () => {
     await reload();
     await openPanel();
-    // The fixture forces line-height 1, uppercase buttons and letter-spacing.
-    assert.equal(await inPanel("getComputedStyle(s.querySelector('.bubble')).lineHeight"), "23.2px");
-    assert.equal(await inPanel("getComputedStyle(s.querySelector('.chip')).textTransform"), "none");
-    assert.equal(await inPanel("getComputedStyle(s.querySelector('.bubble')).letterSpacing"), "normal");
+    // The fixture forces line-height 1, 24px buttons and 2px letter spacing.
+    const lineHeight = parseFloat(await inPanel("getComputedStyle(s.querySelector('.entry-body')).lineHeight"));
+    assert.ok(lineHeight > 20, `page CSS collapsed the line height to ${lineHeight}`);
+    assert.equal(await inPanel("getComputedStyle(s.querySelector('.seg')).fontSize"), "9.5px");
+    assert.equal(await inPanel("getComputedStyle(s.querySelector('.entry-body')).letterSpacing"), "normal");
   });
 
   test("the trigger is isolated too", async () => {
@@ -150,7 +159,7 @@ describe("style isolation", () => {
     await select("p1");
     await sleep(500);
     assert.equal(await inCard("s.querySelector('.trigger').textContent"), "Summarize");
-    assert.equal(await inCard("getComputedStyle(s.querySelector('.trigger')).textTransform"), "none");
+    assert.equal(await inCard("getComputedStyle(s.querySelector('.trigger')).fontSize"), "9.5px");
   });
 });
 
@@ -158,27 +167,27 @@ describe("markdown", () => {
   test("bullets render as a list, not literal dashes", async () => {
     await reload();
     await openPanel();
-    await inPanel("[...s.querySelectorAll('.chip')].find(c => c.textContent === 'Bullets').click()");
+    await inPanel("[...s.querySelectorAll('.seg')].find(c => c.textContent === 'Bullets').click()");
     await sleep(1600);
-    assert.equal(await inPanel("s.querySelectorAll('.bubble ul.md-list li').length"), 3);
+    assert.equal(await inPanel("s.querySelectorAll('.entry-body ul.md-list li').length"), 3);
     assert.doesNotMatch(await inPanel("s.querySelector('ul.md-list li').textContent"), /^-/);
   });
 
   test("bold markers are rendered, not shown", async () => {
-    assert.equal(await inPanel("!!s.querySelector('.bubble strong')"), true);
+    assert.equal(await inPanel("!!s.querySelector('.entry-body strong')"), true);
     assert.doesNotMatch(await inPanel("s.querySelector('ul.md-list').textContent"), /\*\*/);
   });
 
   test("numbered lists render as an ordered list", async () => {
-    await inPanel("[...s.querySelectorAll('.chip')].find(c => c.textContent === 'Key points').click()");
+    await inPanel("[...s.querySelectorAll('.seg')].find(c => c.textContent === 'Key points').click()");
     await sleep(1600);
-    assert.equal(await inPanel("s.querySelectorAll('.bubble ol.md-list li').length"), 3);
+    assert.equal(await inPanel("s.querySelectorAll('.entry-body ol.md-list li').length"), 3);
   });
 
   test("questions the user typed are never parsed as markdown", async () => {
     await ask("why is 2 * 3 * 4 = 24");
-    assert.equal(await inPanel("!!s.querySelector('.turn.user em')"), false);
-    assert.match(await inPanel("s.querySelector('.turn.user .bubble').textContent"), /2 \* 3 \* 4/);
+    assert.equal(await inPanel("!!s.querySelector('.entry.ask em')"), false);
+    assert.match(await inPanel("s.querySelector('.entry.ask p').textContent"), /2 \* 3 \* 4/);
   });
 });
 
@@ -188,40 +197,44 @@ describe("conversation", () => {
     await openPanel();
     await ask("First question");
     await ask("Second question");
-    assert.equal(await inPanel("s.querySelectorAll('.turn').length"), 5);
-    assert.match(await inPanel("s.querySelector('.turn').textContent"), /tldr mode/);
+    assert.equal(await inPanel("s.querySelectorAll('.entry').length"), 5);
+    assert.match(await inPanel("s.querySelector('.entry').textContent"), /tldr mode/);
   });
 
   test("switching mode adds to the thread instead of clearing it", async () => {
-    await inPanel("[...s.querySelectorAll('.chip')].find(c => c.textContent === 'Bullets').click()");
+    await inPanel("[...s.querySelectorAll('.seg')].find(c => c.textContent === 'Bullets').click()");
     await sleep(1600);
-    assert.equal(await inPanel("s.querySelectorAll('.turn').length"), 6);
+    assert.equal(await inPanel("s.querySelectorAll('.entry').length"), 6);
     assert.match(await inPanel("s.textContent"), /First question/);
     assert.match(await inPanel("s.textContent"), /Second question/);
-    assert.equal(await inPanel("s.querySelector('.rule').textContent"), "Bullets");
+    assert.equal(
+      await inPanel("[...s.querySelectorAll('.entry-head .mono')].pop().textContent"),
+      "Bullets",
+      "the new summary should be labelled with the mode that produced it"
+    );
   });
 
   test("the thread scrolls instead of the panel growing", async () => {
     for (let i = 0; i < 5; i++) await ask(`Filler question ${i}`);
     assert.equal(
-      await inPanel(`(() => { const p = s.querySelector('.panel').getBoundingClientRect();
+      await inPanel(`(() => { const p = s.querySelector('.rail').getBoundingClientRect();
         return p.top >= -1 && p.bottom <= innerHeight + 1; })()`),
       true
     );
     assert.equal(
-      await inPanel("(() => { const t = s.querySelector('.thread'); return t.scrollHeight > t.clientHeight; })()"),
+      await inPanel("(() => { const t = s.querySelector('.stream'); return t.scrollHeight > t.clientHeight; })()"),
       true
     );
   });
 
   test("scrolling up stops auto-follow and offers a jump back", async () => {
-    await inPanel("(() => { const t = s.querySelector('.thread'); t.scrollTop = 0; t.dispatchEvent(new Event('scroll')); })()");
+    await inPanel("(() => { const t = s.querySelector('.stream'); t.scrollTop = 0; t.dispatchEvent(new Event('scroll')); })()");
     await sleep(300);
     assert.equal(await inPanel("s.querySelector('.jump').classList.contains('show')"), true);
     await inPanel("s.querySelector('.jump').click()");
     await sleep(300);
     assert.equal(
-      await inPanel("(() => { const t = s.querySelector('.thread'); return t.scrollHeight - t.scrollTop - t.clientHeight < 4; })()"),
+      await inPanel("(() => { const t = s.querySelector('.stream'); return t.scrollHeight - t.scrollTop - t.clientHeight < 4; })()"),
       true
     );
   });
@@ -232,7 +245,7 @@ describe("conversation", () => {
         .filter(n => n.getClientRects().length > 0);
       focusable[focusable.length - 1].focus();
       const before = s.activeElement;
-      s.querySelector('.panel').dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
+      s.querySelector('.rail').dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
       return { moved: s.activeElement !== before, inside: s.contains(s.activeElement) };
     })()`);
     assert.equal(trapped.inside, true);
@@ -244,17 +257,21 @@ describe("sources", () => {
     await reload();
     await openPanel();
     await evaluate("window.__error = null; window.onerror = (m) => (window.__error = m);");
-    await inPanel("s.querySelector('.src-toggle').click()");
-    await sleep(300);
-    await inPanel("s.querySelector('.src').click()");
+    assert.ok((await inPanel("s.querySelectorAll('.ref').length")) >= 1, "footnote markers should render");
+    await inPanel("s.querySelector('.ref').click()");
     await sleep(900);
 
     assert.equal(await evaluate("window.__error"), null);
-    assert.equal(await evaluate("!!document.getElementById('ai-overlay')"), false, "panel should step aside");
-    assert.match(await evaluate("document.getElementById('p2').style.backgroundColor"), /124, 107, 245/);
+    assert.equal(
+      await evaluate("!!document.getElementById('ai-overlay')"),
+      true,
+      "the rail sits beside the article, so it should stay open"
+    );
+    assert.match(await evaluate("document.getElementById('p2').style.backgroundColor"), /123, 140, 255/);
   });
 
   test("the highlight is removed afterwards", async () => {
+    await closePanel();
     await sleep(3200);
     assert.match(
       await evaluate("getComputedStyle(document.getElementById('p2')).backgroundColor"),
@@ -268,12 +285,13 @@ describe("sources", () => {
     await evaluate(`window.__reply = () => ({ ok: true, status: 200,
       text: () => Promise.resolve(JSON.stringify({ summary: 'A summary.', sources: ['zzqq not present anywhere on this page'] })) });`);
     await evaluate("window.__storage = {}");
+    await closePanel();
     await openPanel();
-    await inPanel("s.querySelector('.src-toggle').click()");
-    await sleep(300);
-    await inPanel("s.querySelector('.src').click()");
+    assert.equal(await inPanel("s.querySelector('.ref').classList.contains('dead')"), true,
+      "a snippet that is not on the page should be marked unavailable");
+    await inPanel("s.querySelector('.ref').click()");
     await sleep(500);
-    assert.equal(await evaluate("!!document.getElementById('ai-overlay')"), true, "panel should stay open");
+    assert.equal(await evaluate("!!document.getElementById('ai-overlay')"), true);
     assert.equal(await evaluate("!!document.getElementById('es-toast')"), true);
     await evaluate("window.__reply = null");
   });
@@ -304,7 +322,7 @@ describe("caching", () => {
   });
 
   test("remembers the chosen mode across opens", async () => {
-    await inPanel("[...s.querySelectorAll('.chip')].find(c => c.textContent === 'Key points').click()");
+    await inPanel("[...s.querySelectorAll('.seg')].find(c => c.textContent === 'Key points').click()");
     await sleep(1600);
     assert.equal(await evaluate("window.__storage['es:mode']"), "key-points");
 
@@ -312,7 +330,7 @@ describe("caching", () => {
     await evaluate("window.__requests.length = 0");
     await openPanel();
     assert.equal(
-      await inPanel("[...s.querySelectorAll('.chip')].find(c => c.getAttribute('aria-pressed') === 'true').textContent"),
+      await inPanel("[...s.querySelectorAll('.seg')].find(c => c.getAttribute('aria-pressed') === 'true').textContent"),
       "Key points"
     );
     assert.equal(await evaluate("window.__requests.length"), 0, "the cached key-points summary should be reused");
@@ -323,7 +341,7 @@ describe("caching", () => {
     await evaluate("window.__storage['es:mode'] = 'nonsense'");
     await openPanel();
     assert.equal(
-      await inPanel("[...s.querySelectorAll('.chip')].find(c => c.getAttribute('aria-pressed') === 'true').textContent"),
+      await inPanel("[...s.querySelectorAll('.seg')].find(c => c.getAttribute('aria-pressed') === 'true').textContent"),
       "TL;DR"
     );
   });
@@ -362,7 +380,7 @@ describe("selection", () => {
     })()`);
     await sleep(1600);
     assert.match(await evaluate("window.__requests.slice(-1)[0].url"), /\/api\/ask$/);
-    assert.equal(await inCard("s.querySelectorAll('.turn').length"), 3);
+    assert.equal(await inCard("s.querySelectorAll('.entry').length"), 3);
   });
 
   test("closing restores the trigger and cleans up the anchor", async () => {
@@ -382,14 +400,14 @@ describe("failures", () => {
       text: () => Promise.resolve(JSON.stringify({ error: 'Failed to summarize text.' })) });`);
     await openPanel();
 
-    assert.match(await inPanel("s.querySelector('.turn.error').textContent"), /AI server had a problem/);
+    assert.match(await inPanel("s.querySelector('.entry.warn').textContent"), /AI server had a problem/);
     assert.equal(await evaluate("Object.keys(window.__storage).length"), 0, "nothing should be cached on failure");
 
     await evaluate("window.__reply = null");
-    await inPanel("s.querySelector('.turn.error .mini').click()");
+    await inPanel("s.querySelector('.entry.warn .act').click()");
     await sleep(1600);
     assert.match(await inPanel("s.textContent"), /tldr mode/);
-    assert.equal(await inPanel("!!s.querySelector('.turn.error')"), false);
+    assert.equal(await inPanel("!!s.querySelector('.entry.warn')"), false);
   });
 
   test("rate limiting gets its own message", async () => {
@@ -398,7 +416,7 @@ describe("failures", () => {
     await evaluate(`window.__reply = () => ({ ok: false, status: 429,
       text: () => Promise.resolve(JSON.stringify({ error: 'Too many requests.' })) });`);
     await openPanel();
-    assert.match(await inPanel("s.querySelector('.turn.error').textContent"), /Too many requests/);
+    assert.match(await inPanel("s.querySelector('.entry.warn').textContent"), /Too many requests/);
     await evaluate("window.__reply = null");
   });
 });

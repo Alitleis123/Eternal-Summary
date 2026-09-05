@@ -9,7 +9,6 @@ if (window.__esListenerLoaded) {
   const CACHE_TTL_MS = 30 * 60 * 1000;
   const cacheKey = () => `summary:${location.href}`;
   const MODE_KEY = "es:mode";
-  const ICON_URL = chrome.runtime.getURL("icons/icon-32.png");
 
   // One stylesheet, shared by the trigger here and the panel in page context.
   let cssPromise = null;
@@ -38,7 +37,6 @@ if (window.__esListenerLoaded) {
         document.documentElement.appendChild(cacheEl);
       }
       cacheEl.dataset.payload = JSON.stringify(fresh ? entry : {});
-      cacheEl.dataset.iconUrl = ICON_URL;
       cacheEl.dataset.css = css;
       cacheEl.dataset.mode = res?.[MODE_KEY] || "";
 
@@ -119,9 +117,11 @@ if (window.__esListenerLoaded) {
     button.type = "button";
     button.className = "trigger";
 
+    // Same orbital mark as the rail, so the trigger reads as the same tool.
     const mark = document.createElement("span");
-    mark.className = "mark";
-    mark.style.backgroundImage = `url("${ICON_URL}")`;
+    mark.className = "ring ring-sm";
+    mark.style.width = "16px";
+    mark.style.height = "16px";
 
     const label = document.createElement("span");
     label.textContent = "Summarize";

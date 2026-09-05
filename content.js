@@ -19,19 +19,10 @@
   const modeLabel = (id) => MODES.find((m) => m.id === id)?.label || id;
 
   const cacheEl = document.getElementById("es-cache");
-  const ICON_URL = cacheEl?.dataset?.iconUrl || "";
 
   // The stylesheet is fetched by listener.js and handed over on the cache node.
   const UI_CSS = cacheEl?.dataset?.css || "";
 
-  const ICONS = {
-    close: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>',
-    copy: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
-    chevron: '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>',
-    down: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M19 12l-7 7-7-7"/></svg>',
-    send: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4Z"/></svg>',
-    retry: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7M21 3v6h-6"/></svg>',
-  };
 
   // =========================================================
   // Shadow host helpers
@@ -350,8 +341,8 @@
   };
 
   const HIGHLIGHT = {
-    "background-color": "rgba(124, 107, 245, 0.24)",
-    "box-shadow": "0 0 0 6px rgba(124, 107, 245, 0.16)",
+    "background-color": "rgba(123, 140, 255, 0.24)",
+    "box-shadow": "0 0 0 6px rgba(123, 140, 255, 0.16)",
     "border-radius": "4px",
     transition: "background-color 300ms ease",
   };
@@ -426,30 +417,38 @@
   };
 
   // =========================================================
-  // Conversation surface, shared by the panel and the selection card
+  // Conversation surface, shared by the rail and the selection card
   // =========================================================
-  const createThread = (container, { onSourceClick } = {}) => {
-    const thread = el("div", "thread");
-    container.appendChild(thread);
+  const ICONS = {
+    close: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>',
+    send: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>',
+    down: '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M19 12l-7 7-7-7"/></svg>',
+  };
+
+  const ring = (size) => {
+    const node = el("div", `ring ${size}`);
+    return node;
+  };
+
+  const createStream = (container, { onSourceClick } = {}) => {
+    const stream = el("div", "stream");
+    container.appendChild(stream);
 
     let pinned = true;
-    const nearBottom = () =>
-      thread.scrollHeight - thread.scrollTop - thread.clientHeight <= NEAR_BOTTOM_PX;
+    let jump = null;
 
-    thread.addEventListener("scroll", () => {
-      pinned = nearBottom();
+    const atBottom = () => stream.scrollHeight - stream.scrollTop - stream.clientHeight <= NEAR_BOTTOM_PX;
+    stream.addEventListener("scroll", () => {
+      pinned = atBottom();
       if (jump) jump.classList.toggle("show", !pinned);
     });
 
-    // Only follow new content when the reader is already at the bottom, so
-    // scrolling back through the conversation is not yanked away.
     const follow = (force) => {
       if (!force && !pinned) return;
-      thread.scrollTop = thread.scrollHeight;
+      stream.scrollTop = stream.scrollHeight;
     };
 
-    let jump = null;
-    const addJumpButton = () => {
+    const addJump = () => {
       jump = el("button", "jump", `${ICONS.down}<span>Latest</span>`);
       jump.type = "button";
       jump.addEventListener("click", () => {
@@ -460,122 +459,129 @@
       container.appendChild(jump);
     };
 
-    const addRule = (label) => {
-      const rule = el("div", "rule");
-      rule.appendChild(el("span", null, ""));
-      rule.lastChild.textContent = label;
-      thread.appendChild(rule);
-      follow();
-    };
-
-    const addSources = (turn, sources) => {
+    // Sources render as footnotes rather than a disclosure. A numbered marker
+    // reads as a citation, which is what it is.
+    const addRefs = (entry, sources) => {
       const snippets = Array.isArray(sources) ? sources.slice(0, 6).filter(Boolean) : [];
       if (!snippets.length) return;
 
-      const toggle = el("button", "src-toggle", `${ICONS.chevron}<span>${snippets.length} source${snippets.length > 1 ? "s" : ""}</span>`);
-      toggle.type = "button";
-      toggle.setAttribute("aria-expanded", "false");
+      const refs = el("div", "refs");
+      const label = el("span", "mono");
+      label.textContent = "Sources";
+      refs.appendChild(label);
 
-      const list = el("div", "src-list");
-      for (const snippet of snippets) {
-        const item = el("button", "src");
-        item.type = "button";
-        item.textContent = snippet.length > 130 ? `${snippet.slice(0, 130)}...` : snippet;
-        item.title = "Jump to this passage on the page";
-        item.addEventListener("click", () => onSourceClick && onSourceClick(snippet));
-        list.appendChild(item);
-      }
-
-      toggle.addEventListener("click", () => {
-        const open = toggle.getAttribute("aria-expanded") === "true";
-        toggle.setAttribute("aria-expanded", String(!open));
-        list.classList.toggle("open", !open);
-        follow();
+      snippets.forEach((snippet, i) => {
+        const ref = el("button", "ref");
+        ref.type = "button";
+        ref.textContent = String(i + 1);
+        const found = onSourceClick ? findParagraphForSnippet(snippet) : null;
+        ref.title = found
+          ? `Jump to: ${snippet.slice(0, 90)}`
+          : `Not found on this page: ${snippet.slice(0, 90)}`;
+        if (!found) ref.classList.add("dead");
+        ref.addEventListener("click", () => onSourceClick && onSourceClick(snippet));
+        refs.appendChild(ref);
       });
 
-      turn.__esActions.prepend(toggle);
-      turn.appendChild(list);
+      entry.appendChild(refs);
       follow();
     };
 
-    const addTurn = (role, text, { typing = false, sources = [], copyable = true } = {}) => {
-      const turn = el("div", `turn ${role}`);
-      const bubble = el("div", `bubble ${role === "assistant" ? "rich" : "plain"}`);
-      turn.appendChild(bubble);
-
-      // One row holds the sources toggle and the copy action, so a turn without
-      // sources does not leave a gap where a hidden button used to sit.
-      const actions = el("div", "actions");
-      turn.__esActions = actions;
-      if (role === "assistant") {
-        turn.appendChild(actions);
-        if (copyable) {
-          const copy = el("button", "mini", `${ICONS.copy}<span>Copy</span>`);
-          copy.type = "button";
-          copy.title = "Copy answer";
-          copy.addEventListener("click", () => copyText(text));
-          actions.appendChild(copy);
-        }
+    const addEntry = (role, text, { label, typing = false, sources = [], copyable = true } = {}) => {
+      if (role === "user") {
+        const entry = el("div", "entry ask");
+        const p = document.createElement("p");
+        p.textContent = text;
+        entry.appendChild(p);
+        stream.appendChild(entry);
+        follow(true);
+        return entry;
       }
 
-      thread.appendChild(turn);
+      const entry = el("article", `entry ${role === "warn" ? "warn" : ""}`.trim());
+      const head = el("div", "entry-head");
+      const tag = el("span", "mono");
+      tag.textContent = label || "Summary";
+      head.appendChild(tag);
+      entry.appendChild(head);
+
+      const body = el("div", "entry-body");
+      entry.appendChild(body);
+
+      const acts = el("div", "acts");
+      entry.__esActs = acts;
+      entry.appendChild(acts);
+
+      if (copyable) {
+        const copy = el("button", "act");
+        copy.type = "button";
+        copy.textContent = "Copy";
+        copy.addEventListener("click", () => copyText(text));
+        acts.appendChild(copy);
+      }
+
+      stream.appendChild(entry);
       follow(true);
 
-      if (role === "assistant") {
-        renderMarkdown(text, bubble);
-        if (typing) {
-          revealMarkdown(bubble, {
-            onTick: () => follow(),
-            onDone: () => {
-              addSources(turn, sources);
-              follow();
-            },
-          });
-        } else {
-          addSources(turn, sources);
-          follow(true);
-        }
+      renderMarkdown(text, body);
+      if (typing) {
+        revealMarkdown(body, {
+          onTick: () => follow(),
+          onDone: () => {
+            addRefs(entry, sources);
+            follow();
+          },
+        });
       } else {
-        bubble.textContent = text;
+        addRefs(entry, sources);
         follow(true);
       }
-      return turn;
+      return entry;
     };
 
-    const addPending = () => {
-      const turn = el("div", "turn assistant");
-      const bubble = el("div", "bubble");
-      bubble.appendChild(el("div", "dots", "<i></i><i></i><i></i>"));
-      turn.appendChild(bubble);
-      thread.appendChild(turn);
+    const addPending = (label) => {
+      const entry = el("article", "entry");
+      const head = el("div", "entry-head");
+      const tag = el("span", "mono");
+      tag.textContent = label || "Working";
+      head.appendChild(tag);
+      const body = el("div", "entry-body");
+      body.appendChild(el("span", "thinking", "<i></i><i></i><i></i>"));
+      entry.append(head, body);
+      stream.appendChild(entry);
       follow(true);
-      return turn;
+      return entry;
     };
 
-    const addError = (message, onRetry) => {
-      const turn = el("div", "turn assistant error");
-      const bubble = el("div", "bubble");
-      bubble.textContent = message;
-      turn.appendChild(bubble);
-
+    const addFailure = (message, onRetry) => {
+      const entry = addEntry("warn", message, { label: "Error", copyable: false });
       if (onRetry) {
-        const tools = el("div", "actions always");
-        const retry = el("button", "mini", `${ICONS.retry}<span>Retry</span>`);
+        const retry = el("button", "act pinned");
         retry.type = "button";
+        retry.textContent = "Retry";
         retry.addEventListener("click", () => {
-          turn.remove();
+          entry.remove();
           onRetry();
         });
-        tools.appendChild(retry);
-        turn.appendChild(tools);
+        entry.__esActs.appendChild(retry);
       }
-
-      thread.appendChild(turn);
-      follow(true);
-      return turn;
+      return entry;
     };
 
-    return { thread, addTurn, addPending, addError, addRule, addJumpButton, follow };
+    const addLoader = (message) => {
+      const box = el("div", "loading");
+      const r = ring("ring-lg");
+      r.classList.add("spin");
+      const status = el("div", "status mono");
+      status.textContent = message;
+      status.insertAdjacentHTML("beforeend", " <i>.</i><i>.</i><i>.</i>");
+      box.append(r, status);
+      stream.appendChild(box);
+      follow(true);
+      return box;
+    };
+
+    return { stream, addEntry, addPending, addFailure, addLoader, addJump, follow };
   };
 
   // =========================================================
@@ -622,34 +628,36 @@
     root.appendChild(card);
     requestAnimationFrame(() => root.classList.add("in"));
 
-    const bar = el("div", "bar");
-    const mark = el("div", "mark");
-    if (ICON_URL) mark.style.backgroundImage = `url("${ICON_URL}")`;
-    const titles = el("div", "titles");
-    const t1 = el("div", "t1");
-    t1.textContent = "Selection";
-    titles.appendChild(t1);
+    const bar = el("div", "head");
+    const mark = ring("ring-sm");
+    const wordmark = el("div", "wordmark");
+    const name = el("div", "name");
+    name.textContent = "Selection";
+    wordmark.appendChild(name);
     const close = el("button", "icon-btn", ICONS.close);
     close.type = "button";
     close.title = "Close";
-    bar.append(mark, titles, close);
+    close.setAttribute("aria-label", "Close");
+    bar.append(mark, wordmark, close);
     card.appendChild(bar);
 
-    const body = el("div", "thread-wrap");
+    const body = el("div", "stream-wrap");
     card.appendChild(body);
-    const chat = createThread(body);
+    const chat = createStream(body);
 
     const composer = el("div", "composer");
+    const caret = el("span", "caret");
+    caret.textContent = ">";
     const field = el("div", "field");
     const input = document.createElement("input");
     input.type = "text";
-    input.placeholder = "Ask a follow-up...";
+    input.placeholder = "Ask a follow-up";
     input.setAttribute("aria-label", "Ask a follow-up about the selection");
     field.appendChild(input);
     const send = el("button", "send", ICONS.send);
     send.type = "button";
     send.title = "Send";
-    composer.append(field, send);
+    composer.append(caret, field, send);
     card.appendChild(composer);
 
     // --- position against the original highlight
@@ -746,10 +754,10 @@
       if (!question || busy) return;
       setBusy(true);
       input.value = "";
-      chat.addTurn("user", question, { copyable: false });
+      chat.addEntry("user", question);
       history.push({ role: "user", content: question });
 
-      const pending = chat.addPending();
+      const pending = chat.addPending("Answer");
       const { ok, data, error } = await api("ask", {
         text: selectedText,
         selection: selectedText,
@@ -760,9 +768,9 @@
       if (ok) {
         const answer = data.answer || "No answer received.";
         history.push({ role: "assistant", content: answer });
-        chat.addTurn("assistant", answer, { typing: true, sources: data.sources || [] });
+        chat.addEntry("assistant", answer, { label: "Answer", typing: true, sources: data.sources || [] });
       } else {
-        chat.addError(friendlyError(error), ask);
+        chat.addFailure(friendlyError(error), ask);
       }
       setBusy(false);
       place();
@@ -776,20 +784,20 @@
 
     const summarize = async () => {
       setBusy(true);
-      const pending = chat.addPending();
+      const loader = chat.addLoader("Reading");
       const { ok, data, error } = await api("summarize", { text: selectedText, mode: "tldr" });
-      pending.remove();
+      loader.remove();
 
       if (!ok) {
-        chat.addError(friendlyError(error), summarize);
+        chat.addFailure(friendlyError(error), summarize);
       } else {
         const summary = data.summary || "";
         const words = selectedText.trim() ? selectedText.trim().split(/\s+/).length : 0;
         if (!summary || words < 10) {
-          chat.addTurn("assistant", "There is not much to work with here. What would you like to know?", { copyable: false });
+          chat.addEntry("assistant", "There is not much to work with here. What would you like to know?", { label: "Selection", copyable: false });
         } else {
           history.push({ role: "assistant", content: summary });
-          chat.addTurn("assistant", summary, { typing: true });
+          chat.addEntry("assistant", summary, { label: "Selection", typing: true });
         }
       }
       setBusy(false);
@@ -814,11 +822,14 @@
   if (wantsSelection && openSelectionCard(selectionRequest)) return;
 
   // =========================================================
-  // Main panel
+  // The rail
+  //
+  // A side panel rather than a centred modal: the article stays readable
+  // beside it, so jumping to a source scrolls the page without closing
+  // anything.
   // =========================================================
   const { host, root } = makeHost("ai-overlay");
   host.setAttribute("role", "dialog");
-  host.setAttribute("aria-modal", "true");
   host.setAttribute("aria-label", "Eternal Summary");
   // documentElement rather than body: a transformed body would become the
   // containing block for our fixed positioning.
@@ -838,13 +849,10 @@
     teardown.push(() => target.removeEventListener(event, handler, options));
   };
 
-  const scrim = el("div", "scrim");
-  const stage = el("div", "stage");
-  const panel = el("div", "panel");
-  stage.appendChild(panel);
-  root.append(scrim, stage);
+  const rail = el("div", "rail");
+  root.appendChild(rail);
 
-  const closePanel = (immediate = false) => {
+  const closeRail = (immediate = false) => {
     if (host.dataset.closing === "true") return;
     host.dataset.closing = "true";
     while (teardown.length) teardown.pop()();
@@ -854,112 +862,116 @@
     }
     root.classList.remove("in");
     root.classList.add("out");
-    setTimeout(() => host.remove(), 200);
+    setTimeout(() => host.remove(), 320);
   };
-  host.__esClose = closePanel;
-
+  host.__esClose = closeRail;
   requestAnimationFrame(() => root.classList.add("in"));
 
-  // --- header
-  const bar = el("div", "bar");
-  const mark = el("div", "mark");
-  if (ICON_URL) mark.style.backgroundImage = `url("${ICON_URL}")`;
-
-  const titles = el("div", "titles");
-  const t1 = el("div", "t1");
-  t1.textContent = "Eternal Summary";
-  const t2 = el("div", "t2");
+  // --- head
+  const head = el("div", "head");
+  const mark = ring("ring-sm");
+  const wordmark = el("div", "wordmark");
+  const name = el("div", "name");
+  name.textContent = "Eternal Summary";
+  const meta = el("div", "meta");
   const minutes = readingMinutes(pageText);
-  t2.textContent = minutes
-    ? `${location.hostname} \u00b7 ${minutes} min read`
+  meta.innerHTML = minutes
+    ? `${location.hostname} <b>&middot;</b> ${minutes} min read`
     : location.hostname;
-  t2.title = document.title || location.hostname;
-  titles.append(t1, t2);
+  meta.title = document.title || location.hostname;
+  wordmark.append(name, meta);
 
   const closeBtn = el("button", "icon-btn", ICONS.close);
   closeBtn.type = "button";
   closeBtn.title = "Close";
   closeBtn.setAttribute("aria-label", "Close");
-  closeBtn.addEventListener("click", () => closePanel());
+  closeBtn.addEventListener("click", () => closeRail());
 
-  bar.append(mark, titles, closeBtn);
-  panel.appendChild(bar);
+  head.append(mark, wordmark, closeBtn);
+  rail.appendChild(head);
 
-  // --- mode chips
-  const modeRow = el("div", "modes");
-  modeRow.setAttribute("role", "group");
-  modeRow.setAttribute("aria-label", "Summary style");
-  // Start in whichever style was picked last, so reopening a page reuses the
-  // cached summary instead of silently spending another request.
+  // --- segmented mode control
+  const segments = el("div", "segments");
+  segments.setAttribute("role", "group");
+  segments.setAttribute("aria-label", "Summary style");
+  const segTrack = el("span", "seg-track");
+  segments.appendChild(segTrack);
+
   const savedMode = cacheEl?.dataset?.mode || "";
   let activeMode = MODES.some((m) => m.id === savedMode) ? savedMode : MODES[0].id;
-  const chips = new Map();
+  const segs = new Map();
 
   const paintModes = () => {
-    for (const [id, chip] of chips) chip.setAttribute("aria-pressed", String(id === activeMode));
+    for (const [id, seg] of segs) seg.setAttribute("aria-pressed", String(id === activeMode));
+    const active = segs.get(activeMode);
+    if (!active) return;
+    segTrack.style.width = `${active.offsetWidth}px`;
+    segTrack.style.transform = `translateX(${active.offsetLeft}px)`;
   };
 
   for (const mode of MODES) {
-    const chip = el("button", "chip");
-    chip.type = "button";
-    chip.textContent = mode.label;
-    chip.addEventListener("click", () => {
+    const seg = el("button", "seg");
+    seg.type = "button";
+    seg.textContent = mode.label;
+    seg.addEventListener("click", () => {
       if (busy || activeMode === mode.id) return;
       activeMode = mode.id;
       paintModes();
       writeModePref(activeMode);
-      runSummary({ force: true, announce: true });
+      runSummary({ force: true });
     });
-    chips.set(mode.id, chip);
-    modeRow.appendChild(chip);
+    segs.set(mode.id, seg);
+    segments.appendChild(seg);
   }
-  paintModes();
-  panel.appendChild(modeRow);
+  rail.appendChild(segments);
+  requestAnimationFrame(paintModes);
+  on(window, "resize", paintModes);
 
-  // --- thread
-  const threadWrap = el("div", "thread-wrap");
-  panel.appendChild(threadWrap);
+  // --- stream
+  const streamWrap = el("div", "stream-wrap");
+  rail.appendChild(streamWrap);
 
-  const chat = createThread(threadWrap, {
+  const chat = createStream(streamWrap, {
     onSourceClick: (snippet) => {
       const target = findParagraphForSnippet(snippet);
       if (!target) {
-        showToast("Could not find that passage on the page");
+        showToast("Not found on this page");
         return;
       }
-      // The panel covers the page, so step out of the way before scrolling.
-      closePanel();
-      setTimeout(() => highlightParagraph(target), 240);
+      // The rail sits beside the article, so this needs no dismissal.
+      highlightParagraph(target);
     },
   });
-  chat.addJumpButton();
+  chat.addJump();
 
   // --- selection strip
   const selStrip = el("div", "sel");
   const selText = el("div", "sel-txt");
-  const explainBtn = el("button", "pill");
+  const explainBtn = el("button", "sel-act");
   explainBtn.type = "button";
   explainBtn.textContent = "Explain";
-  const sumSelBtn = el("button", "pill");
+  const sumSelBtn = el("button", "sel-act");
   sumSelBtn.type = "button";
   sumSelBtn.textContent = "Summarize";
   selStrip.append(selText, explainBtn, sumSelBtn);
-  panel.appendChild(selStrip);
+  rail.appendChild(selStrip);
 
   // --- composer
   const composer = el("div", "composer");
+  const caret = el("span", "caret");
+  caret.textContent = ">";
   const field = el("div", "field");
   const input = document.createElement("input");
   input.type = "text";
-  input.placeholder = "Ask about this page...";
+  input.placeholder = "Ask about this page";
   input.setAttribute("aria-label", "Ask about this page");
   field.appendChild(input);
   const sendBtn = el("button", "send", ICONS.send);
   sendBtn.type = "button";
   sendBtn.title = "Send";
   sendBtn.setAttribute("aria-label", "Send");
-  composer.append(field, sendBtn);
-  panel.appendChild(composer);
+  composer.append(caret, field, sendBtn);
+  rail.appendChild(composer);
 
   // =========================================================
   // Behaviour
@@ -970,7 +982,7 @@
   const setBusy = (value) => {
     busy = value;
     sendBtn.disabled = value;
-    modeRow.dataset.busy = String(value);
+    segments.dataset.busy = String(value);
   };
 
   const readCache = () => {
@@ -987,12 +999,11 @@
   async function runSummary({ force = false, announce = false } = {}) {
     if (busy) return;
     setBusy(true);
-    if (announce) chat.addRule(modeLabel(activeMode));
 
     if (!force) {
       const cached = readCache();
       if (cached?.summary && cached.mode === activeMode) {
-        chat.addTurn("assistant", cached.summary, { typing: true, sources: cached.sources || [] });
+        chat.addEntry("assistant", cached.summary, { label: modeLabel(activeMode), typing: true, sources: cached.sources || [] });
         history.push({ role: "assistant", content: cached.summary });
         showToast("Showing a saved summary");
         setBusy(false);
@@ -1001,17 +1012,17 @@
     }
 
     if (pageText.length < 40) {
-      chat.addTurn("assistant", "There is not enough readable text on this page to summarize.", { copyable: false });
+      chat.addEntry("assistant", "There is not enough readable text on this page to summarize.", { label: "Nothing to read", copyable: false });
       setBusy(false);
       return;
     }
 
-    const pending = chat.addPending();
+    const loader = chat.addLoader("Reading");
     const { ok, data, error } = await api("summarize", { text: pageText, mode: activeMode });
-    pending.remove();
+    loader.remove();
 
     if (!ok) {
-      chat.addError(friendlyError(error), () => runSummary({ force: true }));
+      chat.addFailure(friendlyError(error), () => runSummary({ force: true }));
       setBusy(false);
       return;
     }
@@ -1019,7 +1030,7 @@
     const summary = data.summary || "No summary received.";
     const sources = data.sources || [];
     history.push({ role: "assistant", content: summary });
-    chat.addTurn("assistant", summary, { typing: true, sources });
+    chat.addEntry("assistant", summary, { label: modeLabel(activeMode), typing: true, sources });
     writeCache({ summary, sources, mode: activeMode });
     setBusy(false);
   }
@@ -1043,11 +1054,11 @@
     if (!value || busy) return;
 
     input.value = "";
-    chat.addTurn("user", value, { copyable: false });
+    chat.addEntry("user", value);
     history.push({ role: "user", content: value });
     setBusy(true);
 
-    const pending = chat.addPending();
+    const pending = chat.addPending("Answer");
     const endpoint = override?.endpoint || "ask";
     const payload =
       override?.payload || {
@@ -1062,9 +1073,9 @@
     if (ok) {
       const answer = data.answer || data.summary || "No answer received.";
       history.push({ role: "assistant", content: answer });
-      chat.addTurn("assistant", answer, { typing: true, sources: data.sources || [] });
+      chat.addEntry("assistant", answer, { label: "Answer", typing: true, sources: data.sources || [] });
     } else {
-      chat.addError(friendlyError(error), () => ask(value, override));
+      chat.addFailure(friendlyError(error), () => ask(value, override));
     }
     setBusy(false);
     input.focus();
@@ -1086,16 +1097,15 @@
   });
 
   on(document, "keydown", (e) => {
-    if (e.key === "Escape") closePanel();
+    if (e.key === "Escape") closeRail();
   });
-  scrim.addEventListener("click", () => closePanel());
 
   // Keep Tab inside the dialog. Without this a keyboard user tabs straight out
   // into the page behind an overlay they cannot see past.
-  panel.addEventListener("keydown", (e) => {
+  rail.addEventListener("keydown", (e) => {
     if (e.key !== "Tab") return;
     const focusable = Array.from(
-      panel.querySelectorAll("button:not([disabled]), input:not([disabled])")
+      rail.querySelectorAll("button:not([disabled]), input:not([disabled])")
     ).filter((node) => node.getClientRects().length > 0);
     if (focusable.length < 2) return;
 
