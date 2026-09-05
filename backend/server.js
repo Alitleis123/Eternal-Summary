@@ -22,13 +22,13 @@ if (!process.env.GEMINI_API_KEY) {
 }
 
 const GEMINI_MODEL = "gemini-2.5-flash";
-const MAX_INPUT_CHARS = 6000;
+// The model takes a million tokens. This cap is about latency and quota, not
+// context: it is roughly three thousand tokens of page text.
+const MAX_INPUT_CHARS = 12000;
 const MAX_SELECTION_CHARS = 1500;
 const MAX_MESSAGE_CHARS = 800;
 const MAX_HISTORY = 6;
-const CHUNK_CHARS = 2800;
 const CHUNK_OVERLAP = 200;
-const MAX_CHUNKS = 3;
 const REQUEST_TIMEOUT_MS = 20000;
 
 const MODE_INSTRUCTIONS = {
@@ -86,7 +86,7 @@ const clampText = (value, maxChars) => {
   return str.length > maxChars ? str.slice(0, maxChars) : str;
 };
 
-const chunkText = (text, maxChars = CHUNK_CHARS, overlap = CHUNK_OVERLAP) => {
+const chunkText = (text, maxChars, overlap = CHUNK_OVERLAP) => {
   if (!text) return [];
   const chunks = [];
   let start = 0;
@@ -184,52 +184,18 @@ app.post("/api/summarize", rateLimit, async (req, res) => {
       return;
     }
 
-    const chunks = chunkText(text);
-    console.log("summarize mode=%s chars=%d chunks=%d", mode, text.length, chunks.length);
+    console.log("summarize mode=%s chars=%d", mode, text.length);
 
-    if (chunks.length <= 1) {
-      const content = await callGemini(summarizePrompt(mode), [{ role: "user", content: text }]);
-      if (!content) {
-        res.status(502).json({ error: "No summary generated." });
-        return;
-      }
-      const payload = safeJsonParse(content, { summary: content, sources: [] });
-      res.json({
-        summary: payload.summary || content,
-        sources: Array.isArray(payload.sources) ? payload.sources.slice(0, 6) : [],
-      });
-      return;
-    }
-
-    // Long pages: summarize each chunk, then condense the pieces into one answer.
-    const partials = [];
-    let sources = [];
-
-    for (let i = 0; i < Math.min(chunks.length, MAX_CHUNKS); i++) {
-      if (i > 0) await new Promise((r) => setTimeout(r, 800));
-      const content = await callGemini(
-        "Summarize this excerpt of a longer page. Return JSON only, with keys: summary (string) and sources (array of short snippets copied verbatim from the excerpt).",
-        [{ role: "user", content: chunks[i] }]
-      );
-      const payload = safeJsonParse(content, { summary: content, sources: [] });
-      if (payload.summary) partials.push(payload.summary);
-      if (Array.isArray(payload.sources)) sources = sources.concat(payload.sources);
-    }
-
-    if (!partials.length) {
+    const content = await callGemini(summarizePrompt(mode), [{ role: "user", content: text }]);
+    if (!content) {
       res.status(502).json({ error: "No summary generated." });
       return;
     }
 
-    const merged = await callGemini(
-      `${summarizePrompt(mode)} The input is a set of partial summaries of one page. Leave the sources array empty.`,
-      [{ role: "user", content: partials.join("\n\n") }]
-    );
-    const finalPayload = safeJsonParse(merged, { summary: merged || partials.join("\n\n") });
-
+    const payload = safeJsonParse(content, { summary: content, sources: [] });
     res.json({
-      summary: finalPayload.summary || partials.join("\n\n"),
-      sources: sources.slice(0, 6),
+      summary: payload.summary || content,
+      sources: Array.isArray(payload.sources) ? payload.sources.slice(0, 6) : [],
     });
   } catch (error) {
     console.error("summarize failed:", error);
