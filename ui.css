@@ -73,7 +73,11 @@ svg { display: block; flex: none; }
   pointer-events: auto;
   position: fixed;
   top: 0; right: 0; bottom: 0;
-  width: min(430px, 100vw);
+  /* Give the article at least 320px before taking width for the rail, and
+     never go under 320px ourselves. Below ~640px there is no room to split,
+     and content.js stops insetting the page and lets the rail overlay it.
+     The 320px floor is MIN_ARTICLE in content.js; keep the two in step. */
+  width: min(430px, max(320px, 100vw - 320px));
   display: flex;
   flex-direction: column;
   background: var(--rail);

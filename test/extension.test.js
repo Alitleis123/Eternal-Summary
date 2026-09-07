@@ -119,20 +119,34 @@ describe("panel", () => {
     assert.equal(await evaluate("!!document.getElementById('ai-overlay')"), false);
   });
 
-  test("the rail leaves the article reachable", async () => {
+  test("the rail sits beside the article, not on top of it", async () => {
     await openPanel();
-    // No backdrop: the page must still take clicks beside the rail.
-    const covered = await evaluate(`(() => {
-      const el = document.elementFromPoint(40, Math.round(innerHeight / 2));
-      return el ? el.id === 'ai-overlay' : true;
-    })()`);
-    assert.equal(covered, false, "the rail should not cover the article");
+    // The page is inset by the rail's width, so no line may run underneath it.
+    // Sampling one point on the left would pass even with the text covered.
+    const geom = JSON.parse(await evaluate(`(() => {
+      const rail = document.getElementById('ai-overlay').shadowRoot
+        .querySelector('.rail').getBoundingClientRect();
+      const p = document.getElementById('p1').getBoundingClientRect();
+      const hit = document.elementFromPoint(40, Math.round(innerHeight / 2));
+      return JSON.stringify({ railLeft: rail.left, textRight: p.right,
+        covered: hit ? hit.id === 'ai-overlay' : true });
+    })()`));
+    assert.equal(geom.covered, false, "the page must still take clicks beside the rail");
+    assert.ok(
+      geom.textRight <= geom.railLeft + 1,
+      `article text runs under the rail (right edge ${geom.textRight} > ${geom.railLeft})`
+    );
+  });
+
+  test("closing gives the page its width back", async () => {
+    await closePanel();
+    await sleep(700);
+    assert.equal(await evaluate("document.documentElement.style.marginRight"), "");
+    assert.equal(await evaluate("document.documentElement.hasAttribute('style')"), false,
+      "the rail should hand <html> back exactly as it found it");
   });
 
   test("refuses pages where content scripts cannot run", async () => {
-    // The rail has no backdrop to dismiss, so the previous test leaves it open.
-    await closePanel();
-    await sleep(400);
     await evaluate("window.__injections.length = 0");
     for (const url of ["chrome://settings", "about:blank", "view-source:http://x", "https://chromewebstore.google.com/detail/x"]) {
       await evaluate(`window.__onAction({ id: 1, url: ${JSON.stringify(url)} })`);

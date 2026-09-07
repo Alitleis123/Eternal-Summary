@@ -867,6 +867,51 @@
   host.__esClose = closeRail;
   requestAnimationFrame(() => root.classList.add("in"));
 
+  // --- make room for the rail
+  //
+  // The rail is fixed, so on its own it would sit *over* the article rather
+  // than beside it and the text would run underneath. Inset the document by
+  // the rail's width instead: that is what lets a source jump stay readable,
+  // and it is the whole reason this is a rail and not a modal. Narrow
+  // viewports keep the overlay behaviour, since there is no room to split.
+  const MIN_ARTICLE = 320;
+  const EASE = "320ms cubic-bezier(0.32, 0.72, 0, 1)";
+  {
+    const doc = document.documentElement;
+    // Restore only what we touch, the way the source highlight does, so a page
+    // that sets its own margin on <html> gets it back. Dropping the margin on
+    // teardown is synchronous, so a rail opening while another is still
+    // sliding out can never capture an inset we wrote ourselves.
+    const margin = [doc.style.getPropertyValue("margin-right"), doc.style.getPropertyPriority("margin-right")];
+
+    const fit = () => {
+      const width = Math.round(rail.getBoundingClientRect().width);
+      const room = window.innerWidth - width >= MIN_ARTICLE;
+      if (!room) {
+        doc.style.removeProperty("margin-right");
+        return;
+      }
+      // The reduced-motion rule in ui.css only reaches the shadow root, and
+      // this margin is on the page's own <html>, so honour it here too.
+      const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+      doc.style.setProperty("transition", still ? "none" : `margin-right ${EASE}`, "important");
+      doc.style.setProperty("margin-right", `${width}px`, "important");
+    };
+
+    fit();
+    on(window, "resize", fit);
+    teardown.push(() => {
+      // Removing the inset animates the page back, because the transition is
+      // still in force; that is the only reason it outlives the margin.
+      if (margin[0]) doc.style.setProperty("margin-right", margin[0], margin[1]);
+      else doc.style.removeProperty("margin-right");
+      setTimeout(() => {
+        doc.style.removeProperty("transition");
+        if (!doc.getAttribute("style")) doc.removeAttribute("style");
+      }, 340);
+    });
+  }
+
   // --- head
   const head = el("div", "head");
   const mark = ring("ring-sm");
