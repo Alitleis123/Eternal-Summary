@@ -11,7 +11,7 @@
   const NEAR_BOTTOM_PX = 60;
 
   const MODES = [
-    { id: "tldr", label: "TL;DR" },
+    { id: "tldr", label: "Summary" },
     { id: "bullets", label: "Bullets" },
     { id: "key-points", label: "Key points" },
     { id: "simple", label: "Plain English" },

@@ -356,7 +356,7 @@ describe("caching", () => {
     await openPanel();
     assert.equal(
       await inPanel("[...s.querySelectorAll('.seg')].find(c => c.getAttribute('aria-pressed') === 'true').textContent"),
-      "TL;DR"
+      "Summary"
     );
   });
 });
