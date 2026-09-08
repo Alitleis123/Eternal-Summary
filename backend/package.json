@@ -9,6 +9,7 @@
   },
   "scripts": {
     "start": "node server.js",
+    "test": "node --test test/*.test.js",
     "dev": "node --watch server.js"
   },
   "author": "Ali Tleis",

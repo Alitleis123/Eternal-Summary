@@ -1,6 +1,7 @@
 import express from "express";
 import dotenv from "dotenv";
 import cors from "cors";
+import { readPayload } from "./payload.js";
 
 // Fly.io injects secrets straight into the environment, so loading a .env file
 // in production could shadow them with stale values.
@@ -104,24 +105,10 @@ const resolveMode = (value) => {
   return MODE_INSTRUCTIONS[id] ? id : DEFAULT_MODE;
 };
 
-const stripCodeFences = (text) => {
-  const trimmed = text.trim();
-  const fenced = trimmed.match(/^```(?:json)?\s*\n?([\s\S]*?)\n?\s*```$/);
-  return fenced ? fenced[1].trim() : trimmed;
-};
-
-const safeJsonParse = (content, fallback) => {
-  try {
-    return JSON.parse(stripCodeFences(content));
-  } catch {
-    return fallback;
-  }
-};
-
 const geminiUrl = () =>
   `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${process.env.GEMINI_API_KEY}`;
 
-const callGemini = async (systemPrompt, messages, retries = 3) => {
+const callGemini = async (systemPrompt, messages, { schema = null, retries = 3 } = {}) => {
   const body = JSON.stringify({
     system_instruction: { parts: [{ text: systemPrompt }] },
     contents: messages.map((m) => ({
@@ -130,8 +117,10 @@ const callGemini = async (systemPrompt, messages, retries = 3) => {
     })),
     generationConfig: {
       temperature: 0.2,
-      maxOutputTokens: 800,
+      // 800 truncated real pages mid-sentence, which left invalid JSON behind.
+      maxOutputTokens: 2048,
       responseMimeType: "application/json",
+      ...(schema ? { responseSchema: schema } : {}),
     },
   });
 
@@ -166,12 +155,22 @@ const callGemini = async (systemPrompt, messages, retries = 3) => {
   return "";
 };
 
+const replySchema = (key) => ({
+  type: "OBJECT",
+  properties: {
+    [key]: { type: "STRING" },
+    sources: { type: "ARRAY", items: { type: "STRING" } },
+  },
+  required: [key],
+});
+
 const summarizePrompt = (mode) =>
   [
     "You summarize web page text.",
     MODE_INSTRUCTIONS[mode],
     "Return JSON only, with keys: summary (string) and sources (array of 3 to 6 short snippets copied verbatim from the text).",
-    "Copy source snippets exactly as they appear so they can be located on the page. Never invent content.",
+    "Copy source snippets exactly as they appear so they can be located on the page, at most 20 words each.",
+    "Never invent content.",
   ].join(" ");
 
 app.post("/api/summarize", rateLimit, async (req, res) => {
@@ -186,17 +185,17 @@ app.post("/api/summarize", rateLimit, async (req, res) => {
 
     console.log("summarize mode=%s chars=%d", mode, text.length);
 
-    const content = await callGemini(summarizePrompt(mode), [{ role: "user", content: text }]);
-    if (!content) {
+    const content = await callGemini(summarizePrompt(mode), [{ role: "user", content: text }], {
+      schema: replySchema("summary"),
+    });
+    const { text: summary, sources } = readPayload(content, "summary");
+    if (!summary) {
+      console.warn("summarize: unreadable reply: %s", String(content).slice(0, 200));
       res.status(502).json({ error: "No summary generated." });
       return;
     }
 
-    const payload = safeJsonParse(content, { summary: content, sources: [] });
-    res.json({
-      summary: payload.summary || content,
-      sources: Array.isArray(payload.sources) ? payload.sources.slice(0, 6) : [],
-    });
+    res.json({ summary, sources: sources.slice(0, 6) });
   } catch (error) {
     console.error("summarize failed:", error);
     res.status(500).json({ error: "Failed to summarize text." });
@@ -254,17 +253,15 @@ app.post("/api/ask", rateLimit, async (req, res) => {
       selection ? `\n\nThe user highlighted:\n${selection}` : "",
     ].join(" ");
 
-    const content = await callGemini(systemPrompt, messages);
-    if (!content) {
+    const content = await callGemini(systemPrompt, messages, { schema: replySchema("answer") });
+    const { text: answer, sources } = readPayload(content, "answer");
+    if (!answer) {
+      console.warn("ask: unreadable reply: %s", String(content).slice(0, 200));
       res.status(502).json({ error: "No answer generated." });
       return;
     }
 
-    const payload = safeJsonParse(content, { answer: content, sources: [] });
-    res.json({
-      answer: payload.answer || content,
-      sources: Array.isArray(payload.sources) ? payload.sources.slice(0, 6) : [],
-    });
+    res.json({ answer, sources: sources.slice(0, 6) });
   } catch (error) {
     console.error("ask failed:", error);
     res.status(500).json({ error: "Failed to answer question." });

@@ -48,6 +48,9 @@ jobs:
 
       - run: npm ci
 
+      - name: Unit tests
+        run: npm test
+
       - name: Boot and probe the health endpoint
         run: |
           node server.js & SERVER=$!
