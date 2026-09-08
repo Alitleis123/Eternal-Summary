@@ -585,6 +585,40 @@ describe("settings", () => {
   });
 });
 
+describe("feedback", () => {
+  test("copy says it copied, then goes back", async () => {
+    await reload();
+    await openPanel();
+    await inPanel("s.querySelector('.entry .act').click()");
+    await sleep(200);
+    assert.equal(await inPanel("s.querySelector('.entry .act').textContent"), "Copied");
+    assert.equal(await inPanel("s.querySelector('.entry .act').classList.contains('ok')"), true);
+
+    await sleep(1500);
+    assert.equal(await inPanel("s.querySelector('.entry .act').textContent"), "Copy");
+    assert.equal(await inPanel("s.querySelector('.entry .act').classList.contains('ok')"), false);
+  });
+
+  test("settings rows carry the index their stagger is built on", async () => {
+    await inPanel("s.querySelector('.gear').click()");
+    await sleep(400);
+    const indexes = JSON.parse(
+      await inPanel("JSON.stringify([...s.querySelectorAll('.sheet > *')].map(n => n.style.getPropertyValue('--i')))")
+    );
+    assert.ok(indexes.length >= 9, `expected the full sheet, got ${indexes.length} children`);
+    assert.deepEqual(
+      indexes,
+      indexes.map((_, i) => String(i)),
+      "every child needs its position or the stagger collapses to one step"
+    );
+    // The delay is what the index feeds, so check it actually reaches the CSS.
+    assert.notEqual(
+      await inPanel("getComputedStyle(s.querySelectorAll('.sheet > *')[4]).animationDelay"),
+      "0s"
+    );
+  });
+});
+
 describe("hygiene", () => {
   test("repeated opens do not strand elements on the page", async () => {
     await reload();

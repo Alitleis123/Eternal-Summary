@@ -528,6 +528,46 @@ ol.md-list li::marker { font-size: 0.85em; font-weight: 500; }
 .root[data-side="left"].in .rail { transform: none; }
 .root[data-side="left"].out .rail { transform: translateX(-100%); }
 
+/* ============ motion ============
+   Two jobs only: show where a thing came from, and confirm a press landed.
+   Everything here is duration-zeroed by the reduced-motion rule below. */
+@keyframes lift { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: none; } }
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slide-in { from { opacity: 0; transform: translateX(12px); } to { opacity: 1; transform: none; } }
+@keyframes slide-back { from { opacity: 0; transform: translateX(-12px); } to { opacity: 1; transform: none; } }
+
+/* The rail arrives, then its furniture, so the eye lands on the summary. */
+.root.in .head { animation: lift 400ms cubic-bezier(0.32, 0.72, 0, 1) 70ms both; }
+.root.in .segments { animation: lift 400ms cubic-bezier(0.32, 0.72, 0, 1) 120ms both; }
+.root.in .composer { animation: lift 400ms cubic-bezier(0.32, 0.72, 0, 1) 170ms both; }
+
+/* Settings come in from the side they are reached from, and the stream
+   returns from the other, so the two views feel adjacent rather than swapped. */
+.root[data-view="settings"] .sheet { animation: fade 200ms ease both; }
+.root[data-view="settings"] .sheet > * {
+  animation: lift 320ms cubic-bezier(0.32, 0.72, 0, 1) both;
+  animation-delay: calc(60ms + var(--i, 0) * 24ms);
+}
+.root[data-view="settings"] .head .wordmark { animation: slide-in 280ms cubic-bezier(0.32, 0.72, 0, 1) both; }
+.root[data-view="stream"] .stream-wrap { animation: slide-back 300ms cubic-bezier(0.32, 0.72, 0, 1) both; }
+
+/* The gear leans into the press. */
+.gear svg { transition: transform 260ms cubic-bezier(0.32, 0.72, 0, 1); }
+.gear:hover svg { transform: rotate(55deg); }
+.gear[aria-expanded="true"]:hover svg { transform: translateX(-2px) rotate(0deg); }
+
+/* Press feedback. Without it every control feels like a picture of a control. */
+.icon-btn:active { transform: scale(0.9); }
+.seg:active, .choice:active, .sel-act:active, .row-act:active:not(:disabled) { transform: scale(0.97); }
+.ref:active { transform: translateY(1px); }
+.send:active:not(:disabled) { transform: scale(0.88); }
+.switch:active::after { width: 18px; }
+.icon-btn, .send { transition: color 140ms ease, background 140ms ease, transform 120ms ease; }
+.seg, .sel-act, .ref { transition: color 140ms ease, background 140ms ease, border-color 140ms ease, transform 120ms ease; }
+
+/* Copy confirming itself. */
+.act.ok { color: var(--accent); opacity: 1; }
+
 @media (max-width: 520px) {
   .rail { width: 100vw; border-left: none; }
 }

@@ -367,6 +367,7 @@
     "border-radius": "4px",
     transition: "background-color 300ms ease",
   };
+  const FLASH = "rgba(123, 140, 255, 0.46)";
   const HIGHLIGHT_MS = 2400;
 
   const highlightParagraph = (node) => {
@@ -385,6 +386,16 @@
     ]);
     for (const [name, value] of Object.entries(HIGHLIGHT)) {
       node.style.setProperty(name, value, "important");
+    }
+
+    // A brief brighter flash makes the jump land. This paints on the page's own
+    // element, outside the shadow root, so the reduced-motion rule in ui.css
+    // cannot reach it and it is checked here instead.
+    if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      node.style.setProperty("background-color", FLASH, "important");
+      setTimeout(() => {
+        node.style.setProperty("background-color", HIGHLIGHT["background-color"], "important");
+      }, 190);
     }
 
     setTimeout(() => {
@@ -542,7 +553,18 @@
         const copy = el("button", "act");
         copy.type = "button";
         copy.textContent = "Copy";
-        copy.addEventListener("click", () => copyText(text));
+        let revert = 0;
+        copy.addEventListener("click", () => {
+          copyText(text);
+          // Clicking Copy used to look like nothing happened at all.
+          copy.textContent = "Copied";
+          copy.classList.add("ok");
+          clearTimeout(revert);
+          revert = setTimeout(() => {
+            copy.textContent = "Copy";
+            copy.classList.remove("ok");
+          }, 1400);
+        });
         acts.appendChild(copy);
       }
 
@@ -1080,6 +1102,13 @@
   const sheet = el("div", "sheet");
   sheet.setAttribute("aria-label", "Settings");
 
+  // Sheet children animate in on a stagger, so each one carries its position.
+  let sheetIndex = 0;
+  const stagger = (node) => {
+    node.style.setProperty("--i", String(sheetIndex++));
+    return node;
+  };
+
   const setRow = (name, note, control, { stack = false } = {}) => {
     const row = el("div", `row${stack ? " stack" : ""}`);
     const copy = el("div", "row-copy");
@@ -1092,14 +1121,14 @@
       copy.appendChild(hint);
     }
     row.append(copy, control);
-    sheet.appendChild(row);
+    sheet.appendChild(stagger(row));
     return row;
   };
 
   const group = (text) => {
     const g = el("div", "group");
     g.textContent = text;
-    sheet.appendChild(g);
+    sheet.appendChild(stagger(g));
   };
 
   // A switch reads its own state, so the caller never tracks it twice.
