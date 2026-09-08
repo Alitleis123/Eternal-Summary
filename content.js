@@ -466,7 +466,7 @@
       if (!snippets.length) return;
 
       const refs = el("div", "refs");
-      const label = el("span", "mono");
+      const label = el("span", "label");
       label.textContent = "Sources";
       refs.appendChild(label);
 
@@ -500,7 +500,7 @@
 
       const entry = el("article", `entry ${role === "warn" ? "warn" : ""}`.trim());
       const head = el("div", "entry-head");
-      const tag = el("span", "mono");
+      const tag = el("span", "label");
       tag.textContent = label || "Summary";
       head.appendChild(tag);
       entry.appendChild(head);
@@ -542,7 +542,7 @@
     const addPending = (label) => {
       const entry = el("article", "entry");
       const head = el("div", "entry-head");
-      const tag = el("span", "mono");
+      const tag = el("span", "label");
       tag.textContent = label || "Working";
       head.appendChild(tag);
       const body = el("div", "entry-body");
@@ -568,14 +568,19 @@
       return entry;
     };
 
+    // A skeleton in the shape of the answer, rather than a spinner in a void:
+    // it fills the panel with what is about to arrive instead of dead space.
     const addLoader = (message) => {
       const box = el("div", "loading");
-      const r = ring("ring-lg");
-      r.classList.add("spin");
-      const status = el("div", "status mono");
-      status.textContent = message;
-      status.insertAdjacentHTML("beforeend", " <i>.</i><i>.</i><i>.</i>");
-      box.append(r, status);
+      const head = el("div", "entry-head");
+      const tag = el("span", "label");
+      tag.textContent = message;
+      head.appendChild(tag);
+
+      const lines = el("div", "skeleton");
+      for (let i = 0; i < 4; i++) lines.appendChild(el("span", "sk-line"));
+
+      box.append(head, lines);
       stream.appendChild(box);
       follow(true);
       return box;
@@ -646,8 +651,6 @@
     const chat = createStream(body);
 
     const composer = el("div", "composer");
-    const caret = el("span", "caret");
-    caret.textContent = ">";
     const field = el("div", "field");
     const input = document.createElement("input");
     input.type = "text";
@@ -657,7 +660,7 @@
     const send = el("button", "send", ICONS.send);
     send.type = "button";
     send.title = "Send";
-    composer.append(caret, field, send);
+    composer.append(field, send);
     card.appendChild(composer);
 
     // --- position against the original highlight
@@ -1003,8 +1006,6 @@
 
   // --- composer
   const composer = el("div", "composer");
-  const caret = el("span", "caret");
-  caret.textContent = ">";
   const field = el("div", "field");
   const input = document.createElement("input");
   input.type = "text";
@@ -1015,7 +1016,7 @@
   sendBtn.type = "button";
   sendBtn.title = "Send";
   sendBtn.setAttribute("aria-label", "Send");
-  composer.append(caret, field, sendBtn);
+  composer.append(field, sendBtn);
   rail.appendChild(composer);
 
   // =========================================================

@@ -164,7 +164,8 @@ describe("style isolation", () => {
     // The fixture forces line-height 1, 24px buttons and 2px letter spacing.
     const lineHeight = parseFloat(await inPanel("getComputedStyle(s.querySelector('.entry-body')).lineHeight"));
     assert.ok(lineHeight > 20, `page CSS collapsed the line height to ${lineHeight}`);
-    assert.equal(await inPanel("getComputedStyle(s.querySelector('.seg')).fontSize"), "9.5px");
+    assert.equal(await inPanel("getComputedStyle(s.querySelector('.seg')).fontSize"), "12.5px");
+    assert.equal(await inPanel("getComputedStyle(s.querySelector('.seg')).textTransform"), "none");
     assert.equal(await inPanel("getComputedStyle(s.querySelector('.entry-body')).letterSpacing"), "normal");
   });
 
@@ -173,7 +174,8 @@ describe("style isolation", () => {
     await select("p1");
     await sleep(500);
     assert.equal(await inCard("s.querySelector('.trigger').textContent"), "Summarize");
-    assert.equal(await inCard("getComputedStyle(s.querySelector('.trigger')).fontSize"), "9.5px");
+    assert.equal(await inCard("getComputedStyle(s.querySelector('.trigger')).fontSize"), "13px");
+    assert.equal(await inCard("getComputedStyle(s.querySelector('.trigger')).textTransform"), "none");
   });
 });
 
@@ -222,7 +224,7 @@ describe("conversation", () => {
     assert.match(await inPanel("s.textContent"), /First question/);
     assert.match(await inPanel("s.textContent"), /Second question/);
     assert.equal(
-      await inPanel("[...s.querySelectorAll('.entry-head .mono')].pop().textContent"),
+      await inPanel("[...s.querySelectorAll('.entry-head .label')].pop().textContent"),
       "Bullets",
       "the new summary should be labelled with the mode that produced it"
     );
