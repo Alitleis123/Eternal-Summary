@@ -2,6 +2,7 @@ import express from "express";
 import dotenv from "dotenv";
 import cors from "cors";
 import { readPayload } from "./payload.js";
+import { retryDelay, upstreamFailure } from "./upstream.js";
 
 // Fly.io injects secrets straight into the environment, so loading a .env file
 // in production could shadow them with stale values.
@@ -136,14 +137,18 @@ const callGemini = async (systemPrompt, messages, { schema = null, retries = 3 }
       });
       const text = await response.text();
 
-      if (response.status === 429 && attempt < retries - 1) {
-        const delay = Math.min(2000 * 2 ** attempt, 30000);
-        console.warn(`Rate limited by Gemini, retrying in ${delay}ms`);
+      const delay = response.ok ? null : retryDelay(response.status, attempt);
+      if (delay !== null && attempt < retries - 1) {
+        console.warn(`Gemini responded ${response.status}, retrying in ${delay}ms`);
         await new Promise((r) => setTimeout(r, delay));
         continue;
       }
       if (!response.ok) {
-        throw new Error(`Gemini responded ${response.status}: ${text.slice(0, 300)}`);
+        // Carry the status so the route can tell a busy model apart from a
+        // fault of our own.
+        const error = new Error(`Gemini responded ${response.status}: ${text.slice(0, 300)}`);
+        error.status = response.status;
+        throw error;
       }
 
       const data = JSON.parse(text);
@@ -198,7 +203,8 @@ app.post("/api/summarize", rateLimit, async (req, res) => {
     res.json({ summary, sources: sources.slice(0, 6) });
   } catch (error) {
     console.error("summarize failed:", error);
-    res.status(500).json({ error: "Failed to summarize text." });
+    const upstream = upstreamFailure(error?.status);
+    res.status(upstream?.status || 500).json({ error: upstream?.error || "Failed to summarize text." });
   }
 });
 
@@ -264,7 +270,8 @@ app.post("/api/ask", rateLimit, async (req, res) => {
     res.json({ answer, sources: sources.slice(0, 6) });
   } catch (error) {
     console.error("ask failed:", error);
-    res.status(500).json({ error: "Failed to answer question." });
+    const upstream = upstreamFailure(error?.status);
+    res.status(upstream?.status || 500).json({ error: upstream?.error || "Failed to answer question." });
   }
 });
 

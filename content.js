@@ -128,6 +128,9 @@
   const friendlyError = (err) => {
     if (err?.code === "timeout") return "That took too long. Try again.";
     if (err?.status === 429) return "Too many requests. Wait a moment and try again.";
+    // Upstream capacity, not our fault and not the reader's. Worth saying so,
+    // because "the server had a problem" invites a pointless bug report.
+    if (err?.status === 503) return "The model is busy. Try again in a moment.";
     if (err?.code === "http") return "The AI server had a problem. Try again shortly.";
     return "Could not reach the AI server.";
   };
