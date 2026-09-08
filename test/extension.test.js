@@ -34,6 +34,19 @@ const openPanel = async () => {
 
 const closePanel = () => evaluate("document.getElementById('ai-overlay')?.__esClose(true)");
 
+// Poll rather than guess a sleep. A fixed wait either flakes under load or
+// pads every run to the worst case.
+const waitFor = async (read, want, label, timeout = 4000) => {
+  const started = Date.now();
+  let last;
+  while (Date.now() - started < timeout) {
+    last = await read();
+    if (want(last)) return last;
+    await sleep(50);
+  }
+  throw new Error(`${label}: gave up after ${timeout}ms, last saw ${JSON.stringify(last)}`);
+};
+
 const select = (id) =>
   evaluate(`(() => {
     const range = document.createRange();
@@ -534,9 +547,16 @@ describe("settings", () => {
 
   test("moving the panel to the left insets the page from the left", async () => {
     await pick("Left");
-    await sleep(700);
-    assert.equal(await inPanel("s.querySelector('.root').dataset.side"), "left");
-    assert.equal(await inPanel("Math.round(s.querySelector('.rail').getBoundingClientRect().left)"), 0);
+    await waitFor(
+      () => inPanel("s.querySelector('.root').dataset.side"),
+      (v) => v === "left",
+      "the root should record the chosen side"
+    );
+    await waitFor(
+      () => inPanel("Math.round(s.querySelector('.rail').getBoundingClientRect().left)"),
+      (v) => v === 0,
+      "the rail should move to the left edge"
+    );
     assert.match(await evaluate("document.documentElement.style.marginLeft"), /^\d+px$/);
     assert.equal(
       await evaluate("document.documentElement.style.marginRight"),
@@ -548,8 +568,11 @@ describe("settings", () => {
   test("a narrower panel gives the article more room", async () => {
     const before = await inPanel("Math.round(s.querySelector('.rail').getBoundingClientRect().width)");
     await pick("Narrow");
-    await sleep(700);
-    const after = await inPanel("Math.round(s.querySelector('.rail').getBoundingClientRect().width)");
+    const after = await waitFor(
+      () => inPanel("Math.round(s.querySelector('.rail').getBoundingClientRect().width)"),
+      (v) => v < before,
+      "the rail should shrink"
+    );
     assert.ok(after < before, `narrow (${after}) should be under medium (${before})`);
     assert.equal(await evaluate("document.documentElement.style.marginLeft"), `${after}px`);
   });
@@ -594,8 +617,12 @@ describe("feedback", () => {
     assert.equal(await inPanel("s.querySelector('.entry .act').textContent"), "Copied");
     assert.equal(await inPanel("s.querySelector('.entry .act').classList.contains('ok')"), true);
 
-    await sleep(1500);
-    assert.equal(await inPanel("s.querySelector('.entry .act').textContent"), "Copy");
+    // The label reverts on a 1400ms timer, so poll past it rather than racing.
+    await waitFor(
+      () => inPanel("s.querySelector('.entry .act').textContent"),
+      (v) => v === "Copy",
+      "copy should go back to its resting label"
+    );
     assert.equal(await inPanel("s.querySelector('.entry .act').classList.contains('ok')"), false);
   });
 
