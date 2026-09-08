@@ -8,7 +8,29 @@ if (window.__esListenerLoaded) {
 
   const CACHE_TTL_MS = 30 * 60 * 1000;
   const cacheKey = () => `summary:${location.href}`;
+  const CACHE_PREFIX = "summary:";
   const MODE_KEY = "es:mode";
+  const SETTINGS_KEY = "es:settings";
+
+  // Defaults live only here. The panel is handed a fully merged object, so it
+  // never has to know what a default is, and the two can never disagree.
+  const DEFAULTS = {
+    format: "tldr",
+    rememberFormat: true,
+    highlightSources: true,
+    selectionButton: true,
+    animateText: true,
+    reuseSaved: true,
+    width: "medium",
+    side: "right",
+  };
+  const merge = (raw) => ({ ...DEFAULTS, ...(raw && typeof raw === "object" ? raw : {}) });
+
+  let settings = { ...DEFAULTS };
+  chrome.storage.local.get([SETTINGS_KEY], (res) => {
+    settings = merge(res?.[SETTINGS_KEY]);
+    if (!settings.selectionButton) hideTrigger();
+  });
 
   // One stylesheet, shared by the trigger here and the panel in page context.
   let cssPromise = null;
@@ -25,9 +47,13 @@ if (window.__esListenerLoaded) {
   const showOverlay = async () => {
     const css = await loadCss();
     const key = cacheKey();
-    chrome.storage.local.get([key, MODE_KEY], (res) => {
+    // Read everything: the settings view shows how many summaries are saved.
+    chrome.storage.local.get(null, (res) => {
+      settings = merge(res?.[SETTINGS_KEY]);
       const entry = res?.[key];
-      const fresh = entry && Date.now() - (entry.ts || 0) < CACHE_TTL_MS;
+      const fresh =
+        settings.reuseSaved && entry && Date.now() - (entry.ts || 0) < CACHE_TTL_MS;
+      const saved = Object.keys(res || {}).filter((k) => k.startsWith(CACHE_PREFIX)).length;
 
       let cacheEl = document.getElementById("es-cache");
       if (!cacheEl) {
@@ -39,6 +65,8 @@ if (window.__esListenerLoaded) {
       cacheEl.dataset.payload = JSON.stringify(fresh ? entry : {});
       cacheEl.dataset.css = css;
       cacheEl.dataset.mode = res?.[MODE_KEY] || "";
+      cacheEl.dataset.settings = JSON.stringify(settings);
+      cacheEl.dataset.saved = String(saved);
 
       const script = document.createElement("script");
       script.src = chrome.runtime.getURL("content.js");
@@ -88,8 +116,25 @@ if (window.__esListenerLoaded) {
       return;
     }
 
+    if (msg.type === "ES_SETTINGS_SET") {
+      if (!msg.patch || typeof msg.patch !== "object") return;
+      settings = merge({ ...settings, ...msg.patch });
+      chrome.storage.local.set({ [SETTINGS_KEY]: settings });
+      // Take effect on the page immediately, not on the next load.
+      if (!settings.selectionButton) hideTrigger();
+      return;
+    }
+
+    if (msg.type === "ES_CACHE_CLEAR") {
+      chrome.storage.local.get(null, (res) => {
+        const keys = Object.keys(res || {}).filter((k) => k.startsWith(CACHE_PREFIX));
+        if (keys.length) chrome.storage.local.remove(keys);
+      });
+      return;
+    }
+
     if (msg.type === "ES_CACHE_SET") {
-      if (!msg.value?.summary) return;
+      if (!msg.value?.summary || !settings.reuseSaved) return;
       chrome.storage.local.set({
         [cacheKey()]: { ...msg.value, ts: Date.now() },
       });
@@ -259,7 +304,16 @@ if (window.__esListenerLoaded) {
     button.style.left = `${Math.round(left)}px`;
   };
 
+  const hideTrigger = () => {
+    const popup = document.getElementById(POPUP_ID);
+    popup?.style.setProperty("display", "none", "important");
+  };
+
   const updatePopup = async () => {
+    if (!settings.selectionButton) {
+      hideTrigger();
+      return;
+    }
     const selection = window.getSelection();
     const textValue = selection ? selection.toString().trim() : "";
     const popup = await ensurePopup();

@@ -27,8 +27,13 @@
     },
     storage: {
       local: {
+        // null means "everything", as in the real API.
         get: (keys, cb) =>
           setTimeout(() => {
+            if (keys === null || keys === undefined) {
+              cb({ ...window.__storage });
+              return;
+            }
             const list = Array.isArray(keys) ? keys : [keys];
             const out = {};
             for (const key of list) if (key in window.__storage) out[key] = window.__storage[key];
@@ -36,6 +41,10 @@
           }, 0),
         set: (obj, cb) => {
           Object.assign(window.__storage, obj);
+          if (cb) cb();
+        },
+        remove: (keys, cb) => {
+          for (const key of Array.isArray(keys) ? keys : [keys]) delete window.__storage[key];
           if (cb) cb();
         },
       },

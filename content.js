@@ -20,6 +20,24 @@
 
   const cacheEl = document.getElementById("es-cache");
 
+  // listener.js owns the defaults and hands them over already merged, so there
+  // is no second copy here to drift out of step.
+  const settings = (() => {
+    try {
+      return JSON.parse(cacheEl?.dataset?.settings || "{}");
+    } catch {
+      return {};
+    }
+  })();
+  const savedSummaries = Number(cacheEl?.dataset?.saved || 0);
+  // One gate for every reveal, so the preference cannot be honoured in some
+  // paths and missed in others.
+  const animate = () => settings.animateText !== false;
+  const putSettings = (patch) => {
+    Object.assign(settings, patch);
+    window.postMessage({ type: "ES_SETTINGS_SET", patch }, "*");
+  };
+
   // The stylesheet is fetched by listener.js and handed over on the cache node.
   const UI_CSS = cacheEl?.dataset?.css || "";
 
@@ -352,6 +370,9 @@
     if (!node) return;
     node.scrollIntoView({ behavior: "smooth", block: "center" });
 
+    // Jumping to the passage is the point; painting it is a preference.
+    if (settings.highlightSources === false) return;
+
     // Restore only the properties we touch. Replacing the whole style attribute
     // would discard anything the page sets on this element in the meantime.
     const previous = Object.keys(HIGHLIGHT).map((name) => [
@@ -422,6 +443,8 @@
   const ICONS = {
     close: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>',
     send: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>',
+    gear: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.05A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.05A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.55V3a2 2 0 1 1 4 0v.05A1.7 1.7 0 0 0 15 4.6a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9v0a1.7 1.7 0 0 0 1.55 1H21a2 2 0 1 1 0 4h-.05a1.7 1.7 0 0 0-1.55 1z"/></svg>',
+    back: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>',
     down: '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M19 12l-7 7-7-7"/></svg>',
   };
 
@@ -771,7 +794,7 @@
       if (ok) {
         const answer = data.answer || "No answer received.";
         history.push({ role: "assistant", content: answer });
-        chat.addEntry("assistant", answer, { label: "Answer", typing: true, sources: data.sources || [] });
+        chat.addEntry("assistant", answer, { label: "Answer", typing: animate(), sources: data.sources || [] });
       } else {
         chat.addFailure(friendlyError(error), ask);
       }
@@ -800,7 +823,7 @@
           chat.addEntry("assistant", "There is not much to work with here. What would you like to know?", { label: "Selection", copyable: false });
         } else {
           history.push({ role: "assistant", content: summary });
-          chat.addEntry("assistant", summary, { label: "Selection", typing: true });
+          chat.addEntry("assistant", summary, { label: "Selection", typing: animate() });
         }
       }
       setBusy(false);
@@ -853,6 +876,8 @@
   };
 
   const rail = el("div", "rail");
+  root.dataset.width = settings.width || "medium";
+  root.dataset.side = settings.side || "right";
   root.appendChild(rail);
 
   const closeRail = (immediate = false) => {
@@ -879,35 +904,45 @@
   // viewports keep the overlay behaviour, since there is no room to split.
   const MIN_ARTICLE = 320;
   const EASE = "320ms cubic-bezier(0.32, 0.72, 0, 1)";
+  let fitPage = () => {};
   {
     const doc = document.documentElement;
     // Restore only what we touch, the way the source highlight does, so a page
-    // that sets its own margin on <html> gets it back. Dropping the margin on
+    // that sets its own margin on <html> gets it back. Both sides are captured
+    // because the rail can move while it is open. Dropping the margin on
     // teardown is synchronous, so a rail opening while another is still
     // sliding out can never capture an inset we wrote ourselves.
-    const margin = [doc.style.getPropertyValue("margin-right"), doc.style.getPropertyPriority("margin-right")];
+    const saved = ["margin-right", "margin-left"].map((name) => [
+      name,
+      doc.style.getPropertyValue(name),
+      doc.style.getPropertyPriority(name),
+    ]);
 
-    const fit = () => {
+    fitPage = () => {
       const width = Math.round(rail.getBoundingClientRect().width);
       const room = window.innerWidth - width >= MIN_ARTICLE;
+      const left = settings.side === "left";
+      doc.style.removeProperty(left ? "margin-right" : "margin-left");
       if (!room) {
-        doc.style.removeProperty("margin-right");
+        doc.style.removeProperty(left ? "margin-left" : "margin-right");
         return;
       }
       // The reduced-motion rule in ui.css only reaches the shadow root, and
       // this margin is on the page's own <html>, so honour it here too.
       const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
-      doc.style.setProperty("transition", still ? "none" : `margin-right ${EASE}`, "important");
-      doc.style.setProperty("margin-right", `${width}px`, "important");
+      doc.style.setProperty("transition", still ? "none" : `margin ${EASE}`, "important");
+      doc.style.setProperty(left ? "margin-left" : "margin-right", `${width}px`, "important");
     };
 
-    fit();
-    on(window, "resize", fit);
+    fitPage();
+    on(window, "resize", fitPage);
     teardown.push(() => {
       // Removing the inset animates the page back, because the transition is
       // still in force; that is the only reason it outlives the margin.
-      if (margin[0]) doc.style.setProperty("margin-right", margin[0], margin[1]);
-      else doc.style.removeProperty("margin-right");
+      for (const [name, value, priority] of saved) {
+        if (value) doc.style.setProperty(name, value, priority);
+        else doc.style.removeProperty(name);
+      }
       setTimeout(() => {
         doc.style.removeProperty("transition");
         if (!doc.getAttribute("style")) doc.removeAttribute("style");
@@ -929,13 +964,18 @@
   meta.title = document.title || location.hostname;
   wordmark.append(name, meta);
 
+  const gearBtn = el("button", "icon-btn gear", ICONS.gear);
+  gearBtn.type = "button";
+  gearBtn.title = "Settings";
+  gearBtn.setAttribute("aria-label", "Settings");
+
   const closeBtn = el("button", "icon-btn", ICONS.close);
   closeBtn.type = "button";
   closeBtn.title = "Close";
   closeBtn.setAttribute("aria-label", "Close");
   closeBtn.addEventListener("click", () => closeRail());
 
-  head.append(mark, wordmark, closeBtn);
+  head.append(mark, wordmark, gearBtn, closeBtn);
   rail.appendChild(head);
 
   // --- segmented mode control
@@ -945,8 +985,13 @@
   const segTrack = el("span", "seg-track");
   segments.appendChild(segTrack);
 
+  const known = (id) => MODES.some((m) => m.id === id);
   const savedMode = cacheEl?.dataset?.mode || "";
-  let activeMode = MODES.some((m) => m.id === savedMode) ? savedMode : MODES[0].id;
+  const defaultMode = known(settings.format) ? settings.format : MODES[0].id;
+  // Remembering is on by default, so this matches the old behaviour until the
+  // reader turns it off and pins a format instead.
+  let activeMode =
+    settings.rememberFormat !== false && known(savedMode) ? savedMode : defaultMode;
   const segs = new Map();
 
   const paintModes = () => {
@@ -972,6 +1017,10 @@
     segments.appendChild(seg);
   }
   rail.appendChild(segments);
+  // Pressed state now, track geometry once there is layout to measure. Leaving
+  // both to the frame callback made the active mode briefly unreadable to
+  // assistive tech, and to anyone reading it right after open.
+  paintModes();
   requestAnimationFrame(paintModes);
   on(window, "resize", paintModes);
 
@@ -1020,6 +1069,167 @@
   rail.appendChild(composer);
 
   // =========================================================
+  // Settings
+  //
+  // A second view inside the rail rather than a separate options page: it is
+  // where the reader already is, and it shares this stylesheet.
+  // =========================================================
+  const sheet = el("div", "sheet");
+  sheet.setAttribute("aria-label", "Settings");
+
+  const setRow = (name, note, control, { stack = false } = {}) => {
+    const row = el("div", `row${stack ? " stack" : ""}`);
+    const copy = el("div", "row-copy");
+    const title = el("div", "row-name");
+    title.textContent = name;
+    copy.appendChild(title);
+    if (note) {
+      const hint = el("div", "row-note");
+      hint.textContent = note;
+      copy.appendChild(hint);
+    }
+    row.append(copy, control);
+    sheet.appendChild(row);
+    return row;
+  };
+
+  const group = (text) => {
+    const g = el("div", "group");
+    g.textContent = text;
+    sheet.appendChild(g);
+  };
+
+  // A switch reads its own state, so the caller never tracks it twice.
+  const toggle = (key, { onChange } = {}) => {
+    const btn = el("button", "switch");
+    btn.type = "button";
+    btn.setAttribute("role", "switch");
+    const paint = () => btn.setAttribute("aria-checked", String(settings[key] !== false));
+    paint();
+    btn.addEventListener("click", () => {
+      putSettings({ [key]: settings[key] === false });
+      paint();
+      onChange?.();
+    });
+    return btn;
+  };
+
+  const choices = (key, options, { onChange } = {}) => {
+    const wrap = el("div", "choices");
+    const buttons = new Map();
+    const paint = () => {
+      for (const [value, btn] of buttons) {
+        btn.setAttribute("aria-pressed", String(settings[key] === value));
+      }
+    };
+    for (const option of options) {
+      const btn = el("button", "choice");
+      btn.type = "button";
+      btn.textContent = option.label;
+      btn.addEventListener("click", () => {
+        putSettings({ [key]: option.value });
+        paint();
+        onChange?.();
+      });
+      buttons.set(option.value, btn);
+      wrap.appendChild(btn);
+    }
+    paint();
+    return wrap;
+  };
+
+  group("Reading");
+  setRow(
+    "Default format",
+    "What a page opens in when there is nothing remembered.",
+    choices("format", MODES.map((m) => ({ value: m.id, label: m.label })), {
+      onChange: () => {
+        // Pinning a format only means something if we stop remembering.
+        if (settings.rememberFormat !== false) {
+          putSettings({ rememberFormat: false });
+          rememberSwitch.setAttribute("aria-checked", "false");
+          showToast("Every page will open in this format");
+        }
+      },
+    }),
+    { stack: true }
+  );
+  const rememberSwitch = toggle("rememberFormat");
+  setRow("Remember my last format", "Otherwise every page opens in the default above.", rememberSwitch);
+  setRow("Animate text as it arrives", null, toggle("animateText"));
+
+  group("On the page");
+  setRow("Highlight the passage when I open a source", null, toggle("highlightSources"));
+  setRow(
+    "Show the Summarize button when I select text",
+    "The floating button beside a selection.",
+    toggle("selectionButton")
+  );
+
+  group("Panel");
+  setRow(
+    "Width",
+    null,
+    choices("width", [
+      { value: "narrow", label: "Narrow" },
+      { value: "medium", label: "Medium" },
+      { value: "wide", label: "Wide" },
+    ], {
+      onChange: () => {
+        root.dataset.width = settings.width;
+        // Measuring flushes style and layout, so there is nothing to wait for.
+        // Deferring to a frame callback only made this miss when rAF is
+        // throttled.
+        fitPage();
+        paintModes();
+      },
+    })
+  );
+  setRow(
+    "Side",
+    null,
+    choices("side", [
+      { value: "left", label: "Left" },
+      { value: "right", label: "Right" },
+    ], {
+      onChange: () => {
+        root.dataset.side = settings.side;
+        fitPage();
+      },
+    })
+  );
+
+  group("Saved summaries");
+  let savedLeft = savedSummaries;
+  const clearBtn = el("button", "row-act");
+  clearBtn.type = "button";
+  const paintClear = () => {
+    clearBtn.textContent = savedLeft ? `Clear ${savedLeft}` : "Nothing saved";
+    clearBtn.disabled = !savedLeft;
+  };
+  paintClear();
+  clearBtn.addEventListener("click", () => {
+    window.postMessage({ type: "ES_CACHE_CLEAR" }, "*");
+    savedLeft = 0;
+    paintClear();
+    showToast("Saved summaries cleared");
+  });
+  setRow("Reuse a summary for 30 minutes", "Reopening a page is instant instead of asking again.", toggle("reuseSaved"));
+  setRow("Stored on this device", null, clearBtn);
+
+  rail.appendChild(sheet);
+
+  const showSettings = (on) => {
+    root.dataset.view = on ? "settings" : "stream";
+    gearBtn.setAttribute("aria-expanded", String(on));
+    gearBtn.innerHTML = on ? ICONS.back : ICONS.gear;
+    gearBtn.title = on ? "Back" : "Settings";
+    gearBtn.setAttribute("aria-label", on ? "Back to summary" : "Settings");
+  };
+  showSettings(false);
+  gearBtn.addEventListener("click", () => showSettings(root.dataset.view !== "settings"));
+
+  // =========================================================
   // Behaviour
   // =========================================================
   const history = [];
@@ -1049,7 +1259,7 @@
     if (!force) {
       const cached = readCache();
       if (cached?.summary && cached.mode === activeMode) {
-        chat.addEntry("assistant", cached.summary, { label: modeLabel(activeMode), typing: true, sources: cached.sources || [] });
+        chat.addEntry("assistant", cached.summary, { label: modeLabel(activeMode), typing: animate(), sources: cached.sources || [] });
         history.push({ role: "assistant", content: cached.summary });
         showToast("Showing a saved summary");
         setBusy(false);
@@ -1076,7 +1286,7 @@
     const summary = data.summary || "No summary received.";
     const sources = data.sources || [];
     history.push({ role: "assistant", content: summary });
-    chat.addEntry("assistant", summary, { label: modeLabel(activeMode), typing: true, sources });
+    chat.addEntry("assistant", summary, { label: modeLabel(activeMode), typing: animate(), sources });
     writeCache({ summary, sources, mode: activeMode });
     setBusy(false);
   }
@@ -1119,7 +1329,7 @@
     if (ok) {
       const answer = data.answer || data.summary || "No answer received.";
       history.push({ role: "assistant", content: answer });
-      chat.addEntry("assistant", answer, { label: "Answer", typing: true, sources: data.sources || [] });
+      chat.addEntry("assistant", answer, { label: "Answer", typing: animate(), sources: data.sources || [] });
     } else {
       chat.addFailure(friendlyError(error), () => ask(value, override));
     }

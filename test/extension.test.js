@@ -437,6 +437,154 @@ describe("failures", () => {
   });
 });
 
+describe("settings", () => {
+  const gear = () => inPanel("s.querySelector('.gear').click()");
+  // Rows are addressed by their visible label, the way a reader finds them.
+  const rowSwitch = (label) =>
+    `[...s.querySelectorAll('.row')].find(r => r.textContent.startsWith(${JSON.stringify(label)}))` +
+    `.querySelector('.switch')`;
+  const flip = (label) => inPanel(`${rowSwitch(label)}.click()`);
+  const pick = (text) =>
+    inPanel(`[...s.querySelectorAll('.choice')].find(c => c.textContent === ${JSON.stringify(text)}).click()`);
+
+  test("the gear opens a settings view and comes back", async () => {
+    await reload();
+    await evaluate("window.__storage = {}");
+    await openPanel();
+    await gear();
+    await sleep(300);
+
+    assert.equal(await inPanel("s.querySelector('.root').dataset.view"), "settings");
+    // The stream steps aside rather than sitting behind the settings.
+    assert.equal(await inPanel("getComputedStyle(s.querySelector('.composer')).display"), "none");
+    assert.equal(await inPanel("getComputedStyle(s.querySelector('.sheet')).display"), "block");
+
+    await gear();
+    await sleep(300);
+    assert.equal(await inPanel("s.querySelector('.root').dataset.view"), "stream");
+    assert.notEqual(await inPanel("getComputedStyle(s.querySelector('.composer')).display"), "none");
+  });
+
+  test("a switch writes through to storage", async () => {
+    await gear();
+    await sleep(250);
+    await flip("Animate text as it arrives");
+    await sleep(250);
+    assert.equal(await evaluate("window.__storage['es:settings'].animateText"), false);
+    assert.equal(await inPanel(`${rowSwitch('Animate text as it arrives')}.getAttribute('aria-checked')`), "false");
+  });
+
+  test("pinning a default format stops remembering and holds across opens", async () => {
+    await pick("Bullets");
+    await sleep(300);
+    assert.equal(await evaluate("window.__storage['es:settings'].format"), "bullets");
+    assert.equal(
+      await evaluate("window.__storage['es:settings'].rememberFormat"),
+      false,
+      "a pinned format is meaningless while the last one is still remembered"
+    );
+
+    // Switching mode in the stream must not override the pin on the next open.
+    await gear();
+    await sleep(250);
+    await inPanel("[...s.querySelectorAll('.seg')].find(c => c.textContent === 'Key points').click()");
+    await sleep(1600);
+    await closePanel();
+    await sleep(400);
+    await openPanel();
+    assert.equal(
+      await inPanel("[...s.querySelectorAll('.seg')].find(c => c.getAttribute('aria-pressed') === 'true').textContent"),
+      "Bullets"
+    );
+  });
+
+  test("with highlighting off a source still jumps but paints nothing", async () => {
+    await gear();
+    await sleep(250);
+    await flip("Highlight the passage when I open a source");
+    await sleep(200);
+    await gear();
+    await sleep(300);
+
+    assert.ok((await inPanel("s.querySelectorAll('.ref').length")) >= 1, "there should be a source to open");
+    await inPanel("s.querySelector('.ref:not(.dead)').click()");
+    await sleep(800);
+    assert.equal(
+      await evaluate("document.querySelectorAll('article [style*=\"background-color\"]').length"),
+      0,
+      "nothing on the page should be painted while highlighting is off"
+    );
+    assert.equal(await evaluate("!!document.getElementById('ai-overlay')"), true);
+  });
+
+  test("turning off the selection button stops it appearing", async () => {
+    await gear();
+    await sleep(250);
+    await flip("Show the Summarize button when I select text");
+    await sleep(300);
+
+    await select("p3");
+    await sleep(600);
+    const visible = await evaluate(`(() => {
+      const p = document.getElementById('es-selection-popup');
+      return !!p && p.style.display !== 'none';
+    })()`);
+    assert.equal(visible, false, "the floating trigger should stay hidden");
+  });
+
+  test("moving the panel to the left insets the page from the left", async () => {
+    await pick("Left");
+    await sleep(700);
+    assert.equal(await inPanel("s.querySelector('.root').dataset.side"), "left");
+    assert.equal(await inPanel("Math.round(s.querySelector('.rail').getBoundingClientRect().left)"), 0);
+    assert.match(await evaluate("document.documentElement.style.marginLeft"), /^\d+px$/);
+    assert.equal(
+      await evaluate("document.documentElement.style.marginRight"),
+      "",
+      "the old side's inset must be released, not left behind"
+    );
+  });
+
+  test("a narrower panel gives the article more room", async () => {
+    const before = await inPanel("Math.round(s.querySelector('.rail').getBoundingClientRect().width)");
+    await pick("Narrow");
+    await sleep(700);
+    const after = await inPanel("Math.round(s.querySelector('.rail').getBoundingClientRect().width)");
+    assert.ok(after < before, `narrow (${after}) should be under medium (${before})`);
+    assert.equal(await evaluate("document.documentElement.style.marginLeft"), `${after}px`);
+  });
+
+  test("clearing saved summaries removes them", async () => {
+    await closePanel();
+    await sleep(400);
+    await openPanel();
+    assert.ok(
+      (await evaluate("Object.keys(window.__storage).filter(k => k.startsWith('summary:')).length")) >= 1,
+      "there should be something saved to clear"
+    );
+
+    await gear();
+    await sleep(250);
+    await inPanel("s.querySelector('.row-act').click()");
+    await sleep(400);
+    assert.equal(
+      await evaluate("Object.keys(window.__storage).filter(k => k.startsWith('summary:')).length"),
+      0
+    );
+    assert.equal(await inPanel("s.querySelector('.row-act').disabled"), true);
+  });
+
+  test("settings survive a reload", async () => {
+    // Navigating resets the fake storage, so carry the value through Node.
+    const saved = await evaluate("JSON.stringify(window.__storage['es:settings'])");
+    await reload();
+    await evaluate(`window.__storage['es:settings'] = ${saved}`);
+    await openPanel();
+    assert.equal(await inPanel("s.querySelector('.root').dataset.side"), "left");
+    assert.equal(await inPanel("s.querySelector('.root').dataset.width"), "narrow");
+  });
+});
+
 describe("hygiene", () => {
   test("repeated opens do not strand elements on the page", async () => {
     await reload();

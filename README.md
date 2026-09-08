@@ -14,9 +14,10 @@ Live site: https://alitleis123.github.io/Eternal-Summary/
 - **Four modes.** Summary, bullets, key points, or plain English. Switching modes re-reads the page in that style and appends the result, so the conversation above it stays intact. Your choice is remembered for next time.
 - **Selection summaries.** Highlight text and a floating Summarize button appears next to it. The card that opens follows the highlight as you scroll.
 - **Follow-up questions.** Ask anything about the page in the same panel. The thread scrolls on its own, keeps every turn, and only follows new messages when you are already at the bottom.
-- **Clickable sources.** Every answer lists the passages it drew on. Clicking one closes the panel and highlights that passage on the page.
+- **Clickable sources.** Every answer lists the passages it drew on. Clicking one scrolls to that passage and highlights it, without closing the panel.
 - **Local caching.** Summaries are kept in extension storage for thirty minutes, so reopening a page you already read costs nothing.
 - **Reading time.** The header shows how long the page would take to read, so you can see what the summary saved you.
+- **Settings.** The gear in the panel header opens them. Pin a default format, stop remembering the last one, turn off the page highlight or the floating Summarize button, drop the typing animation, move the panel to either side at three widths, and clear saved summaries.
 
 ## Screenshots
 
