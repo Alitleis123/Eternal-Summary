@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { readPayload, salvageString, stripCodeFences } from "../payload.js";
+import { readPayload, readVerdict, salvageString, stripCodeFences } from "../payload.js";
 
 describe("stripCodeFences", () => {
   test("unwraps a fenced block", () => {
@@ -85,5 +85,44 @@ describe("readPayload", () => {
 describe("salvageString", () => {
   test("returns empty when the key is absent", () => {
     assert.equal(salvageString('{"other":"x"}', "summary"), "");
+  });
+});
+
+describe("readVerdict", () => {
+  test("reads a verdict and its reason", () => {
+    assert.deepEqual(
+      readVerdict('{"verdict":"skim","why":"Mostly recap of earlier coverage.","summary":"x"}'),
+      { call: "skim", why: "Mostly recap of earlier coverage." }
+    );
+  });
+
+  test("survives a reply truncated after the verdict", () => {
+    // The verdict is asked for first precisely so this case still works.
+    assert.deepEqual(readVerdict('{"verdict":"read","why":"Names the ruling'), {
+      call: "read",
+      why: "Names the ruling",
+    });
+  });
+
+  test("renders nothing for a call the interface has no treatment for", () => {
+    assert.equal(readVerdict('{"verdict":"maybe","why":"unsure"}'), null);
+    assert.equal(readVerdict('{"verdict":"","why":"unsure"}'), null);
+    assert.equal(readVerdict('{"summary":"no verdict at all"}'), null);
+    assert.equal(readVerdict("not json"), null);
+  });
+
+  test("accepts a call in any casing", () => {
+    assert.equal(readVerdict('{"verdict":"SKIP","why":"Link list."}').call, "skip");
+  });
+
+  test("caps a reason that ignored the word limit", () => {
+    const long = "word ".repeat(60);
+    const { why } = readVerdict(`{"verdict":"read","why":"${long}"}`);
+    assert.ok(why.length <= 120, `reason was ${why.length} characters`);
+    assert.match(why, /…$/);
+  });
+
+  test("keeps a verdict with no reason at all", () => {
+    assert.deepEqual(readVerdict('{"verdict":"read","summary":"x"}'), { call: "read", why: "" });
   });
 });

@@ -16,7 +16,8 @@ Live site: https://alitleis123.github.io/Eternal-Summary/
 - **Follow-up questions.** Ask anything about the page in the same panel. The thread scrolls on its own, keeps every turn, and only follows new messages when you are already at the bottom.
 - **Clickable sources.** Every answer lists the passages it drew on. Clicking one scrolls to that passage and highlights it, without closing the panel.
 - **Local caching.** Summaries are kept in extension storage for thirty minutes, so reopening a page you already read costs nothing.
-- **Reading time.** The header shows how long the page would take to read, so you can see what the summary saved you.
+- **Reading time, and whether it is worth it.** The header shows how long the page would take to read. Beside it, a one line verdict: worth reading, worth a skim, or probably skippable, with the reason.
+- **Any language.** Summarize and ask in one of thirteen languages regardless of what the page is written in. Source snippets stay in the original so they can still be found on the page.
 - **Settings.** The gear in the panel header opens them. Pin a default format, stop remembering the last one, turn off the page highlight or the floating Summarize button, drop the typing animation, move the panel to either side at three widths, and clear saved summaries.
 
 ## Screenshots

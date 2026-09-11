@@ -21,6 +21,8 @@ if (window.__esListenerLoaded) {
     selectionButton: true,
     animateText: true,
     reuseSaved: true,
+    // "page" means leave it in whatever language the page is written in.
+    language: "page",
     width: "medium",
     side: "right",
   };

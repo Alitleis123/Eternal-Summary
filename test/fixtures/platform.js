@@ -92,6 +92,7 @@
                 ? "1. Commissioned by Ptolemy I.\n2. One of the tallest structures for centuries.\n3. Rediscovered in the harbour in 1994."
                 : `Summary in ${payload.mode} mode. The Pharos of Alexandria guided ships for over sixteen centuries.`,
           sources: ["Cras dapibus vivamus elementum semper nisi", "Phasellus viverra nulla ut metus varius"],
+          verdict: { call: "read", why: "Names the dates and the height." },
         }
       : { answer: `Answer: ${payload.messages.slice(-1)[0].content}`, sources: [] };
 

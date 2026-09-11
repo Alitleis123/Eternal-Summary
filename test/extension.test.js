@@ -646,6 +646,95 @@ describe("feedback", () => {
   });
 });
 
+describe("worth reading", () => {
+  test("a verdict shows with its reason", async () => {
+    await reload();
+    await evaluate("window.__storage = {}");
+    await openPanel();
+    assert.equal(await inPanel("s.querySelector('.verdict').classList.contains('show')"), true);
+    assert.equal(await inPanel("s.querySelector('.verdict').dataset.call"), "read");
+    assert.equal(await inPanel("s.querySelector('.verdict-call').textContent"), "Worth reading");
+    assert.match(await inPanel("s.querySelector('.verdict-why').textContent"), /dates and the height/);
+  });
+
+  test("it survives being served from the cache", async () => {
+    await closePanel();
+    await evaluate("window.__requests.length = 0");
+    await openPanel();
+    assert.equal(await evaluate("window.__requests.length"), 0, "this should be the cached summary");
+    assert.equal(await inPanel("s.querySelector('.verdict-call').textContent"), "Worth reading");
+  });
+
+  test("a reply without one shows nothing rather than an empty badge", async () => {
+    await evaluate(`window.__reply = () => ({ ok: true, status: 200,
+      text: () => Promise.resolve(JSON.stringify({ summary: 'No verdict here.', sources: [] })) });`);
+    await evaluate("window.__storage = {}");
+    await closePanel();
+    await sleep(400);
+    await openPanel();
+    assert.equal(await inPanel("s.querySelector('.verdict').classList.contains('show')"), false);
+    await evaluate("window.__reply = null");
+  });
+
+  test("a call the interface has no label for is refused", async () => {
+    await evaluate(`window.__reply = () => ({ ok: true, status: 200,
+      text: () => Promise.resolve(JSON.stringify({ summary: 'x.', sources: [],
+        verdict: { call: 'maybe', why: 'unsure' } })) });`);
+    await evaluate("window.__storage = {}");
+    await closePanel();
+    await sleep(400);
+    await openPanel();
+    assert.equal(await inPanel("s.querySelector('.verdict').classList.contains('show')"), false);
+    await evaluate("window.__reply = null");
+  });
+});
+
+describe("translation", () => {
+  test("no language is sent while the default is in force", async () => {
+    await reload();
+    await evaluate("window.__storage = {}");
+    await evaluate("window.__requests.length = 0");
+    await openPanel();
+    assert.equal(await evaluate("window.__requests.slice(-1)[0].body.lang"), undefined);
+  });
+
+  test("choosing one sends it with every request", async () => {
+    await inPanel("s.querySelector('.gear').click()");
+    await sleep(300);
+    await inPanel(`(() => { const f = s.querySelector('.picker select');
+      f.value = 'es'; f.dispatchEvent(new Event('change')); })()`);
+    await sleep(250);
+    assert.equal(await evaluate("window.__storage['es:settings'].language"), "es");
+
+    // Summaries and follow-up questions both have to carry it.
+    await inPanel("s.querySelector('.gear').click()");
+    await sleep(300);
+    await inPanel("[...s.querySelectorAll('.seg')].find(c => c.textContent === 'Bullets').click()");
+    await sleep(1600);
+    assert.equal(await evaluate("window.__requests.slice(-1)[0].body.lang"), "es");
+    assert.match(await evaluate("window.__requests.slice(-1)[0].url"), /summarize$/);
+
+    await ask("And what about the height?");
+    assert.equal(await evaluate("window.__requests.slice(-1)[0].body.lang"), "es");
+    assert.match(await evaluate("window.__requests.slice(-1)[0].url"), /ask$/);
+  });
+
+  test("entries let the browser pick their own direction", async () => {
+    // Without this a right-to-left summary is laid out left-to-right.
+    assert.equal(await inPanel("s.querySelector('.entry-body').getAttribute('dir')"), "auto");
+  });
+
+  test("the choice survives a reload", async () => {
+    const saved = await evaluate("JSON.stringify(window.__storage['es:settings'])");
+    await reload();
+    await evaluate(`window.__storage['es:settings'] = ${saved}`);
+    await openPanel();
+    await inPanel("s.querySelector('.gear').click()");
+    await sleep(300);
+    assert.equal(await inPanel("s.querySelector('.picker select').value"), "es");
+  });
+});
+
 describe("hygiene", () => {
   test("repeated opens do not strand elements on the page", async () => {
     await reload();

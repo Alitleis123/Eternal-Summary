@@ -1,7 +1,7 @@
 import express from "express";
 import dotenv from "dotenv";
 import cors from "cors";
-import { readPayload } from "./payload.js";
+import { readPayload, readVerdict } from "./payload.js";
 import { retryDelay, upstreamFailure } from "./upstream.js";
 
 // Fly.io injects secrets straight into the environment, so loading a .env file
@@ -34,12 +34,16 @@ const CHUNK_OVERLAP = 200;
 const REQUEST_TIMEOUT_MS = 20000;
 
 const MODE_INSTRUCTIONS = {
-  tldr: "Write two or three flowing sentences that capture the single most important idea.",
+  // These two used to read the same. tldr keeps the author's own wording and
+  // is bounded by sentence count; simple is bounded by word count and is the
+  // only mode allowed to reword the vocabulary.
+  tldr:
+    "Write two or three flowing sentences that capture the single most important idea. Keep the author's own terminology.",
   bullets: "Write four to six short bullet lines, each starting with '- '. One idea per line.",
   "key-points":
     "List the concrete takeaways a reader must remember, numbered '1.', '2.' and so on, at most five.",
   simple:
-    "Explain it in plain English for someone new to the topic. Short sentences, no jargon, define any term you must use.",
+    "Explain it in plain English for someone new to the topic, in at most 90 words. Short sentences, no jargon, define any term you must use.",
 };
 const DEFAULT_MODE = "tldr";
 
@@ -101,6 +105,36 @@ const chunkText = (text, maxChars, overlap = CHUNK_OVERLAP) => {
   return chunks;
 };
 
+// An allowlist, because this string lands in a prompt. An unknown code falls
+// back to the page's own language rather than being passed through.
+const LANGUAGE_NAMES = {
+  en: "English",
+  es: "Spanish",
+  fr: "French",
+  de: "German",
+  pt: "Portuguese",
+  it: "Italian",
+  ar: "Arabic",
+  hi: "Hindi",
+  zh: "Simplified Chinese",
+  ja: "Japanese",
+  ko: "Korean",
+  ru: "Russian",
+  tr: "Turkish",
+};
+
+export const resolveLanguage = (value) => {
+  const code = typeof value === "string" ? value.trim().toLowerCase() : "";
+  return LANGUAGE_NAMES[code] || null;
+};
+
+// Source snippets are found on the page by exact text match, so translating
+// them would break every footnote. Only the prose may change language.
+const languageRule = (name, noun) =>
+  name
+    ? `Write the ${noun} in ${name}, whatever language the page is in. Leave every source snippet exactly as it appears on the page, in the page's original language, untranslated.`
+    : "";
+
 const resolveMode = (value) => {
   const id = typeof value === "string" ? value.trim().toLowerCase() : "";
   return MODE_INSTRUCTIONS[id] ? id : DEFAULT_MODE;
@@ -160,23 +194,32 @@ const callGemini = async (systemPrompt, messages, { schema = null, retries = 3 }
   return "";
 };
 
-const replySchema = (key) => ({
+const replySchema = (key, { verdict = false } = {}) => ({
   type: "OBJECT",
   properties: {
+    ...(verdict ? { verdict: { type: "STRING" }, why: { type: "STRING" } } : {}),
     [key]: { type: "STRING" },
     sources: { type: "ARRAY", items: { type: "STRING" } },
   },
   required: [key],
+  // Ordered so a reply cut off by the token limit still carries the verdict.
+  ...(verdict ? { propertyOrdering: ["verdict", "why", key, "sources"] } : {}),
 });
 
-const summarizePrompt = (mode) =>
+const summarizePrompt = (mode, language) =>
   [
     "You summarize web page text.",
     MODE_INSTRUCTIONS[mode],
-    "Return JSON only, with keys: summary (string) and sources (array of 3 to 6 short snippets copied verbatim from the text).",
+    "Also judge whether the page is worth a reader's time.",
+    "Return JSON only, with keys in this order: verdict, why, summary, sources.",
+    "verdict is exactly one of 'read', 'skim' or 'skip'.",
+    "why is one short clause, at most 12 words, saying what decides it. Do not repeat the summary.",
+    "Judge on substance: 'read' for something with real information, 'skim' when most of it is recap or padding, 'skip' for a stub, a paywall, a link list or navigation.",
+    "summary is a string. sources is an array of 3 to 6 short snippets copied verbatim from the text.",
     "Copy source snippets exactly as they appear so they can be located on the page, at most 20 words each.",
+    languageRule(language, "summary"),
     "Never invent content.",
-  ].join(" ");
+  ].filter(Boolean).join(" ");
 
 app.post("/api/summarize", rateLimit, async (req, res) => {
   try {
@@ -188,10 +231,11 @@ app.post("/api/summarize", rateLimit, async (req, res) => {
       return;
     }
 
-    console.log("summarize mode=%s chars=%d", mode, text.length);
+    const language = resolveLanguage(req.body?.lang);
+    console.log("summarize mode=%s chars=%d lang=%s", mode, text.length, language || "page");
 
-    const content = await callGemini(summarizePrompt(mode), [{ role: "user", content: text }], {
-      schema: replySchema("summary"),
+    const content = await callGemini(summarizePrompt(mode, language), [{ role: "user", content: text }], {
+      schema: replySchema("summary", { verdict: true }),
     });
     const { text: summary, sources } = readPayload(content, "summary");
     if (!summary) {
@@ -200,7 +244,10 @@ app.post("/api/summarize", rateLimit, async (req, res) => {
       return;
     }
 
-    res.json({ summary, sources: sources.slice(0, 6) });
+    // A missing or unrecognised verdict is simply absent, not an error: the
+    // panel renders nothing rather than an empty badge.
+    const verdict = readVerdict(content);
+    res.json({ summary, sources: sources.slice(0, 6), ...(verdict ? { verdict } : {}) });
   } catch (error) {
     console.error("summarize failed:", error);
     const upstream = upstreamFailure(error?.status);
@@ -255,6 +302,7 @@ app.post("/api/ask", rateLimit, async (req, res) => {
       "You answer questions about the page text below.",
       "Return JSON only, with keys: answer (string) and sources (array of short snippets copied verbatim from the text).",
       "Be concise. If the answer is not in the text, say so plainly instead of guessing.",
+      languageRule(resolveLanguage(req.body?.lang), "answer"),
       `\n\nPage text:\n${relevantExcerpt(text, lastQuestion)}`,
       selection ? `\n\nThe user highlighted:\n${selection}` : "",
     ].join(" ");

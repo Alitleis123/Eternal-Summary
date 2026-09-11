@@ -18,6 +18,26 @@
   ];
   const modeLabel = (id) => MODES.find((m) => m.id === id)?.label || id;
 
+  // "page" is the default and means leave it as written. The backend holds the
+  // real allowlist, since that string reaches a prompt; an unknown code there
+  // falls back to the page's language rather than being passed through.
+  const LANGUAGES = [
+    { value: "page", label: "As written" },
+    { value: "en", label: "English" },
+    { value: "es", label: "Spanish" },
+    { value: "fr", label: "French" },
+    { value: "de", label: "German" },
+    { value: "pt", label: "Portuguese" },
+    { value: "it", label: "Italian" },
+    { value: "ar", label: "Arabic" },
+    { value: "hi", label: "Hindi" },
+    { value: "zh", label: "Simplified Chinese" },
+    { value: "ja", label: "Japanese" },
+    { value: "ko", label: "Korean" },
+    { value: "ru", label: "Russian" },
+    { value: "tr", label: "Turkish" },
+  ];
+
   const cacheEl = document.getElementById("es-cache");
 
   // listener.js owns the defaults and hands them over already merged, so there
@@ -84,6 +104,12 @@
   // =========================================================
   // Bridge to the extension
   // =========================================================
+  // One place, so a new endpoint cannot forget the reader's language.
+  const withLang = (payload) => {
+    const lang = settings.language;
+    return lang && lang !== "page" ? { ...payload, lang } : payload;
+  };
+
   const api = (endpoint, payload, timeoutMs = REQUEST_TIMEOUT_MS) => {
     const requestId = `es_${Date.now()}_${Math.random().toString(36).slice(2)}`;
     return new Promise((resolve) => {
@@ -543,6 +569,10 @@
       entry.appendChild(head);
 
       const body = el("div", "entry-body");
+      // A summary can now come back in Arabic or Hebrew. "auto" lets the
+      // browser infer direction per entry from its own first strong character,
+      // so a right-to-left answer is not laid out left-to-right.
+      body.setAttribute("dir", "auto");
       entry.appendChild(body);
 
       const acts = el("div", "acts");
@@ -594,6 +624,10 @@
       tag.textContent = label || "Working";
       head.appendChild(tag);
       const body = el("div", "entry-body");
+      // A summary can now come back in Arabic or Hebrew. "auto" lets the
+      // browser infer direction per entry from its own first strong character,
+      // so a right-to-left answer is not laid out left-to-right.
+      body.setAttribute("dir", "auto");
       body.appendChild(el("span", "thinking", "<i></i><i></i><i></i>"));
       entry.append(head, body);
       stream.appendChild(entry);
@@ -809,11 +843,11 @@
       history.push({ role: "user", content: question });
 
       const pending = chat.addPending("Answer");
-      const { ok, data, error } = await api("ask", {
+      const { ok, data, error } = await api("ask", withLang({
         text: selectedText,
         selection: selectedText,
         messages: history.slice(-6),
-      });
+      }));
       pending.remove();
 
       if (ok) {
@@ -836,7 +870,7 @@
     const summarize = async () => {
       setBusy(true);
       const loader = chat.addLoader("Reading");
-      const { ok, data, error } = await api("summarize", { text: selectedText, mode: "tldr" });
+      const { ok, data, error } = await api("summarize", withLang({ text: selectedText, mode: "tldr" }));
       loader.remove();
 
       if (!ok) {
@@ -1002,6 +1036,31 @@
 
   head.append(mark, wordmark, gearBtn, closeBtn);
   rail.appendChild(head);
+
+  // --- worth reading
+  //
+  // Absent until a reply carries one, and absent again if a reply does not.
+  // An empty badge would be worse than no badge.
+  const VERDICT_LABELS = { read: "Worth reading", skim: "Worth a skim", skip: "Probably skippable" };
+  const verdictEl = el("div", "verdict");
+  const verdictCall = el("span", "verdict-call");
+  const verdictWhy = el("span", "verdict-why");
+  verdictEl.append(verdictCall, verdictWhy);
+  rail.appendChild(verdictEl);
+
+  let lastVerdict = null;
+  const setVerdict = (verdict) => {
+    lastVerdict = verdict || null;
+    const label = verdict && VERDICT_LABELS[verdict.call];
+    if (!label) {
+      verdictEl.classList.remove("show");
+      return;
+    }
+    verdictEl.dataset.call = verdict.call;
+    verdictCall.textContent = label;
+    verdictWhy.textContent = verdict.why || "";
+    verdictEl.classList.add("show");
+  };
 
   // --- segmented mode control
   const segments = el("div", "segments");
@@ -1170,6 +1229,25 @@
     return wrap;
   };
 
+  // Fourteen options will not fit in a pill group.
+  const select = (key, options, { onChange } = {}) => {
+    const wrap = el("div", "picker");
+    const field = document.createElement("select");
+    for (const option of options) {
+      const node = document.createElement("option");
+      node.value = option.value;
+      node.textContent = option.label;
+      field.appendChild(node);
+    }
+    field.value = options.some((o) => o.value === settings[key]) ? settings[key] : options[0].value;
+    field.addEventListener("change", () => {
+      putSettings({ [key]: field.value });
+      onChange?.();
+    });
+    wrap.append(field, el("span", "picker-mark", ICONS.down));
+    return wrap;
+  };
+
   group("Reading");
   setRow(
     "Default format",
@@ -1189,6 +1267,12 @@
   const rememberSwitch = toggle("rememberFormat");
   setRow("Remember my last format", "Otherwise every page opens in the default above.", rememberSwitch);
   setRow("Animate text as it arrives", null, toggle("animateText"));
+  setRow(
+    "Summarize in",
+    "Source snippets stay in the page's own language so they can still be found.",
+    select("language", LANGUAGES, { onChange: () => showToast("Applies to the next summary") }),
+    { stack: true }
+  );
 
   group("On the page");
   setRow("Highlight the passage when I open a source", null, toggle("highlightSources"));
@@ -1291,6 +1375,7 @@
     if (!force) {
       const cached = readCache();
       if (cached?.summary && cached.mode === activeMode) {
+        setVerdict(cached.verdict);
         chat.addEntry("assistant", cached.summary, { label: modeLabel(activeMode), typing: animate(), sources: cached.sources || [] });
         history.push({ role: "assistant", content: cached.summary });
         showToast("Showing a saved summary");
@@ -1306,7 +1391,7 @@
     }
 
     const loader = chat.addLoader("Reading");
-    const { ok, data, error } = await api("summarize", { text: pageText, mode: activeMode });
+    const { ok, data, error } = await api("summarize", withLang({ text: pageText, mode: activeMode }));
     loader.remove();
 
     if (!ok) {
@@ -1317,9 +1402,10 @@
 
     const summary = data.summary || "No summary received.";
     const sources = data.sources || [];
+    setVerdict(data.verdict);
     history.push({ role: "assistant", content: summary });
     chat.addEntry("assistant", summary, { label: modeLabel(activeMode), typing: animate(), sources });
-    writeCache({ summary, sources, mode: activeMode });
+    writeCache({ summary, sources, mode: activeMode, ...(lastVerdict ? { verdict: lastVerdict } : {}) });
     setBusy(false);
   }
 
@@ -1355,7 +1441,7 @@
         selection: selectedText,
       };
 
-    const { ok, data, error } = await api(endpoint, payload);
+    const { ok, data, error } = await api(endpoint, withLang(payload));
     pending.remove();
 
     if (ok) {

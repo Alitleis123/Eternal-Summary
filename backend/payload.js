@@ -62,3 +62,22 @@ export const readPayload = (content, key) => {
   // Anything that still smells like an object is scaffolding, so drop it.
   return { text: looksLikeJson(text) ? "" : text.trim(), sources: [] };
 };
+
+// ---- the worth-reading verdict --------------------------------------------
+//
+// Asked for first in the reply so a truncated response still carries it, and
+// validated against a fixed set: an unrecognised call renders nothing rather
+// than showing the reader a word the interface has no treatment for.
+export const VERDICTS = ["read", "skim", "skip"];
+
+export const readVerdict = (content) => {
+  const parsed = safeJsonParse(content, null);
+  const pick = (key) => {
+    const value = parsed && typeof parsed[key] === "string" ? parsed[key] : salvageString(content, key);
+    return String(value ?? "").trim();
+  };
+  const call = pick("verdict").toLowerCase();
+  if (!VERDICTS.includes(call)) return null;
+  const why = pick("why");
+  return { call, why: why.length > 120 ? `${why.slice(0, 119).trimEnd()}\u2026` : why };
+};
