@@ -6,6 +6,18 @@
   // boundary, which matters: a site rule like `* { line-height: 1 !important }`
   // would otherwise collapse our text on top of itself.
 
+  // How big the selection card is allowed to get. Both numbers live here
+  // rather than half in the stylesheet, because the height is not a style: the
+  // card is capped to the room left beside the passage, and this is only the
+  // ceiling on that. The widths cap against the viewport so a large card on a
+  // narrow window still leaves the page readable.
+  const CARD_SIZES = {
+    small: { width: 320, height: 300 },
+    medium: { width: 400, height: 380 },
+    large: { width: 520, height: 540 },
+  };
+  const cardSize = () => CARD_SIZES[settings.cardSize] || CARD_SIZES.medium;
+
   const MAX_PAGE_CHARS = 6000;
   const REQUEST_TIMEOUT_MS = 25000;
   const NEAR_BOTTOM_PX = 60;
@@ -804,8 +816,9 @@
     // --- position against the original highlight
     const GAP = 10;
     const MARGIN = 8;
-    const MAX_CARD = 380;
+    const { width: CARD_WIDTH, height: MAX_CARD } = cardSize();
     const MIN_CARD = 130;
+    card.style.width = `min(${CARD_WIDTH}px, 92vw)`;
     // Where the highlight sits right now, in viewport coordinates.
     const anchorBox = () => {
       const anchor = anchorId ? document.getElementById(anchorId) : null;
@@ -1402,6 +1415,22 @@
         fitPage();
       },
     })
+  );
+
+  group("Selection card");
+  setRow(
+    "Size",
+    "The card that opens when you summarize a highlight. It is still capped to the room beside the passage, so a large card on a crowded page settles for what fits.",
+    choices("cardSize", [
+      { value: "small", label: "Small" },
+      { value: "medium", label: "Medium" },
+      { value: "large", label: "Large" },
+    ], {
+      // The card and the rail are never open together, so there is nothing on
+      // screen to repaint: this lands the next time a highlight is summarized.
+      onChange: () => showToast("Applies to the next selection"),
+    }),
+    { stack: true }
   );
 
   group("Saved summaries");

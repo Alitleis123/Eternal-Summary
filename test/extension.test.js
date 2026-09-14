@@ -518,6 +518,27 @@ describe("selection", () => {
     await evaluate("window.__reply = null");
   });
 
+  // The card is capped to the room beside the passage, so a size preference is
+  // a ceiling rather than a measurement. Compare the sizes against each other.
+  test("honours the card size preference", async () => {
+    const openAt = async (size) => {
+      // Settings are read from storage each time the overlay opens, and
+      // navigating resets the stub, so seed it after the reload.
+      await reload();
+      await evaluate(`window.__storage['es:settings'] = { cardSize: ${JSON.stringify(size)} }`);
+      await select("p1");
+      await sleep(500);
+      await inCard("s.querySelector('.trigger').click()");
+      await sleep(1600);
+      return JSON.parse(await inCard("JSON.stringify(s.querySelector('.card').getBoundingClientRect())"));
+    };
+
+    const small = await openAt("small");
+    const large = await openAt("large");
+    assert.ok(large.width > small.width, `large card (${large.width}px) is no wider than small (${small.width}px)`);
+    assert.ok(small.width <= 320, `small card ran to ${small.width}px`);
+  });
+
   test("escape from the follow-up closes the card", async () => {
     await reload();
     await select("p1");
