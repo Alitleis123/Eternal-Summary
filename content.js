@@ -101,6 +101,22 @@
     return node;
   };
 
+  // Keep typing inside our UI. Shadow DOM retargets the event on its way out,
+  // so a page that guards its single-key shortcuts with "is the user in a
+  // field?" sees our host <div> rather than an <input> and fires anyway: the
+  // "s" of a follow-up focuses the site's search box and the rest of the
+  // sentence lands there. stopPropagation does not cancel the keystroke, only
+  // its trip to the page, so the character still types. Escape is handled here
+  // too, since it can no longer reach a document-level listener.
+  const containKeys = (node, onEscape) => {
+    for (const type of ["keydown", "keypress", "keyup"]) {
+      node.addEventListener(type, (e) => {
+        e.stopPropagation();
+        if (onEscape && type === "keydown" && e.key === "Escape") onEscape();
+      });
+    }
+  };
+
   // =========================================================
   // Bridge to the extension
   // =========================================================
@@ -849,9 +865,7 @@
 
     const closeCard = () => window.postMessage({ type: "ES_RESTORE_SELECTION_POPUP" }, "*");
     close.addEventListener("click", closeCard);
-    input.addEventListener("keydown", (e) => {
-      if (e.key === "Escape") closeCard();
-    });
+    containKeys(card, closeCard);
 
     // --- conversation
     const history = [];
@@ -915,6 +929,11 @@
       setBusy(false);
       place();
     };
+
+    // The trigger that opened this card was torn down with the rest of the
+    // popup, which drops focus back to the page. Take it as the card lands, so
+    // the first thing typed goes into the follow-up and not into the article.
+    requestAnimationFrame(() => input.focus({ preventScroll: true }));
 
     summarize();
     return true;
@@ -1497,9 +1516,12 @@
     });
   });
 
+  // Escape from the page behind us; keys typed in the rail are caught by
+  // containKeys below, which closes on Escape itself.
   on(document, "keydown", (e) => {
     if (e.key === "Escape") closeRail();
   });
+  containKeys(rail, closeRail);
 
   // Keep Tab inside the dialog. Without this a keyboard user tabs straight out
   // into the page behind an overlay they cannot see past.

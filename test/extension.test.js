@@ -132,6 +132,29 @@ describe("panel", () => {
     assert.equal(await evaluate("!!document.getElementById('ai-overlay')"), false);
   });
 
+  test("escape from the composer closes it too", async () => {
+    await openPanel();
+    await inPanel("s.querySelector('.field input').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))");
+    await sleep(500);
+    assert.equal(await evaluate("!!document.getElementById('ai-overlay')"), false);
+  });
+
+  // A page that sees our keystrokes runs its own single-key shortcuts on them,
+  // which is how typing in the composer ends up in the site's search box.
+  test("keys typed in the rail never reach the page", async () => {
+    await openPanel();
+    await evaluate(`(() => {
+      window.__pageKeys = [];
+      window.__spy = (e) => window.__pageKeys.push(e.key);
+      document.addEventListener('keydown', window.__spy);
+    })()`);
+    await inPanel("s.querySelector('.field input').dispatchEvent(new KeyboardEvent('keydown', { key: 's', bubbles: true, composed: true }))");
+    const leaked = await evaluate("(document.removeEventListener('keydown', window.__spy), window.__pageKeys)");
+    assert.deepEqual(leaked, [], "the page saw a key typed in the rail");
+    await closePanel();
+    await sleep(500);
+  });
+
   test("the rail sits beside the article, not on top of it", async () => {
     await openPanel();
     // The page is inset by the rail's width, so no line may run underneath it.
@@ -391,6 +414,24 @@ describe("selection", () => {
     assert.equal(await evaluate("!!document.getElementById('ai-overlay')"), false, "no full panel for a selection");
   });
 
+  // The trigger that opened the card is gone by now, so without an explicit
+  // focus the page keeps it and the first thing typed lands in the article.
+  test("takes focus, so a follow-up types into the card", async () => {
+    const focused = await inCard("s.activeElement === s.querySelector('.field input')");
+    assert.equal(focused, true);
+  });
+
+  test("keys typed in the card never reach the page", async () => {
+    await evaluate(`(() => {
+      window.__pageKeys = [];
+      window.__spy = (e) => window.__pageKeys.push(e.key);
+      document.addEventListener('keydown', window.__spy);
+    })()`);
+    await inCard("s.querySelector('.field input').dispatchEvent(new KeyboardEvent('keydown', { key: 's', bubbles: true, composed: true }))");
+    const leaked = await evaluate("(document.removeEventListener('keydown', window.__spy), window.__pageKeys)");
+    assert.deepEqual(leaked, [], "the page saw a key typed in the card");
+  });
+
   test("never covers the text it is summarizing", async () => {
     const clear = await evaluate(`(() => {
       const card = document.getElementById('es-selection-popup').shadowRoot.querySelector('.card').getBoundingClientRect();
@@ -418,6 +459,20 @@ describe("selection", () => {
     assert.equal(await inCard("s.querySelector('.trigger').textContent"), "Summarize");
     assert.equal(await evaluate("document.getElementById('es-selection-popup').dataset.expanded"), "false");
     assert.equal(await evaluate("!!document.querySelector('[data-es-anchor]')"), false);
+  });
+
+  test("escape from the follow-up closes the card", async () => {
+    await reload();
+    await select("p1");
+    await sleep(500);
+    await inCard("s.querySelector('.trigger').click()");
+    await sleep(1600);
+    await inCard("s.querySelector('.field input').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))");
+    await waitFor(
+      () => evaluate("document.getElementById('es-selection-popup').dataset.expanded"),
+      (value) => value === "false",
+      "card closes on Escape"
+    );
   });
 });
 
