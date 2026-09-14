@@ -188,6 +188,16 @@ if (window.__esListenerLoaded) {
     popup.dataset.expanded = "false";
     popup.style.setProperty("display", "none", "important");
     popup.style.setProperty("pointer-events", "none", "important");
+    // The card collapses the host to a zero-sized box at the document origin so
+    // it can be positioned in page coordinates. The trigger wants the viewport
+    // layer back.
+    for (const [k, v] of Object.entries({
+      position: "fixed",
+      top: "0", right: "0", bottom: "0", left: "0",
+      width: "auto", height: "auto",
+    })) {
+      popup.style.setProperty(k, v, "important");
+    }
     wireTrigger(buildTrigger(popup.shadowRoot));
   };
 

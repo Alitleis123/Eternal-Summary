@@ -365,7 +365,9 @@ ol.md-list li::marker { font-size: 0.85em; font-weight: 500; }
 /* ============ selection card ============ */
 .card {
   pointer-events: auto;
-  position: fixed;
+  /* Page coordinates, set by content.js. The card is anchored to a passage, so
+     it scrolls with it rather than being dragged along by script. */
+  position: absolute;
   display: flex;
   flex-direction: column;
   width: min(400px, 90vw);

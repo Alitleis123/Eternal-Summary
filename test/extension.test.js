@@ -441,6 +441,31 @@ describe("selection", () => {
     assert.equal(clear, true);
   });
 
+  // The card used to be re-derived in viewport coordinates once a frame, so it
+  // trailed the text, resized as it went, and flipped to the other side of the
+  // passage as that crossed the middle of the screen. Anchored in page
+  // coordinates it simply travels with the passage.
+  test("rides with the passage when the page scrolls", async () => {
+    const offsets = () =>
+      evaluate(`(() => {
+        const card = document.getElementById('es-selection-popup').shadowRoot.querySelector('.card').getBoundingClientRect();
+        const anchor = document.querySelector('[data-es-anchor]').getBoundingClientRect();
+        return JSON.stringify({ dx: card.left - anchor.left, dy: card.top - anchor.top, h: card.height });
+      })()`);
+
+    const before = JSON.parse(await offsets());
+    await evaluate("window.scrollBy(0, 220)");
+    await sleep(400);
+    assert.ok(await evaluate("scrollY > 100"), "the page did not scroll, so this proves nothing");
+    const after = JSON.parse(await offsets());
+
+    assert.ok(Math.abs(after.dy - before.dy) <= 1, `card slipped ${after.dy - before.dy}px against the passage`);
+    assert.ok(Math.abs(after.dx - before.dx) <= 1, `card drifted sideways by ${after.dx - before.dx}px`);
+    assert.ok(Math.abs(after.h - before.h) <= 1, `card resized by ${after.h - before.h}px mid-scroll`);
+    await evaluate("window.scrollTo(0, 0)");
+    await sleep(300);
+  });
+
   test("keeps its own conversation", async () => {
     await evaluate(`(() => {
       const s = document.getElementById('es-selection-popup').shadowRoot;

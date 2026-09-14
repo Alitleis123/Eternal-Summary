@@ -750,6 +750,19 @@
     popup.dataset.expanded = "true";
     popup.style.setProperty("pointer-events", "none", "important");
 
+    // The host is a viewport-sized fixed layer, which is right for the trigger
+    // but wrong for the card: an absolutely positioned child of it would be
+    // measured against the viewport and so stay put as the page moved. Collapse
+    // it to a zero-sized box at the document origin, and the card's coordinates
+    // become page coordinates. listener.js puts it back on close.
+    for (const [k, v] of Object.entries({
+      position: "absolute",
+      top: "0", left: "0", right: "auto", bottom: "auto",
+      width: "0", height: "0",
+    })) {
+      popup.style.setProperty(k, v, "important");
+    }
+
     const root = popup.shadowRoot.querySelector(".root");
     if (!root) return false;
     root.replaceChildren();
@@ -793,75 +806,102 @@
     const MARGIN = 8;
     const MAX_CARD = 380;
     const MIN_CARD = 130;
-    let placing = false;
+    // Where the highlight sits right now, in viewport coordinates.
+    const anchorBox = () => {
+      const anchor = anchorId ? document.getElementById(anchorId) : null;
+      if (!anchor) return rect || {};
+      const r = anchor.getBoundingClientRect();
+      return anchorOffset
+        ? {
+            top: r.top + (anchorOffset.top || 0),
+            bottom: r.top + (anchorOffset.bottom || 0),
+            left: r.left + (anchorOffset.left || 0),
+          }
+        : { top: r.top, bottom: r.bottom, left: r.left };
+    };
 
-    const place = () => {
-      // Resizing the card re-enters through the observer below.
-      if (placing) return;
-      placing = true;
-
-      let base = rect || {};
-      if (anchorId) {
-        const anchor = document.getElementById(anchorId);
-        if (anchor) {
-          const r = anchor.getBoundingClientRect();
-          base = anchorOffset
-            ? {
-                top: r.top + (anchorOffset.top || 0),
-                bottom: r.top + (anchorOffset.bottom || 0),
-                left: r.left + (anchorOffset.left || 0),
-              }
-            : { top: r.top, bottom: r.bottom, left: r.left };
-        }
-      }
-
-      // Take whichever side of the highlight has more room and cap the card to
-      // it, so a tall conversation scrolls inside the card instead of growing
-      // across the text it is about.
+    // Which side of the highlight the card takes, and how tall it may grow, are
+    // settled once while the highlight is on screen and then left alone.
+    // Deciding them per frame was what made the card flip across the passage
+    // mid-scroll and resize under the reader as they went.
+    let above = true;
+    const measure = () => {
+      const base = anchorBox();
       const spaceAbove = (base.top || 0) - GAP - MARGIN;
       const spaceBelow = window.innerHeight - (base.bottom || 0) - GAP - MARGIN;
-      const above = spaceAbove >= spaceBelow;
+      above = spaceAbove >= spaceBelow;
+      // Cap the card to its side, so a long conversation scrolls inside the
+      // card instead of growing across the text it is about.
       const room = Math.max(MIN_CARD, Math.floor(above ? spaceAbove : spaceBelow));
-      card.style.maxHeight = `${Math.min(MAX_CARD, room)}px`;
+      const height = `${Math.min(MAX_CARD, room)}px`;
+      // Only when it changes: this write is what the ResizeObserver below is
+      // watching, and rewriting it unconditionally fed the observer its own
+      // output once a frame.
+      if (card.style.maxHeight !== height) card.style.maxHeight = height;
+    };
 
+    // Document coordinates, not viewport. The card and the passage then live in
+    // the same space, so scrolling carries both together with no JavaScript in
+    // the frame at all — where before, a fixed card had to be re-derived and
+    // rewritten every frame and so always trailed the text by one.
+    const place = () => {
+      const base = anchorBox();
       const box = card.getBoundingClientRect();
-      let top = above ? (base.top || 0) - box.height - GAP : (base.bottom || 0) + GAP;
-      top = Math.max(MARGIN, Math.min(top, window.innerHeight - box.height - MARGIN));
-      let left = base.left || 0;
-      left = Math.max(MARGIN, Math.min(left, window.innerWidth - box.width - MARGIN));
-
-      card.style.position = "fixed";
-      card.style.left = `${Math.round(left)}px`;
+      // Clamped to the top of the document, not of the viewport: a passage in
+      // the first line of a page leaves less room above it than MIN_CARD, and
+      // the card would otherwise be placed off the page entirely.
+      const top = Math.max(
+        MARGIN,
+        (above ? (base.top || 0) - box.height - GAP : (base.bottom || 0) + GAP) + window.scrollY
+      );
+      const maxLeft = document.documentElement.clientWidth - box.width - MARGIN;
+      const left = Math.max(MARGIN, Math.min(base.left || 0, maxLeft)) + window.scrollX;
       card.style.top = `${Math.round(top)}px`;
-      placing = false;
+      card.style.left = `${Math.round(left)}px`;
     };
 
     let frame = 0;
-    const onViewport = () => {
+    const onViewport = (remeasure = false) => {
       if (frame) cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
         frame = 0;
+        if (remeasure) measure();
         place();
       });
     };
-    document.addEventListener("scroll", onViewport, true);
-    window.addEventListener("resize", onViewport);
+
+    // Scrolling the page needs nothing: the browser moves the card with the
+    // text. A scroll inside some other container is different — that moves the
+    // passage through the document without moving the card, so it still has to
+    // be followed.
+    const onScroll = (e) => {
+      const target = e.target;
+      if (target === document || target === document.documentElement || target === document.body) return;
+      onViewport();
+    };
+    document.addEventListener("scroll", onScroll, true);
+
+    const onResize = () => onViewport(true);
+    window.addEventListener("resize", onResize);
 
     // The card is placed before the answer arrives, so it has to be placed
     // again as it grows. Without this it drifts down over the text it is
     // summarizing while the reply types in.
-    const resize = new ResizeObserver(onViewport);
+    const resize = new ResizeObserver(() => onViewport());
     resize.observe(card);
 
     popup.__esCleanup = () => {
-      document.removeEventListener("scroll", onViewport, true);
-      window.removeEventListener("resize", onViewport);
+      document.removeEventListener("scroll", onScroll, true);
+      window.removeEventListener("resize", onResize);
       resize.disconnect();
       if (frame) cancelAnimationFrame(frame);
       if (anchorId) document.getElementById(anchorId)?.remove();
     };
 
-    requestAnimationFrame(place);
+    requestAnimationFrame(() => {
+      measure();
+      place();
+    });
 
     const closeCard = () => window.postMessage({ type: "ES_RESTORE_SELECTION_POPUP" }, "*");
     close.addEventListener("click", closeCard);
