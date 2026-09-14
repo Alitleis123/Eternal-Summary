@@ -735,6 +735,75 @@ describe("translation", () => {
   });
 });
 
+describe("long pages", () => {
+  const LONG = `http://localhost:${PORT}/long.html`;
+
+  const openLong = async () => {
+    await cdp.call("Page.navigate", { url: LONG });
+    await sleep(700);
+    await evaluate("window.__boot()");
+    await sleep(400);
+    await evaluate("window.__storage = {}");
+    await evaluate("window.__requests.length = 0");
+    await openPanel();
+  };
+
+  test("the end of a long page still reaches the model", async () => {
+    await openLong();
+    const sent = await evaluate("window.__requests.slice(-1)[0].body.text");
+
+    // The whole point: a page this long used to be judged on its opening only.
+    assert.match(sent, /OPENINGMARKER/, "the opening should be there");
+    assert.match(sent, /CLOSINGMARKER/, "the ending is what used to be lost");
+    assert.match(sent, /\[\.\.\.\]/, "omissions have to be marked, not silent");
+  });
+
+  test("it still respects the request budget", async () => {
+    const sent = await evaluate("window.__requests.slice(-1)[0].body.text");
+    assert.ok(sent.length <= 6000, `sent ${sent.length} characters`);
+    // Three windows, so two gaps.
+    assert.equal(sent.split("[...]").length - 1, 2);
+  });
+
+  test("every window is a clean slice of the real page", async () => {
+    const sent = await evaluate("window.__requests.slice(-1)[0].body.text");
+    const full = await evaluate(
+      "document.querySelector('article').innerText.replace(/\\n{3,}/g, '\\n\\n').trim()"
+    );
+
+    for (const part of sent.split("[...]")) {
+      const window = part.trim();
+      assert.ok(window.length > 0, "a window should not be empty");
+
+      // Verbatim, and cut at word boundaries: a window that starts mid word
+      // hands the model a fragment it will read as a typo.
+      const at = full.indexOf(window);
+      assert.notEqual(at, -1, "each window should appear verbatim in the page");
+      if (at > 0) assert.match(full[at - 1], /\s/, "a window must begin at a word boundary");
+      const end = at + window.length;
+      if (end < full.length) assert.match(full[end], /\s/, "a window must end at a word boundary");
+    }
+  });
+
+  test("reading time measures the page, not the excerpt", async () => {
+    // This used to be computed after truncation, so every long page reported
+    // the same four minutes no matter how long it really was.
+    const label = await inPanel("s.querySelector('.wordmark .meta').textContent");
+    const minutes = Number(label.match(/(\d+) min read/)[1]);
+    assert.ok(minutes > 10, `a 45,000 character page should not read as ${minutes} minutes`);
+  });
+
+  test("a short page is sent whole, with nothing elided", async () => {
+    await reload();
+    await evaluate("window.__storage = {}");
+    await evaluate("window.__requests.length = 0");
+    await openPanel();
+    const sent = await evaluate("window.__requests.slice(-1)[0].body.text");
+    assert.doesNotMatch(sent, /\[\.\.\.\]/, "a page under budget needs no sampling");
+    assert.match(sent, /mollis pretium/, "the tail of a short page is simply included");
+  });
+});
+
 describe("hygiene", () => {
   test("repeated opens do not strand elements on the page", async () => {
     await reload();

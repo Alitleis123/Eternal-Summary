@@ -179,7 +179,34 @@
     }
     const bodyText = document.body?.innerText || "";
     const text = best > 400 && best > bodyText.length * 0.25 ? root.innerText : bodyText;
-    return text.replace(/\n{3,}/g, "\n\n").trim().slice(0, MAX_PAGE_CHARS);
+    // The whole page. Trimming to the request budget happens at the point of
+    // sending, so reading time is measured on what is actually there rather
+    // than on however much we could afford to send.
+    return text.replace(/\n{3,}/g, "\n\n").trim();
+  };
+
+  // A long page used to be judged on its opening alone: everything past the
+  // budget was invisible, so a piece that starts slowly read as padding and a
+  // live feed was summarised from its oldest entries. Spend the same budget on
+  // three windows instead, and mark the gaps so the model knows it is holding
+  // an excerpt rather than a short page.
+  const ELISION = "\n\n[...]\n\n";
+
+  const samplePage = (text, budget = MAX_PAGE_CHARS) => {
+    if (text.length <= budget) return text;
+
+    const room = budget - ELISION.length * 2;
+    const headLen = Math.floor(room * 0.5);
+    const midLen = Math.floor(room * 0.2);
+    const tailLen = room - headLen - midLen;
+
+    // Cut on whitespace so no window starts or ends mid word.
+    const head = text.slice(0, headLen).replace(/\s\S*$/, "");
+    const midFrom = Math.floor((text.length - midLen) / 2);
+    const mid = text.slice(midFrom, midFrom + midLen).replace(/^\S*\s/, "").replace(/\s\S*$/, "");
+    const tail = text.slice(text.length - tailLen).replace(/^\S*\s/, "");
+
+    return [head, mid, tail].join(ELISION);
   };
 
   // =========================================================
@@ -1391,7 +1418,7 @@
     }
 
     const loader = chat.addLoader("Reading");
-    const { ok, data, error } = await api("summarize", withLang({ text: pageText, mode: activeMode }));
+    const { ok, data, error } = await api("summarize", withLang({ text: samplePage(pageText), mode: activeMode }));
     loader.remove();
 
     if (!ok) {
@@ -1436,7 +1463,7 @@
     const endpoint = override?.endpoint || "ask";
     const payload =
       override?.payload || {
-        text: pageText,
+        text: samplePage(pageText),
         messages: history.slice(-6),
         selection: selectedText,
       };

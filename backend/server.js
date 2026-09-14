@@ -217,6 +217,7 @@ const summarizePrompt = (mode, language) =>
     "Judge on substance: 'read' for something with real information, 'skim' when most of it is recap or padding, 'skip' for a stub, a paywall, a link list or navigation.",
     "summary is a string. sources is an array of 3 to 6 short snippets copied verbatim from the text.",
     "Copy source snippets exactly as they appear so they can be located on the page, at most 20 words each.",
+    "A [...] marker means part of the page was left out to fit. Treat the text as an excerpt of something longer, and do not call the page short or thin on that basis.",
     languageRule(language, "summary"),
     "Never invent content.",
   ].filter(Boolean).join(" ");
@@ -302,6 +303,7 @@ app.post("/api/ask", rateLimit, async (req, res) => {
       "You answer questions about the page text below.",
       "Return JSON only, with keys: answer (string) and sources (array of short snippets copied verbatim from the text).",
       "Be concise. If the answer is not in the text, say so plainly instead of guessing.",
+      "A [...] marker means part of the page was left out to fit, so absence from this text is not proof it is absent from the page.",
       languageRule(resolveLanguage(req.body?.lang), "answer"),
       `\n\nPage text:\n${relevantExcerpt(text, lastQuestion)}`,
       selection ? `\n\nThe user highlighted:\n${selection}` : "",
