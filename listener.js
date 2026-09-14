@@ -25,6 +25,7 @@ if (window.__esListenerLoaded) {
     language: "page",
     width: "medium",
     side: "right",
+    cardSize: "medium",
   };
   const merge = (raw) => ({ ...DEFAULTS, ...(raw && typeof raw === "object" ? raw : {}) });
 

@@ -370,6 +370,8 @@ ol.md-list li::marker { font-size: 0.85em; font-weight: 500; }
   position: absolute;
   display: flex;
   flex-direction: column;
+  /* The default only. content.js sets the width inline from the reader's
+     card size preference, which also caps the height. */
   width: min(400px, 90vw);
   background: var(--rail);
   border: 1px solid var(--line);
