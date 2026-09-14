@@ -68,6 +68,18 @@ describe("readPayload", () => {
     assert.equal(readPayload("", "summary").text, "");
   });
 
+  // The summarize route reads an empty summary as "nothing to condense" and an
+  // unreadable one as a fault, so the two must not look alike.
+  test("tells a deliberate empty summary from an unreadable reply", () => {
+    const empty = readPayload('{"summary":""}', "summary");
+    assert.equal(empty.text, "");
+    assert.equal(empty.parsed, true);
+
+    for (const broken of ['{"wrongkey":"x"}', "{", "", "Not JSON {\"at\":\"all\"}"]) {
+      assert.equal(readPayload(broken, "summary").parsed, false, broken);
+    }
+  });
+
   test("ignores a non string summary", () => {
     assert.equal(readPayload('{"summary":42}', "summary").text, "");
   });

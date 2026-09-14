@@ -222,6 +222,24 @@ const summarizePrompt = (mode, language) =>
     "Never invent content.",
   ].filter(Boolean).join(" ");
 
+// A highlighted passage is not a page: there is no verdict to pass on it, and
+// nothing to gain from being told a sentence is worth reading. What it does
+// need is permission to come back empty. Length is the wrong test for that —
+// one line can carry a whole claim, and a column of filenames can run long and
+// say nothing — so the model is asked to judge whether there is anything to
+// condense, and the card handles the empty case.
+const selectionPrompt = (mode, language) =>
+  [
+    "You summarize a passage a reader highlighted on a web page.",
+    MODE_INSTRUCTIONS[mode],
+    "Return JSON only, with keys: summary, sources.",
+    "If the passage carries nothing you could usefully condense — a bare filename, a label, a heading, a fragment with no claim in it — return an empty summary rather than restating it in other words.",
+    "Judge that on what the passage says, not on how long it is.",
+    "sources is an array of up to 3 short snippets copied verbatim from the passage.",
+    languageRule(language, "summary"),
+    "Never invent content.",
+  ].filter(Boolean).join(" ");
+
 app.post("/api/summarize", rateLimit, async (req, res) => {
   try {
     const mode = resolveMode(req.body?.mode);
@@ -233,13 +251,24 @@ app.post("/api/summarize", rateLimit, async (req, res) => {
     }
 
     const language = resolveLanguage(req.body?.lang);
-    console.log("summarize mode=%s chars=%d lang=%s", mode, text.length, language || "page");
+    const isSelection = req.body?.scope === "selection";
+    console.log("summarize mode=%s chars=%d lang=%s scope=%s", mode, text.length, language || "page", isSelection ? "selection" : "page");
 
-    const content = await callGemini(summarizePrompt(mode, language), [{ role: "user", content: text }], {
-      schema: replySchema("summary", { verdict: true }),
-    });
-    const { text: summary, sources } = readPayload(content, "summary");
+    const content = await callGemini(
+      isSelection ? selectionPrompt(mode, language) : summarizePrompt(mode, language),
+      [{ role: "user", content: text }],
+      { schema: replySchema("summary", { verdict: !isSelection }) }
+    );
+    const { text: summary, sources, parsed } = readPayload(content, "summary");
     if (!summary) {
+      // A passage the model had nothing to say about is an answer, not a
+      // failure, so it comes back as a summary of nothing rather than a 502.
+      // Only a well-formed reply earns that reading: an unparseable one is
+      // still a fault, and still says so.
+      if (isSelection && parsed) {
+        res.json({ summary: "", sources: [] });
+        return;
+      }
       console.warn("summarize: unreadable reply: %s", String(content).slice(0, 200));
       res.status(502).json({ error: "No summary generated." });
       return;

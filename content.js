@@ -911,15 +911,18 @@
     const summarize = async () => {
       setBusy(true);
       const loader = chat.addLoader("Reading");
-      const { ok, data, error } = await api("summarize", withLang({ text: selectedText, mode: "tldr" }));
+      const { ok, data, error } = await api("summarize", withLang({ text: selectedText, mode: "tldr", scope: "selection" }));
       loader.remove();
 
       if (!ok) {
         chat.addFailure(friendlyError(error), summarize);
       } else {
+        // An empty summary is the model saying the passage carries nothing to
+        // condense. Word count used to stand in for that and got it wrong both
+        // ways: it threw away a good summary of one dense sentence, and dressed
+        // up a long run of filenames as a finding.
         const summary = data.summary || "";
-        const words = selectedText.trim() ? selectedText.trim().split(/\s+/).length : 0;
-        if (!summary || words < 10) {
+        if (!summary) {
           chat.addEntry("assistant", "There is not much to work with here. What would you like to know?", { label: "Selection", copyable: false });
         } else {
           history.push({ role: "assistant", content: summary });

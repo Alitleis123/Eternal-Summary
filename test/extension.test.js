@@ -461,6 +461,38 @@ describe("selection", () => {
     assert.equal(await evaluate("!!document.querySelector('[data-es-anchor]')"), false);
   });
 
+  // Whether a passage is worth summarizing is the model's call, not a word
+  // count's: six words can carry a claim, and a column of filenames cannot.
+  test("a short but meaningful selection still gets its summary", async () => {
+    await reload();
+    await select("short");
+    await sleep(500);
+    await inCard("s.querySelector('.trigger').click()");
+    await sleep(1600);
+
+    assert.equal(await evaluate("window.__requests.slice(-1)[0].body.scope"), "selection");
+    const said = await inCard("s.querySelector('.entry:not(.ask) .entry-body').textContent");
+    assert.match(said, /Pharos of Alexandria/);
+    assert.doesNotMatch(said, /not much to work with/);
+  });
+
+  test("an empty summary reads as nothing to condense, not a failure", async () => {
+    await reload();
+    await evaluate(`window.__reply = (url) => ({ ok: true, status: 200,
+      text: () => Promise.resolve(JSON.stringify(String(url).includes('summarize')
+        ? { summary: '', sources: [] }
+        : { answer: 'x', sources: [] })) });`);
+    await select("short");
+    await sleep(500);
+    await inCard("s.querySelector('.trigger').click()");
+    await sleep(1600);
+
+    const said = await inCard("s.textContent");
+    assert.match(said, /not much to work with/);
+    assert.equal(await inCard("!!s.querySelector('.entry.warn')"), false, "an empty summary is not an error");
+    await evaluate("window.__reply = null");
+  });
+
   test("escape from the follow-up closes the card", async () => {
     await reload();
     await select("p1");
