@@ -46,21 +46,25 @@ export const readPayload = (content, key) => {
   const text = String(content ?? "");
   const parsed = safeJsonParse(text, null);
 
-  if (parsed && typeof parsed[key] === "string" && parsed[key].trim()) {
+  // `parsed` says the model returned a well-formed reply, which is what tells
+  // an empty summary it meant to write apart from one we failed to read. An
+  // empty string is a deliberate answer; a broken reply is a fault.
+  if (parsed && typeof parsed[key] === "string") {
     return {
       text: parsed[key].trim(),
       sources: Array.isArray(parsed.sources) ? parsed.sources.filter((s) => typeof s === "string") : [],
+      parsed: true,
     };
   }
 
   // Truncated JSON: keep the prose the model did manage to write. Its sources
   // array comes after the summary, so by definition it never arrived.
   const salvaged = salvageString(text, key);
-  if (salvaged) return { text: salvaged, sources: [] };
+  if (salvaged) return { text: salvaged, sources: [], parsed: false };
 
   // Not JSON at all — the model answered in plain prose, which is fine to use.
   // Anything that still smells like an object is scaffolding, so drop it.
-  return { text: looksLikeJson(text) ? "" : text.trim(), sources: [] };
+  return { text: looksLikeJson(text) ? "" : text.trim(), sources: [], parsed: false };
 };
 
 // ---- the worth-reading verdict --------------------------------------------

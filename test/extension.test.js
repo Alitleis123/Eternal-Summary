@@ -132,6 +132,29 @@ describe("panel", () => {
     assert.equal(await evaluate("!!document.getElementById('ai-overlay')"), false);
   });
 
+  test("escape from the composer closes it too", async () => {
+    await openPanel();
+    await inPanel("s.querySelector('.field input').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))");
+    await sleep(500);
+    assert.equal(await evaluate("!!document.getElementById('ai-overlay')"), false);
+  });
+
+  // A page that sees our keystrokes runs its own single-key shortcuts on them,
+  // which is how typing in the composer ends up in the site's search box.
+  test("keys typed in the rail never reach the page", async () => {
+    await openPanel();
+    await evaluate(`(() => {
+      window.__pageKeys = [];
+      window.__spy = (e) => window.__pageKeys.push(e.key);
+      document.addEventListener('keydown', window.__spy);
+    })()`);
+    await inPanel("s.querySelector('.field input').dispatchEvent(new KeyboardEvent('keydown', { key: 's', bubbles: true, composed: true }))");
+    const leaked = await evaluate("(document.removeEventListener('keydown', window.__spy), window.__pageKeys)");
+    assert.deepEqual(leaked, [], "the page saw a key typed in the rail");
+    await closePanel();
+    await sleep(500);
+  });
+
   test("the rail sits beside the article, not on top of it", async () => {
     await openPanel();
     // The page is inset by the rail's width, so no line may run underneath it.
@@ -391,6 +414,24 @@ describe("selection", () => {
     assert.equal(await evaluate("!!document.getElementById('ai-overlay')"), false, "no full panel for a selection");
   });
 
+  // The trigger that opened the card is gone by now, so without an explicit
+  // focus the page keeps it and the first thing typed lands in the article.
+  test("takes focus, so a follow-up types into the card", async () => {
+    const focused = await inCard("s.activeElement === s.querySelector('.field input')");
+    assert.equal(focused, true);
+  });
+
+  test("keys typed in the card never reach the page", async () => {
+    await evaluate(`(() => {
+      window.__pageKeys = [];
+      window.__spy = (e) => window.__pageKeys.push(e.key);
+      document.addEventListener('keydown', window.__spy);
+    })()`);
+    await inCard("s.querySelector('.field input').dispatchEvent(new KeyboardEvent('keydown', { key: 's', bubbles: true, composed: true }))");
+    const leaked = await evaluate("(document.removeEventListener('keydown', window.__spy), window.__pageKeys)");
+    assert.deepEqual(leaked, [], "the page saw a key typed in the card");
+  });
+
   test("never covers the text it is summarizing", async () => {
     const clear = await evaluate(`(() => {
       const card = document.getElementById('es-selection-popup').shadowRoot.querySelector('.card').getBoundingClientRect();
@@ -398,6 +439,31 @@ describe("selection", () => {
       return (anchor.top - card.bottom >= 2) || (card.top - anchor.bottom >= 2);
     })()`);
     assert.equal(clear, true);
+  });
+
+  // The card used to be re-derived in viewport coordinates once a frame, so it
+  // trailed the text, resized as it went, and flipped to the other side of the
+  // passage as that crossed the middle of the screen. Anchored in page
+  // coordinates it simply travels with the passage.
+  test("rides with the passage when the page scrolls", async () => {
+    const offsets = () =>
+      evaluate(`(() => {
+        const card = document.getElementById('es-selection-popup').shadowRoot.querySelector('.card').getBoundingClientRect();
+        const anchor = document.querySelector('[data-es-anchor]').getBoundingClientRect();
+        return JSON.stringify({ dx: card.left - anchor.left, dy: card.top - anchor.top, h: card.height });
+      })()`);
+
+    const before = JSON.parse(await offsets());
+    await evaluate("window.scrollBy(0, 220)");
+    await sleep(400);
+    assert.ok(await evaluate("scrollY > 100"), "the page did not scroll, so this proves nothing");
+    const after = JSON.parse(await offsets());
+
+    assert.ok(Math.abs(after.dy - before.dy) <= 1, `card slipped ${after.dy - before.dy}px against the passage`);
+    assert.ok(Math.abs(after.dx - before.dx) <= 1, `card drifted sideways by ${after.dx - before.dx}px`);
+    assert.ok(Math.abs(after.h - before.h) <= 1, `card resized by ${after.h - before.h}px mid-scroll`);
+    await evaluate("window.scrollTo(0, 0)");
+    await sleep(300);
   });
 
   test("keeps its own conversation", async () => {
@@ -418,6 +484,52 @@ describe("selection", () => {
     assert.equal(await inCard("s.querySelector('.trigger').textContent"), "Summarize");
     assert.equal(await evaluate("document.getElementById('es-selection-popup').dataset.expanded"), "false");
     assert.equal(await evaluate("!!document.querySelector('[data-es-anchor]')"), false);
+  });
+
+  // Whether a passage is worth summarizing is the model's call, not a word
+  // count's: six words can carry a claim, and a column of filenames cannot.
+  test("a short but meaningful selection still gets its summary", async () => {
+    await reload();
+    await select("short");
+    await sleep(500);
+    await inCard("s.querySelector('.trigger').click()");
+    await sleep(1600);
+
+    assert.equal(await evaluate("window.__requests.slice(-1)[0].body.scope"), "selection");
+    const said = await inCard("s.querySelector('.entry:not(.ask) .entry-body').textContent");
+    assert.match(said, /Pharos of Alexandria/);
+    assert.doesNotMatch(said, /not much to work with/);
+  });
+
+  test("an empty summary reads as nothing to condense, not a failure", async () => {
+    await reload();
+    await evaluate(`window.__reply = (url) => ({ ok: true, status: 200,
+      text: () => Promise.resolve(JSON.stringify(String(url).includes('summarize')
+        ? { summary: '', sources: [] }
+        : { answer: 'x', sources: [] })) });`);
+    await select("short");
+    await sleep(500);
+    await inCard("s.querySelector('.trigger').click()");
+    await sleep(1600);
+
+    const said = await inCard("s.textContent");
+    assert.match(said, /not much to work with/);
+    assert.equal(await inCard("!!s.querySelector('.entry.warn')"), false, "an empty summary is not an error");
+    await evaluate("window.__reply = null");
+  });
+
+  test("escape from the follow-up closes the card", async () => {
+    await reload();
+    await select("p1");
+    await sleep(500);
+    await inCard("s.querySelector('.trigger').click()");
+    await sleep(1600);
+    await inCard("s.querySelector('.field input').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))");
+    await waitFor(
+      () => evaluate("document.getElementById('es-selection-popup').dataset.expanded"),
+      (value) => value === "false",
+      "card closes on Escape"
+    );
   });
 });
 
