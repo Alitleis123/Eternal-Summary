@@ -302,7 +302,14 @@ app.post("/api/ask", rateLimit, async (req, res) => {
     const systemPrompt = [
       "You answer questions about the page text below.",
       "Return JSON only, with keys: answer (string) and sources (array of short snippets copied verbatim from the text).",
-      "Be concise. If the answer is not in the text, say so plainly instead of guessing.",
+      "Be concise. Answer from the page text whenever it covers the question.",
+      // The old rule refused anything absent from the page, which gagged the
+      // model on plain background knowledge too: a reader asking what a .ics
+      // file is got "I cannot search outside the provided text" rather than the
+      // one-line answer the model already had. Guessing at what the page claims
+      // is the thing worth refusing, not knowing what a file format is.
+      "For general background the page does not cover, answer from your own knowledge, say plainly that it is not from this page, and leave sources empty.",
+      "Never invent or imply claims about what this page says.",
       "A [...] marker means part of the page was left out to fit, so absence from this text is not proof it is absent from the page.",
       languageRule(resolveLanguage(req.body?.lang), "answer"),
       `\n\nPage text:\n${relevantExcerpt(text, lastQuestion)}`,
