@@ -14,11 +14,15 @@ The backend keeps none of this. Text is used to generate the response and is dis
 
 ## What stays on your device
 
-Summaries are cached in your browser's extension storage for thirty minutes so that reopening a page you already summarized does not cost another request. This cache never leaves your device, and clearing the extension's data removes it.
+Summaries are cached in your browser's extension storage for thirty minutes so that reopening a page you already summarized does not cost another request. Your settings are stored the same way. Neither ever leaves your device, and clearing the extension's data removes both. Saved summaries can also be cleared from the gear in the panel header.
 
 ## What is never collected
 
 No accounts, no browsing history, no analytics, no advertising, no tracking, and no profiling. The extension does nothing in the background and makes no requests on pages you have not acted on.
+
+## Why it can read every site
+
+The extension asks for access to all sites because it cannot know in advance which page you will want summarized, and the Summarize button has to already be there when you highlight something. Access is used only on the page in the tab you are acting on, and only when you click or press the shortcut. No page is read in the background.
 
 ## Third parties
 

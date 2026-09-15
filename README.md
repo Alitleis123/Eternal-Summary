@@ -85,8 +85,10 @@ To point the extension at your own deployment, change `API_BASE` in `background.
 Real Chrome, driven over the DevTools Protocol. Only the `chrome.*` API surface and the network are stubbed, so the tests exercise the actual message path: the page posts to `listener.js`, which forwards to `background.js`, which calls the backend.
 
 ```bash
-npm test      # 34 end-to-end tests
-npm run check # syntax check every entry point
+npm test        # 70 end-to-end tests in real Chrome
+npm run check   # syntax check every entry point
+npm run shots   # regenerate the screenshots on the docs site
+npm run package # build the Chrome Web Store zip
 ```
 
 The fixture page ships deliberately hostile CSS (`* { line-height: 1 !important }`, uppercase buttons, forced letter spacing) to prove the UI stays isolated. Coverage includes style isolation, markdown rendering, cache expiry and mode persistence, source lookup and highlight cleanup, focus trapping, error and rate-limit paths, and a check that repeated opens strand nothing on the page.

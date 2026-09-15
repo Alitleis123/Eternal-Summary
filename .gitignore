@@ -22,3 +22,6 @@ test/.profile/
 
 # Local tooling
 .claude/
+
+# Chrome Web Store upload package
+eternal-summary-*.zip
