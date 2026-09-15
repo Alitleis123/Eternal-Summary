@@ -78,6 +78,8 @@ kbd {
   padding: 1px 6px;
   white-space: nowrap;
 }
+/* A chord is one thing to read, so it breaks as one or not at all. */
+.chord { white-space: nowrap; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 3px; }
 
 /* ============ the mark ============
@@ -169,9 +171,15 @@ kbd {
 
 /* ============ rhythm ============ */
 .wrap { padding: 0 var(--gutter); max-width: 1180px; margin: 0 auto; }
-/* The rail is out of flow, so the page has to leave room for it. */
+/* The rail is out of flow, so the page has to leave room for it. Padding
+   rather than a margin, so the block still centres: pinning the left edge to
+   the rail and letting margin-right take up the slack pushed every section
+   left and collected the leftover space in one dead strip on the right. */
 @media (min-width: 901px) {
-  .wrap { margin-left: var(--side); max-width: calc(1180px - var(--side) / 2); }
+  .wrap {
+    max-width: calc(1180px + var(--side));
+    padding-left: calc(var(--side) + var(--gutter));
+  }
 }
 
 section { padding: clamp(4rem, 9vw, 7.5rem) 0; border-top: 1px solid var(--line-dim); }
@@ -231,10 +239,9 @@ h1 {
   font-weight: 400;
   /* Sized against the column left after the rail, not the window. At the old
      size it broke into three lines and left "it." alone on the last. */
-  font-size: clamp(2.5rem, 4.4vw, 3.9rem);
+  font-size: clamp(2.5rem, 4.4vw, 4.05rem);
   line-height: 1.06;
   letter-spacing: -0.021em;
-  max-width: 19ch;
 }
 h1 em {
   font-style: italic;
@@ -299,26 +306,29 @@ h1 em {
 .feature p { color: var(--dim); font-size: 0.97rem; max-width: 46ch; }
 
 /* ============ steps ============ */
-.steps { margin-top: 3rem; display: grid; gap: 0; }
+/* Three abreast. Stacked, each step used a third of the width and left a
+   hairline rule running out into nothing beside it. */
+.steps { margin-top: 3rem; display: grid; grid-template-columns: repeat(3, 1fr); gap: 0 3rem; }
 .step {
-  display: grid;
-  grid-template-columns: 4.5rem 1fr;
-  gap: 1.5rem;
-  padding: 2rem 0;
+  padding: 1.9rem 0 0;
   border-top: 1px solid var(--line-dim);
 }
 .step-n {
   font-family: var(--serif);
-  font-size: 2.6rem;
+  font-size: 2.4rem;
   line-height: 1;
   color: var(--faint);
   font-variant-numeric: lining-nums;
+  margin-bottom: 0.7rem;
 }
-.step h3 { font-size: 1.1rem; font-weight: 600; margin-bottom: 0.45rem; }
-.step p { color: var(--dim); max-width: var(--measure); font-size: 0.98rem; }
+.step h3 { font-size: 1.06rem; font-weight: 600; margin-bottom: 0.45rem; }
+.step p { color: var(--dim); font-size: 0.97rem; }
+@media (max-width: 900px) {
+  .steps { grid-template-columns: 1fr 1fr; gap: 0 2.5rem; }
+}
 @media (max-width: 620px) {
-  .step { grid-template-columns: 1fr; gap: 0.5rem; }
-  .step-n { font-size: 1.6rem; }
+  .steps { grid-template-columns: 1fr; }
+  .step-n { font-size: 1.7rem; margin-bottom: 0.4rem; }
 }
 
 /* ============ shots ============ */
@@ -336,8 +346,9 @@ h1 em {
 .demo-video { width: 100%; border-radius: 11px; border: 1px solid var(--line); display: block; }
 
 /* ============ install ============ */
-.install { margin-top: 3rem; display: grid; gap: 0; counter-reset: step; }
+.install { margin-top: 3rem; display: grid; grid-template-columns: 1fr 1fr; gap: 0 4rem; counter-reset: step; }
 .install li { list-style: none; padding: 1.7rem 0; border-top: 1px solid var(--line-dim); }
+@media (max-width: 760px) { .install { grid-template-columns: 1fr; } }
 .install h3 {
   font-size: 1.02rem;
   font-weight: 600;
@@ -447,7 +458,7 @@ footer { border-top: 1px solid var(--line-dim); padding: 3rem 0 4rem; }
     <svg class="mark hero-mark" width="88" height="52" viewBox="0 0 48 28" fill="none" aria-hidden="true">
       <use href="#es-infinity" stroke="url(#es-mark)" stroke-width="3.2" stroke-linejoin="round"/>
     </svg>
-    <h1>Read the page, <em>not all of it</em>.</h1>
+    <h1>Read the page,<br><em>not all of it</em>.</h1>
     <p>
       A Chrome extension that summarizes whatever you are reading, answers questions
       about it, and shows you the exact passages it drew on. It opens beside the
@@ -558,7 +569,7 @@ footer { border-top: 1px solid var(--line-dim); padding: 3rem 0 4rem; }
         <div class="step-n">1</div>
         <div>
           <h3>Summarize the page</h3>
-          <p>Click the icon in the toolbar, or press <kbd>Cmd</kbd> <kbd>Shift</kbd> <kbd>S</kbd> on a Mac, <kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>S</kbd> elsewhere. The panel opens beside the article and the summary arrives with its sources. Escape closes it.</p>
+          <p>Click the icon in the toolbar, or press <span class="chord"><kbd>Cmd</kbd> <kbd>Shift</kbd> <kbd>S</kbd></span> on a Mac, <span class="chord"><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>S</kbd></span> elsewhere. The panel opens beside the article and the summary arrives with its sources. Escape closes it.</p>
         </div>
       </div>
       <div class="step">
