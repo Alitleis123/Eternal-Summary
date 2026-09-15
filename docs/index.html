@@ -1,866 +1,659 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Eternal Summary - AI Page Summarizer</title>
-  <link rel="icon" type="image/png" sizes="32x32" href="es-icon-32.png">
-  <link rel="icon" type="image/png" sizes="128x128" href="eternal-summary-icon.png">
-  <link rel="apple-touch-icon" href="eternal-summary-icon.png">
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-
-    *, *::before, *::after {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
-    :root {
-      --bg-deep: #06060f;
-      --bg-sidebar: #0a0a16;
-      --bg-card: rgba(10, 10, 30, 0.7);
-      --bg-card-hover: rgba(10, 10, 30, 0.85);
-      --indigo: #6366f1;
-      --purple: #a855f7;
-      --pink: #ec4899;
-      --text-primary: #e0e7ff;
-      --text-secondary: #a5b4fc;
-      --text-muted: #7c8db5;
-      --border: rgba(199, 210, 254, 0.15);
-      --border-hover: rgba(99, 102, 241, 0.4);
-      --sidebar-width: 240px;
-    }
-
-    html {
-      scroll-behavior: smooth;
-    }
-
-    body {
-      font-family: 'Inter', system-ui, -apple-system, sans-serif;
-      background: var(--bg-deep);
-      color: var(--text-primary);
-      line-height: 1.6;
-      overflow-x: hidden;
-    }
-
-    /* === SCREENSHOT GALLERY === */
-    .shot-grid {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 1.6rem;
-    }
-
-    .shot-grid figure {
-      margin: 0;
-      display: flex;
-      flex-direction: column;
-      gap: 0.7rem;
-    }
-
-    .shot-grid img {
-      width: 100%;
-      display: block;
-      border-radius: 12px;
-      border: 1px solid var(--border);
-      background: var(--bg-deep);
-      transition: border-color 0.25s ease, transform 0.25s ease;
-    }
-
-    .shot-grid figure:hover img {
-      border-color: var(--border-hover);
-      transform: translateY(-2px);
-    }
-
-    .shot-grid figcaption {
-      color: var(--text-muted);
-      font-size: 0.86rem;
-      line-height: 1.5;
-    }
-
-    .demo-video {
-      width: 100%;
-      border-radius: 12px;
-      border: 1px solid var(--border);
-      background: var(--bg-deep);
-      display: block;
-    }
-
-    @media (max-width: 700px) {
-      .shot-grid { grid-template-columns: 1fr; }
-    }
-
-    /* === SIDEBAR === */
-    .sidebar {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: var(--sidebar-width);
-      height: 100vh;
-      background: var(--bg-sidebar);
-      border-right: 1px solid var(--border);
-      display: flex;
-      flex-direction: column;
-      padding: 1.8rem 0;
-      z-index: 100;
-      overflow-y: auto;
-    }
-
-    .sidebar-logo {
-      display: flex;
-      align-items: center;
-      gap: 0.6rem;
-      text-decoration: none;
-      color: var(--text-primary);
-      font-weight: 700;
-      font-size: 1rem;
-      padding: 0 1.4rem;
-      margin-bottom: 2.5rem;
-    }
-
-    .sidebar-logo img {
-      width: 30px;
-      height: 30px;
-      border-radius: 8px;
-      filter: drop-shadow(0 0 6px rgba(99, 102, 241, 0.4));
-      transition: filter 0.3s ease;
-    }
-
-    .sidebar-logo:hover img {
-      filter: drop-shadow(0 0 10px rgba(99, 102, 241, 0.7));
-    }
-
-    .sidebar-nav {
-      display: flex;
-      flex-direction: column;
-      gap: 0.2rem;
-      flex: 1;
-    }
-
-    .sidebar-nav a {
-      display: flex;
-      align-items: center;
-      gap: 0.7rem;
-      padding: 0.6rem 1.4rem;
-      color: var(--text-muted);
-      text-decoration: none;
-      font-size: 0.88rem;
-      font-weight: 500;
-      transition: color 0.2s ease, background 0.2s ease;
-      border-left: 2px solid transparent;
-    }
-
-    .sidebar-nav a:hover {
-      color: var(--text-primary);
-      background: rgba(99, 102, 241, 0.06);
-    }
-
-    .sidebar-nav a.active {
-      color: var(--text-primary);
-      background: rgba(99, 102, 241, 0.1);
-      border-left-color: var(--indigo);
-    }
-
-    .sidebar-nav .nav-icon {
-      width: 18px;
-      height: 16px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-    }
-
-    .sidebar-nav .nav-icon svg {
-      width: 16px;
-      height: 16px;
-    }
-
-    .sidebar-footer {
-      padding: 1.2rem 1.4rem 0;
-      border-top: 1px solid var(--border);
-      margin-top: auto;
-      display: flex;
-      flex-direction: column;
-      gap: 0.4rem;
-    }
-
-    .sidebar-footer a {
-      display: flex;
-      align-items: center;
-      gap: 0.4rem;
-      color: var(--text-muted);
-      text-decoration: none;
-      font-size: 0.8rem;
-      transition: color 0.2s ease;
-    }
-
-    .sidebar-footer a:hover {
-      color: var(--text-secondary);
-    }
-
-    .sidebar-footer p {
-      color: var(--text-muted);
-      font-size: 0.72rem;
-      margin-top: 0.5rem;
-      line-height: 1.4;
-    }
-
-    /* === MAIN CONTENT === */
-    .main {
-      margin-left: var(--sidebar-width);
-      min-height: 100vh;
-    }
-
-    /* === HERO === */
-    .hero {
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      text-align: center;
-      padding: 4rem 2rem;
-      position: relative;
-    }
-
-    .hero::before {
-      content: '';
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      width: 600px;
-      height: 600px;
-      background: radial-gradient(circle, rgba(99, 102, 241, 0.12) 0%, rgba(168, 85, 247, 0.06) 40%, transparent 70%);
-      pointer-events: none;
-    }
-
-    .hero-ring {
-      width: 120px;
-      height: 120px;
-      border-radius: 50%;
-      background: conic-gradient(from 0deg, #6366f1, #a855f7, #ec4899, #6366f1);
-      animation: ringSpin 6s linear infinite;
-      filter: drop-shadow(0 0 30px rgba(99, 102, 241, 0.5));
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin-bottom: 2rem;
-    }
-
-    .hero-ring-inner {
-      width: calc(100% - 14px);
-      height: calc(100% - 14px);
-      border-radius: 50%;
-      background: var(--bg-deep);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .hero-ring-inner img {
-      width: 60%;
-      height: 60%;
-      object-fit: contain;
-      border-radius: 50%;
-    }
-
-    @keyframes ringSpin {
-      from { transform: rotate(0deg); }
-      to { transform: rotate(360deg); }
-    }
-
-    .hero h1 {
-      font-size: clamp(2.2rem, 5vw, 3.5rem);
-      font-weight: 800;
-      letter-spacing: -0.02em;
-      line-height: 1.15;
-      margin-bottom: 1rem;
-    }
-
-    .hero h1 .gradient-text {
-      background: linear-gradient(135deg, var(--indigo), var(--purple), var(--pink));
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-    }
-
-    .hero p {
-      font-size: 1.1rem;
-      color: var(--text-secondary);
-      max-width: 500px;
-      margin-bottom: 2.5rem;
-    }
-
-    .hero-cta {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.5rem;
-      padding: 0.85rem 1.8rem;
-      border-radius: 999px;
-      background: linear-gradient(135deg, var(--indigo), var(--purple));
-      color: #fff;
-      font-weight: 600;
-      font-size: 1rem;
-      text-decoration: none;
-      transition: transform 0.2s ease, box-shadow 0.2s ease;
-      box-shadow: 0 4px 24px rgba(99, 102, 241, 0.35);
-    }
-
-    .hero-cta:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 8px 32px rgba(99, 102, 241, 0.5);
-    }
-
-    /* === SECTIONS === */
-    .content-section {
-      padding: 5rem 3rem;
-      max-width: 860px;
-      margin: 0 auto;
-      border-top: 1px solid var(--border);
-    }
-
-    .section-label {
-      font-size: 0.8rem;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.15em;
-      color: var(--indigo);
-      margin-bottom: 0.6rem;
-    }
-
-    .section-title {
-      font-size: clamp(1.6rem, 3.5vw, 2.2rem);
-      font-weight: 700;
-      margin-bottom: 1rem;
-      letter-spacing: -0.01em;
-    }
-
-    .section-desc {
-      color: var(--text-secondary);
-      font-size: 1.02rem;
-      max-width: 560px;
-      margin-bottom: 2.5rem;
-    }
-
-    /* === FEATURES === */
-    .features-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-      gap: 1.1rem;
-    }
-
-    .feature-card {
-      padding: 1.4rem;
-      border-radius: 14px;
-      border: 1px solid var(--border);
-      background: var(--bg-card);
-      transition: border-color 0.3s ease, background 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease;
-    }
-
-    .feature-card:hover {
-      border-color: var(--border-hover);
-      background: var(--bg-card-hover);
-      transform: translateY(-3px);
-      box-shadow: 0 8px 24px rgba(99, 102, 241, 0.1);
-    }
-
-    .feature-icon {
-      width: 38px;
-      height: 38px;
-      border-radius: 10px;
-      background: rgba(99, 102, 241, 0.15);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 1.1rem;
-      margin-bottom: 0.9rem;
-    }
-
-    .feature-card h3 {
-      font-size: 1rem;
-      font-weight: 600;
-      margin-bottom: 0.35rem;
-    }
-
-    .feature-card p {
-      color: var(--text-muted);
-      font-size: 0.88rem;
-      line-height: 1.55;
-    }
-
-    /* === HOW IT WORKS === */
-    .steps {
-      display: flex;
-      flex-direction: column;
-      gap: 1.8rem;
-    }
-
-    .step {
-      display: flex;
-      gap: 1.3rem;
-      align-items: flex-start;
-    }
-
-    .step-number {
-      flex-shrink: 0;
-      width: 38px;
-      height: 38px;
-      border-radius: 50%;
-      background: linear-gradient(135deg, var(--indigo), var(--purple));
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: 700;
-      font-size: 0.9rem;
-    }
-
-    .step-content h3 {
-      font-size: 1rem;
-      font-weight: 600;
-      margin-bottom: 0.3rem;
-    }
-
-    .step-content p {
-      color: var(--text-muted);
-      font-size: 0.9rem;
-    }
-
-    /* === DEMO === */
-    .demo-container {
-      margin-top: 1.5rem;
-      border-radius: 14px;
-      border: 1px solid var(--border);
-      background: var(--bg-card);
-      overflow: hidden;
-    }
-
-    .demo-container video {
-      width: 100%;
-      display: block;
-    }
-
-
-
-
-    /* === ABOUT === */
-    .about-content {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 2.5rem;
-      align-items: start;
-    }
-
-    .about-text p {
-      color: var(--text-secondary);
-      font-size: 0.93rem;
-      margin-bottom: 1rem;
-      line-height: 1.65;
-    }
-
-    .about-stats {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 0.9rem;
-    }
-
-    .stat-card {
-      padding: 1.1rem;
-      border-radius: 12px;
-      border: 1px solid var(--border);
-      background: var(--bg-card);
-      text-align: center;
-    }
-
-    .stat-card .stat-value {
-      font-size: 1.5rem;
-      font-weight: 700;
-      background: linear-gradient(135deg, var(--indigo), var(--purple));
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-    }
-
-    .stat-card .stat-label {
-      font-size: 0.78rem;
-      color: var(--text-muted);
-      margin-top: 0.2rem;
-    }
-
-    /* === INSTALL === */
-    .install-steps {
-      display: flex;
-      flex-direction: column;
-      gap: 0.9rem;
-    }
-
-    .install-step {
-      padding: 1.1rem 1.3rem;
-      border-radius: 12px;
-      border: 1px solid var(--border);
-      background: var(--bg-card);
-    }
-
-    .install-step h3 {
-      font-size: 0.93rem;
-      font-weight: 600;
-      margin-bottom: 0.35rem;
-    }
-
-    .install-step p {
-      color: var(--text-muted);
-      font-size: 0.88rem;
-    }
-
-    .install-step code {
-      display: inline-block;
-      margin-top: 0.4rem;
-      padding: 0.3rem 0.6rem;
-      border-radius: 6px;
-      background: rgba(99, 102, 241, 0.1);
-      border: 1px solid var(--border);
-      font-family: 'SF Mono', 'Fira Code', monospace;
-      font-size: 0.8rem;
-      color: var(--text-secondary);
-    }
-
-    /* === RESPONSIVE === */
-    @media (max-width: 768px) {
-      .sidebar {
-        position: fixed;
-        bottom: 0;
-        top: auto;
-        left: 0;
-        right: 0;
-        width: 100%;
-        height: auto;
-        flex-direction: row;
-        padding: 0;
-        border-right: none;
-        border-top: 1px solid var(--border);
-        background: rgba(10, 10, 22, 0.95);
-        backdrop-filter: blur(16px);
-        z-index: 200;
-      }
-
-      .sidebar-logo,
-      .sidebar-footer {
-        display: none;
-      }
-
-      .sidebar-nav {
-        flex-direction: row;
-        justify-content: space-around;
-        width: 100%;
-        padding: 0.5rem 0;
-      }
-
-      .sidebar-nav a {
-        flex-direction: column;
-        padding: 0.5rem 0.3rem;
-        font-size: 0.68rem;
-        gap: 0.2rem;
-        border-left: none;
-        border-bottom: 2px solid transparent;
-        text-align: center;
-      }
-
-      .sidebar-nav a.active {
-        border-left: none;
-        border-bottom-color: var(--indigo);
-        background: none;
-      }
-
-      .sidebar-nav .nav-label {
-        display: block;
-      }
-
-      .main {
-        margin-left: 0;
-        padding-bottom: 70px;
-      }
-
-      .content-section {
-        padding: 3rem 1.2rem;
-      }
-
-      .about-content {
-        grid-template-columns: 1fr;
-      }
-
-      .features-grid {
-        grid-template-columns: 1fr;
-      }
-    }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Eternal Summary, an AI reading instrument for the browser</title>
+<meta name="description" content="A Chrome extension that summarizes the page you are reading, answers questions about it, and shows you the passages it drew on.">
+<link rel="icon" type="image/png" sizes="32x32" href="es-icon-32.png">
+<link rel="icon" type="image/png" sizes="128x128" href="eternal-summary-icon.png">
+<link rel="apple-touch-icon" href="eternal-summary-icon.png">
+<meta property="og:title" content="Eternal Summary">
+<meta property="og:description" content="Summarize any page or selection with one click, then ask follow-up questions without leaving the tab.">
+<meta property="og:image" content="shots/panel.png">
+<meta property="og:type" content="website">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap" rel="stylesheet">
+<style>
+/* Eternal Summary, the site.
+
+   The direction is taken from the product's own stylesheet rather than
+   invented here: an editorial reading instrument, warm near-black, warm
+   off-white ink, soft geometry, no hard boxes, and exactly one gradient,
+   carried by the mark. The page this replaced was indigo and purple
+   glassmorphism set in Inter, which described some other piece of software. */
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  /* Straight from ui.css, so the site and the panel are the same object. */
+  --bg: #100F14;
+  --raise: #17161C;
+  --raise-2: #201F27;
+  --ink: #EDEAE4;
+  --dim: #A8A3AE;
+  --faint: #857F8D;
+  --line: rgba(237, 234, 228, 0.11);
+  --line-dim: rgba(237, 234, 228, 0.06);
+  --accent: #7B8CFF;
+  --accent-wash: rgba(123, 140, 255, 0.13);
+
+  --serif: "Newsreader", Iowan Old Style, Charter, Georgia, serif;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+  --measure: 62ch;
+  --gutter: clamp(1.3rem, 5vw, 4rem);
+  --bar: 58px;
+}
+
+html { scroll-behavior: smooth; scroll-padding-top: calc(var(--bar) + 18px); }
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 16.5px;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+a { color: inherit; }
+kbd {
+  font-family: var(--mono);
+  font-size: 0.85em;
+  color: var(--ink);
+  background: var(--raise-2);
+  border: 1px solid var(--line-dim);
+  border-radius: 5px;
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 3px; }
+
+/* ============ the mark ============
+   The same figure as the toolbar icon and the panel header. */
+.mark { display: block; flex: none; }
+
+/* ============ top bar ============ */
+.bar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 0 var(--gutter);
+  height: var(--bar);
+  background: rgba(16, 15, 20, 0.86);
+  backdrop-filter: saturate(180%) blur(14px);
+  border-bottom: 1px solid var(--line-dim);
+}
+
+.bar-name {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  text-decoration: none;
+  font-family: var(--serif);
+  font-size: 1.12rem;
+  letter-spacing: 0.01em;
+  margin-right: auto;
+}
+
+.bar-nav { display: flex; gap: 1.4rem; }
+.bar-nav a {
+  text-decoration: none;
+  color: var(--dim);
+  font-size: 0.92rem;
+  padding: 2px 0;
+  border-bottom: 1px solid transparent;
+  transition: color 160ms ease, border-color 160ms ease;
+}
+.bar-nav a:hover { color: var(--ink); }
+.bar-nav a.active { color: var(--ink); border-bottom-color: var(--accent); }
+@media (max-width: 860px) { .bar-nav { display: none; } }
+
+.gh {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  text-decoration: none;
+  font-size: 0.9rem;
+  color: var(--dim);
+  padding: 6px 12px 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  transition: color 160ms ease, border-color 160ms ease, background 160ms ease;
+}
+.gh:hover { color: var(--ink); border-color: rgba(237, 234, 228, 0.28); background: var(--raise); }
+
+/* ============ rhythm ============ */
+.wrap { padding: 0 var(--gutter); max-width: 1180px; margin: 0 auto; }
+
+section { padding: clamp(4rem, 9vw, 7.5rem) 0; border-top: 1px solid var(--line-dim); }
+section:first-of-type { border-top: none; }
+
+.eyebrow {
+  font-size: 0.82rem;
+  color: var(--faint);
+  margin-bottom: 1.1rem;
+}
+
+h2 {
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: clamp(1.9rem, 4vw, 2.7rem);
+  line-height: 1.16;
+  letter-spacing: -0.012em;
+  max-width: 20ch;
+}
+
+.lede {
+  color: var(--dim);
+  max-width: var(--measure);
+  margin-top: 1rem;
+  font-size: 1.02rem;
+}
+
+/* ============ hero ============ */
+.hero {
+  padding: clamp(3.5rem, 8vw, 6.5rem) 0 clamp(3.5rem, 7vw, 6rem);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.02fr);
+  gap: clamp(2rem, 5vw, 4.5rem);
+  align-items: center;
+}
+/* Below this the shot would be a thumbnail rather than evidence, so it goes. */
+@media (max-width: 1000px) {
+  .hero { grid-template-columns: 1fr; }
+  .hero-shot { display: none; }
+}
+
+.hero-mark { margin-bottom: 2.2rem; }
+
+/* The panel as it actually appears, rather than an illustration of it. */
+.hero-shot {
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  overflow: hidden;
+  background: var(--raise);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55);
+}
+.hero-shot img { width: 100%; display: block; }
+.hero-shot { max-width: 430px; margin-left: auto; }
+
+h1 {
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: clamp(2.6rem, 7vw, 4.6rem);
+  line-height: 1.04;
+  letter-spacing: -0.021em;
+  max-width: 16ch;
+}
+h1 em {
+  font-style: italic;
+  /* The one gradient, and only on the word the whole thing turns on. */
+  background: linear-gradient(100deg, #38BDF8, #7B8CFF 45%, #C084FC);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.hero p {
+  color: var(--dim);
+  max-width: 54ch;
+  margin-top: 1.5rem;
+  font-size: 1.1rem;
+}
+
+.cta-row { display: flex; flex-wrap: wrap; gap: 0.8rem; margin-top: 2.4rem; }
+
+.cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  text-decoration: none;
+  font-size: 0.96rem;
+  padding: 11px 20px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  transition: background 170ms ease, border-color 170ms ease, transform 170ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+.cta-primary { background: var(--ink); color: #14131A; font-weight: 500; }
+.cta-primary:hover { transform: translateY(-1px); background: #FFFDF8; }
+.cta-ghost { border-color: var(--line); color: var(--ink); }
+.cta-ghost:hover { background: var(--raise); border-color: rgba(237, 234, 228, 0.28); }
+
+.hero-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.4rem;
+  margin-top: 2.6rem;
+  color: var(--faint);
+  font-size: 0.86rem;
+}
+.hero-meta span { display: inline-flex; align-items: center; gap: 0.45rem; }
+.hero-meta code { font-family: var(--mono); font-size: 0.82rem; color: var(--dim); }
+
+/* ============ features ============
+   A list set in rules, not a grid of boxes. The product's own stylesheet says
+   no hard boxes, and nine rounded cards with an emoji apiece was the loudest
+   thing on the old page. */
+.features { margin-top: 3.2rem; display: grid; grid-template-columns: repeat(2, 1fr); gap: 0 4rem; }
+@media (max-width: 800px) { .features { grid-template-columns: 1fr; gap: 0; } }
+
+.feature { padding: 1.6rem 0; border-top: 1px solid var(--line-dim); }
+.feature h3 {
+  font-family: var(--serif);
+  font-weight: 500;
+  font-size: 1.17rem;
+  letter-spacing: -0.005em;
+  margin-bottom: 0.4rem;
+}
+.feature p { color: var(--dim); font-size: 0.97rem; max-width: 46ch; }
+
+/* ============ steps ============ */
+.steps { margin-top: 3rem; display: grid; gap: 0; }
+.step {
+  display: grid;
+  grid-template-columns: 4.5rem 1fr;
+  gap: 1.5rem;
+  padding: 2rem 0;
+  border-top: 1px solid var(--line-dim);
+}
+.step-n {
+  font-family: var(--serif);
+  font-size: 2.6rem;
+  line-height: 1;
+  color: var(--faint);
+  font-variant-numeric: lining-nums;
+}
+.step h3 { font-size: 1.1rem; font-weight: 600; margin-bottom: 0.45rem; }
+.step p { color: var(--dim); max-width: var(--measure); font-size: 0.98rem; }
+@media (max-width: 620px) {
+  .step { grid-template-columns: 1fr; gap: 0.5rem; }
+  .step-n { font-size: 1.6rem; }
+}
+
+/* ============ shots ============ */
+.shots { margin-top: 3rem; display: grid; grid-template-columns: repeat(2, 1fr); gap: 2rem; }
+@media (max-width: 760px) { .shots { grid-template-columns: 1fr; } }
+.shots figure { display: flex; flex-direction: column; gap: 0.85rem; }
+.shots img {
+  width: 100%;
+  display: block;
+  border-radius: 11px;
+  border: 1px solid var(--line);
+  background: var(--raise);
+}
+.shots figcaption { color: var(--faint); font-size: 0.89rem; line-height: 1.5; }
+.demo-video { width: 100%; border-radius: 11px; border: 1px solid var(--line); display: block; }
+
+/* ============ install ============ */
+.install { margin-top: 3rem; display: grid; gap: 0; counter-reset: step; }
+.install li { list-style: none; padding: 1.7rem 0; border-top: 1px solid var(--line-dim); }
+.install h3 {
+  font-size: 1.02rem;
+  font-weight: 600;
+  margin-bottom: 0.4rem;
+  counter-increment: step;
+}
+.install h3::before {
+  content: counter(step);
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  color: var(--faint);
+  margin-right: 0.75rem;
+}
+.install p { color: var(--dim); font-size: 0.97rem; max-width: var(--measure); }
+
+
+.code {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 0.95rem;
+  background: var(--raise);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 0.7rem 0.7rem 0.7rem 1rem;
+  max-width: var(--measure);
+}
+.code code {
+  font-family: var(--mono);
+  font-size: 0.86rem;
+  color: var(--ink);
+  overflow-x: auto;
+  white-space: nowrap;
+  flex: 1;
+}
+.copy {
+  font: inherit;
+  font-size: 0.82rem;
+  color: var(--dim);
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+  flex: none;
+  transition: color 150ms ease, border-color 150ms ease;
+}
+.copy:hover { color: var(--ink); border-color: rgba(237, 234, 228, 0.3); }
+.copy[data-done="true"] { color: var(--accent); border-color: var(--accent-wash); }
+
+/* ============ about ============ */
+.about { margin-top: 2.6rem; display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 4rem; }
+@media (max-width: 800px) { .about { grid-template-columns: 1fr; gap: 2.5rem; } }
+.about p { color: var(--dim); max-width: var(--measure); }
+.about p + p { margin-top: 1.1rem; }
+
+.facts { display: grid; gap: 0; align-content: start; }
+.fact { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; padding: 0.85rem 0; border-top: 1px solid var(--line-dim); }
+.fact dt { color: var(--faint); font-size: 0.9rem; }
+.fact dd { font-family: var(--mono); font-size: 0.86rem; color: var(--ink); text-align: right; }
+
+/* ============ footer ============ */
+footer { border-top: 1px solid var(--line-dim); padding: 3rem 0 4rem; }
+.foot { display: flex; flex-wrap: wrap; gap: 1.5rem; align-items: center; justify-content: space-between; }
+.foot-links { display: flex; flex-wrap: wrap; gap: 1.5rem; }
+.foot a { color: var(--dim); text-decoration: none; font-size: 0.92rem; display: inline-flex; align-items: center; gap: 0.45rem; }
+.foot a:hover { color: var(--ink); }
+.foot p { color: var(--faint); font-size: 0.86rem; }
+</style>
 </head>
 <body>
 
-  <!-- SIDEBAR -->
-  <aside class="sidebar">
-    <a href="#hero" class="sidebar-logo">
-      <img src="eternal-summary-icon.png" alt="Eternal Summary">
-      Eternal Summary
-    </a>
+<!-- The mark, defined once and referenced wherever it appears. -->
+<svg width="0" height="0" aria-hidden="true" style="position:absolute">
+  <defs>
+    <linearGradient id="es-mark" x1="4" y1="5" x2="44" y2="23" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#38BDF8"/><stop offset=".5" stop-color="#7B8CFF"/><stop offset="1" stop-color="#C084FC"/>
+    </linearGradient>
+    <path id="es-infinity" d="M13 5c9 0 13 18 22 18 9 0 11-18 0-18-9 0-13 18-22 18-9 0-11-18 0-18z"/>
+  </defs>
+</svg>
 
-    <nav class="sidebar-nav">
-      <a href="#hero" class="active">
-        <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></span>
-        <span class="nav-label">Home</span>
-      </a>
-      <a href="#features">
-        <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></span>
-        <span class="nav-label">Features</span>
-      </a>
-      <a href="#demo">
-        <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg></span>
-        <span class="nav-label">Demo</span>
-      </a>
-      <a href="#how-it-works">
-        <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>
-        <span class="nav-label">How It Works</span>
-      </a>
-      <a href="#install">
-        <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>
-        <span class="nav-label">Install</span>
-      </a>
-      <a href="#about">
-        <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span>
-        <span class="nav-label">About</span>
-      </a>
-    </nav>
+<header class="bar">
+  <a href="#top" class="bar-name">
+    <svg class="mark" width="30" height="18" viewBox="0 0 48 28" fill="none" aria-hidden="true">
+      <use href="#es-infinity" stroke="url(#es-mark)" stroke-width="3.5" stroke-linejoin="round"/>
+    </svg>
+    Eternal Summary
+  </a>
+  <nav class="bar-nav">
+    <a href="#what">What it does</a>
+    <a href="#look">A look</a>
+    <a href="#use">How to use it</a>
+    <a href="#install">Install</a>
+    <a href="#about">About</a>
+  </nav>
+  <a class="gh" href="https://github.com/Alitleis123/Eternal-Summary">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+    GitHub
+  </a>
+</header>
 
-    <div class="sidebar-footer">
-      <a href="https://github.com/Alitleis123/Eternal-Summary">GitHub Repository</a>
-      <a href="https://github.com/Alitleis123/Eternal-Summary/blob/main/Privacy.md">Privacy Policy</a>
-      <p>&copy; 2025 Ali Tleis<br>CS @ Northeastern University</p>
+<main class="wrap" id="top">
+
+  <section class="hero">
+    <div>
+    <svg class="mark hero-mark" width="88" height="52" viewBox="0 0 48 28" fill="none" aria-hidden="true">
+      <use href="#es-infinity" stroke="url(#es-mark)" stroke-width="3.2" stroke-linejoin="round"/>
+    </svg>
+    <h1>Read the page, <em>not all of it</em>.</h1>
+    <p>
+      A Chrome extension that summarizes whatever you are reading, answers questions
+      about it, and shows you the exact passages it drew on. It opens beside the
+      article instead of on top of it, so you never lose your place.
+    </p>
+    <div class="cta-row">
+      <a class="cta cta-primary" href="#install">Install it</a>
+      <a class="cta cta-ghost" href="https://github.com/Alitleis123/Eternal-Summary">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+        Read the source
+      </a>
     </div>
-  </aside>
+    <div class="hero-meta">
+      <span>Chrome, Edge, Brave, Arc, any Chromium browser</span>
+      <span>No account</span>
+      <span>Manifest <code>v3</code></span>
+      </div>
+    </div>
 
-  <!-- MAIN -->
-  <div class="main">
+    <div class="hero-shot">
+      <img src="shots/hero.png" alt="The Eternal Summary panel open beside an article, showing a summary, a worth reading verdict, and numbered sources">
+    </div>
+  </section>
 
-    <!-- HERO -->
-    <section class="hero" id="hero">
-      <div class="hero-ring">
-        <div class="hero-ring-inner">
-          <img src="eternal-summary-icon.png" alt="Eternal Summary">
+  <section id="what">
+    <p class="eyebrow">What it does</p>
+    <h2>A reading instrument, not a chatbot in a drawer.</h2>
+    <p class="lede">Everything here is built around one idea: the page stays in front of you, and the summary is answerable to it.</p>
+
+    <div class="features">
+      <div class="feature">
+        <h3>The whole page, not its opening</h3>
+        <p>Long pages are sampled across three windows, beginning, middle and end, so a piece that starts slowly is not mistaken for padding and a live feed is not summarized from its oldest entries.</p>
+      </div>
+      <div class="feature">
+        <h3>Numbered sources you can jump to</h3>
+        <p>Each summary carries footnotes quoting the page verbatim. Click one and the article scrolls to that passage and highlights it. A snippet that cannot be found says so rather than pretending.</p>
+      </div>
+      <div class="feature">
+        <h3>Worth reading, or not</h3>
+        <p>Alongside the summary it tells you whether the page is worth your time, read, skim or skip, with one short clause saying what decides it.</p>
+      </div>
+      <div class="feature">
+        <h3>Highlight anything</h3>
+        <p>Select text and a card opens anchored to it, summarizing just that passage. It is pinned in page coordinates, so scrolling carries the card and the passage together.</p>
+      </div>
+      <div class="feature">
+        <h3>Follow-up questions</h3>
+        <p>A real thread. Every turn is kept, switching summary modes adds to the conversation instead of clearing it, and background questions the page does not cover are answered and marked as such.</p>
+      </div>
+      <div class="feature">
+        <h3>Four ways to be summarized</h3>
+        <p>Summary, bullets, key points, or plain English. Switching re-reads the page in the style you picked, and the panel can remember your choice or open on a fixed default.</p>
+      </div>
+      <div class="feature">
+        <h3>In your language</h3>
+        <p>Answer in any of thirteen languages while the source snippets stay in the page's own words, which is what keeps them findable on the page.</p>
+      </div>
+      <div class="feature">
+        <h3>Yours to arrange</h3>
+        <p>Panel on either side at three widths, selection card at three sizes, the floating button and the passage highlight on or off, text animation on or off, and summaries reused for thirty minutes or never.</p>
+      </div>
+      <div class="feature">
+        <h3>Untouchable by the page</h3>
+        <p>The interface renders in a shadow root, so a site's stylesheet cannot squash or recolour it, and keystrokes typed into it never reach the page's own keyboard shortcuts.</p>
+      </div>
+      <div class="feature">
+        <h3>Nothing stored anywhere but here</h3>
+        <p>Summaries are cached in extension storage on your machine for thirty minutes and can be cleared from the gear. There is no account and no profile.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="look">
+    <p class="eyebrow">A look</p>
+    <h2>Beside the article, never over it.</h2>
+    <p class="lede">The page is inset by the width of the panel rather than covered, which is why jumping to a source can scroll the article without closing anything.</p>
+
+    <!-- Drop a demo.mp4 next to this file and it replaces the gallery below.
+         The script targets this element, not the section, so the heading above
+         survives the swap. -->
+    <div class="shots" id="gallery">
+      <figure>
+        <img src="shots/panel.png" alt="The panel open beside an article, showing a summary with numbered sources" loading="lazy">
+        <figcaption>One click, and the page comes back summarized with the passages it drew on.</figcaption>
+      </figure>
+      <figure>
+        <img src="shots/bullets.png" alt="Bullets mode rendering a real list" loading="lazy">
+        <figcaption>Four styles. Switching re-reads the page and adds to the thread.</figcaption>
+      </figure>
+      <figure>
+        <img src="shots/selection.png" alt="The selection card anchored beside a highlighted paragraph" loading="lazy">
+        <figcaption>Highlight anything and the card stays with it as you scroll.</figcaption>
+      </figure>
+      <figure>
+        <img src="shots/chat.png" alt="A conversation about the page inside the panel" loading="lazy">
+        <figcaption>Ask follow-ups. Every turn stays in the thread.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section id="use">
+    <p class="eyebrow">How to use it</p>
+    <h2>Three ways in.</h2>
+
+    <div class="steps">
+      <div class="step">
+        <div class="step-n">1</div>
+        <div>
+          <h3>Summarize the page</h3>
+          <p>Click the icon in the toolbar, or press <kbd>Cmd</kbd> <kbd>Shift</kbd> <kbd>S</kbd> on a Mac, <kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>S</kbd> elsewhere. The panel opens beside the article and the summary arrives with its sources. Escape closes it.</p>
         </div>
       </div>
-      <h1>Summarize any page<br><span class="gradient-text">in one click.</span></h1>
-      <p>Eternal Summary uses AI to instantly distill web pages into clear, concise summaries. Highlight text, ask follow-up questions, and explore sources.</p>
-      <a href="#install" class="hero-cta">Get Started</a>
-    </section>
-
-    <!-- FEATURES -->
-    <section class="content-section" id="features">
-      <div class="section-label">Features</div>
-      <h2 class="section-title">Everything you need to read smarter.</h2>
-      <p class="section-desc">Built for speed and simplicity. No accounts, no setup, no clutter.</p>
-
-      <div class="features-grid">
-        <div class="feature-card">
-          <div class="feature-icon">&#9889;</div>
-          <h3>Instant Page Summaries</h3>
-          <p>Click the extension icon and get a full AI summary of the current page in seconds.</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">&#9997;</div>
-          <h3>Selection Summaries</h3>
-          <p>Highlight any text and a floating "Summarize" button appears. Get focused summaries of exactly what you selected.</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">&#128172;</div>
-          <h3>Follow-Up Questions</h3>
-          <p>A real chat thread. Every turn is kept, the conversation scrolls on its own, and switching summary modes adds to it rather than clearing it.</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">&#9881;&#65039;</div>
-          <h3>Yours to Set Up</h3>
-          <p>Pin a default format, turn off the page highlight or the floating button, move the panel to either side at three widths, and clear saved summaries. All from the gear in the header.</p>
-        </div>
-
-        <div class="feature-card">
-          <div class="feature-icon">&#127920;</div>
-          <h3>Four Summary Modes</h3>
-          <p>Switch between summary, bullets, key points, and plain English with one click. The page is re-read in the style you picked.</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">&#9000;</div>
-          <h3>Keyboard Shortcut</h3>
-          <p>Open and close the overlay with Cmd+Shift+S on macOS or Ctrl+Shift+S elsewhere. Escape closes it too.</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">&#128209;</div>
-          <h3>Collapsible Sources</h3>
-          <p>See the exact passages the AI referenced. Click any source and the overlay steps aside and highlights that passage on the page.</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">&#128190;</div>
-          <h3>Local Caching</h3>
-          <p>Summaries are cached in extension storage for thirty minutes, so reopening a page you already read is instant and free.</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">&#127912;</div>
-          <h3>Immune to Page CSS</h3>
-          <p>The panel renders in a shadow root, so a site's own stylesheet cannot squash, recolour, or overlap it. It looks the same everywhere.</p>
+      <div class="step">
+        <div class="step-n">2</div>
+        <div>
+          <h3>Summarize a highlight</h3>
+          <p>Select any text and a Summarize button appears next to it. The card that opens is about that passage alone, and it holds its own conversation, separate from the panel's.</p>
         </div>
       </div>
-    </section>
-
-    <!-- DEMO -->
-    <section class="content-section" id="demo">
-      <div class="section-label">Demo</div>
-      <h2 class="section-title">See it in action.</h2>
-      <p class="section-desc">Eternal Summary summarizing a live page, handling text selections, and answering follow-up questions.</p>
-
-      <!-- Drop a demo.mp4 next to this file and it replaces the gallery below
-           automatically. No markup change needed. -->
-      <div class="demo-container" id="demo">
-        <div class="shot-grid">
-          <figure>
-            <img src="shots/panel.png" alt="The panel open on an article with the sources list expanded" loading="lazy">
-            <figcaption>One click, and the page comes back summarized with the passages it drew on.</figcaption>
-          </figure>
-          <figure>
-            <img src="shots/bullets.png" alt="Bullets mode rendering a real list" loading="lazy">
-            <figcaption>Four styles. Switching re-reads the page and adds to the thread.</figcaption>
-          </figure>
-          <figure>
-            <img src="shots/selection.png" alt="The selection card anchored beside a highlighted paragraph" loading="lazy">
-            <figcaption>Highlight anything and the card follows it as you scroll.</figcaption>
-          </figure>
-          <figure>
-            <img src="shots/chat.png" alt="A conversation about the page inside the panel" loading="lazy">
-            <figcaption>Ask follow-ups. Every turn stays in the thread.</figcaption>
-          </figure>
+      <div class="step">
+        <div class="step-n">3</div>
+        <div>
+          <h3>Ask about what you read</h3>
+          <p>Type into the composer at the bottom of either one. Answers cite the page where the page answers, and say plainly when they are drawing on general knowledge instead.</p>
         </div>
       </div>
-    </section>
+    </div>
+  </section>
 
-    <!-- HOW IT WORKS -->
-    <section class="content-section" id="how-it-works">
-      <div class="section-label">How It Works</div>
-      <h2 class="section-title">Three ways to use Eternal Summary.</h2>
-      <p class="section-desc">No configuration required. Just install and start reading smarter.</p>
+  <section id="install">
+    <p class="eyebrow">Install</p>
+    <h2>Four steps, about a minute.</h2>
+    <p class="lede">Not on the Chrome Web Store yet, so it loads unpacked. That also means you can read every line of what you are running.</p>
 
-      <div class="steps">
-        <div class="step">
-          <div class="step-number">1</div>
-          <div class="step-content">
-            <h3>Full Page Summary</h3>
-            <p>Click the Eternal Summary icon in your toolbar, or press the keyboard shortcut. A panel opens and the AI reads the page. Within seconds a summary appears, and you can switch modes from the chips along the top.</p>
-          </div>
+    <ol class="install">
+      <li>
+        <h3>Clone the repository</h3>
+        <div class="code">
+          <code id="clone">git clone https://github.com/Alitleis123/Eternal-Summary.git</code>
+          <button class="copy" type="button" data-copy="clone">Copy</button>
         </div>
-        <div class="step">
-          <div class="step-number">2</div>
-          <div class="step-content">
-            <h3>Highlight and Summarize</h3>
-            <p>Select any text on a webpage. A floating "Summarize" button appears near your selection. Click it to get a focused summary of just that passage. The mini overlay follows your scroll position.</p>
-          </div>
-        </div>
-        <div class="step">
-          <div class="step-number">3</div>
-          <div class="step-content">
-            <h3>Ask Follow-Up Questions</h3>
-            <p>After a summary loads, type any question in the input field at the bottom. The AI responds with context from the page. Expand the "Sources" panel to see the passages it drew on, and click one to jump straight there.</p>
-          </div>
-        </div>
+      </li>
+      <li>
+        <h3>Open your extensions page</h3>
+        <p>Go to <kbd>chrome://extensions</kbd> and turn on <strong>Developer mode</strong>, top right.</p>
+      </li>
+      <li>
+        <h3>Load it unpacked</h3>
+        <p>Click <strong>Load unpacked</strong> and choose the folder you just cloned. The mark appears in your toolbar.</p>
+      </li>
+      <li>
+        <h3>Open something worth reading</h3>
+        <p>Click the icon on any article. If you change the code later, reload the extension from the same page to pick it up.</p>
+      </li>
+    </ol>
+  </section>
+
+  <section id="about">
+    <p class="eyebrow">About</p>
+    <h2>Built by Ali Tleis.</h2>
+
+    <div class="about">
+      <div>
+        <p>Eternal Summary began with a small annoyance: deciding whether a long article was worth reading meant reading it first. I wanted something that could answer that question in the tab I was already in, and show its work.</p>
+        <p>The extension is vanilla JavaScript with no build step and no dependencies. The interface lives entirely in a shadow root so that no site can interfere with it. A small Node and Express service on Fly.io holds the API key and talks to Gemini, so nothing is called directly from the page.</p>
+        <p>The design is meant to read as an editorial instrument rather than a dashboard: warm near-black, warm off-white, soft geometry, and one gradient, carried by the mark above and nowhere else.</p>
       </div>
-    </section>
+      <dl class="facts">
+        <div class="fact"><dt>Version</dt><dd>1.6.0</dd></div>
+        <div class="fact"><dt>Manifest</dt><dd>v3</dd></div>
+        <div class="fact"><dt>Dependencies</dt><dd>none</dd></div>
+        <div class="fact"><dt>Build step</dt><dd>none</dd></div>
+        <div class="fact"><dt>Accounts</dt><dd>none</dd></div>
+        <div class="fact"><dt>Model</dt><dd>Gemini</dd></div>
+        <div class="fact"><dt>Cache</dt><dd>30 min, local</dd></div>
+      </dl>
+    </div>
+  </section>
 
-    <!-- INSTALL -->
-    <section class="content-section" id="install">
-      <div class="section-label">Install</div>
-      <h2 class="section-title">Get started in under a minute.</h2>
-      <p class="section-desc">Works on Chrome, Brave, Edge, Opera, and any Chromium-based browser.</p>
+</main>
 
-      <div class="install-steps">
-        <div class="install-step">
-          <h3>1. Clone the repository</h3>
-          <p>Download the source code from GitHub.</p>
-          <code>git clone https://github.com/Alitleis123/Eternal-Summary.git</code>
-        </div>
-        <div class="install-step">
-          <h3>2. Open your browser's extensions page</h3>
-          <p>Navigate to <strong>chrome://extensions</strong> and enable <strong>Developer Mode</strong> in the top-right corner.</p>
-        </div>
-        <div class="install-step">
-          <h3>3. Load the extension</h3>
-          <p>Click <strong>"Load unpacked"</strong> and select the <strong>Eternal-Summary</strong> folder you just cloned. The extension icon will appear in your toolbar.</p>
-        </div>
-        <div class="install-step">
-          <h3>4. Start summarizing</h3>
-          <p>Navigate to any webpage, click the icon, and watch the AI work. That's it.</p>
-        </div>
-      </div>
-    </section>
-
-    <!-- ABOUT -->
-    <section class="content-section" id="about">
-      <div class="section-label">About</div>
-      <h2 class="section-title">Built by Ali Tleis.</h2>
-
-      <div class="about-content">
-        <div class="about-text">
-          <p>Eternal Summary started as a personal project to solve a simple problem: reading long articles takes too long. I wanted a tool that could distill a page into its key points without leaving the tab.</p>
-          <p>The extension is built with vanilla JavaScript for the frontend and a Node.js and Express backend hosted on Fly.io that calls the Gemini API for summarization.</p>
-          <p>The design follows a dark glassmorphism aesthetic with indigo and purple accents, optimized to overlay cleanly on any website without visual clutter.</p>
-        </div>
-        <div class="about-stats">
-          <div class="stat-card">
-            <div class="stat-value">1-click</div>
-            <div class="stat-label">to summarize</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value">~3s</div>
-            <div class="stat-label">average response</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value">0</div>
-            <div class="stat-label">accounts needed</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value">MV3</div>
-            <div class="stat-label">manifest version</div>
-          </div>
-        </div>
-      </div>
-    </section>
-
+<footer class="wrap">
+  <div class="foot">
+    <div class="foot-links">
+      <a href="https://github.com/Alitleis123/Eternal-Summary">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+        Repository
+      </a>
+      <a href="https://github.com/Alitleis123/Eternal-Summary/blob/main/Privacy.md">Privacy</a>
+      <a href="https://github.com/Alitleis123/Eternal-Summary/blob/main/LICENSE">License</a>
+    </div>
+    <p>Ali Tleis, CS at Northeastern University</p>
   </div>
+</footer>
 
-  <!-- Prefer a recorded demo when demo.mp4 is present -->
-  <script>
-    fetch('demo.mp4', { method: 'HEAD' })
-      .then((res) => {
-        if (!res.ok) return;
-        const host = document.getElementById('demo');
-        host.innerHTML =
-          '<video class="demo-video" src="demo.mp4" controls playsinline preload="metadata" ' +
-          'poster="shots/panel.png"></video>';
-      })
-      .catch(() => {});
-  </script>
+<script>
+// Prefer a recorded demo when demo.mp4 is present. This replaces the gallery
+// only, which is why it targets #gallery rather than the section: the old page
+// shared one id between the two and wiped out the heading with it.
+fetch("demo.mp4", { method: "HEAD" })
+  .then((res) => {
+    if (!res.ok) return;
+    const host = document.getElementById("gallery");
+    host.classList.remove("shots");
+    host.innerHTML =
+      '<video class="demo-video" src="demo.mp4" controls playsinline preload="metadata" poster="shots/panel.png"></video>';
+  })
+  .catch(() => {});
 
-  <!-- SCROLL SPY -->
-  <script>
-    const sections = document.querySelectorAll('section[id], .content-section[id]');
-    const navLinks = document.querySelectorAll('.sidebar-nav a');
+// Copy the clone line.
+for (const btn of document.querySelectorAll(".copy")) {
+  btn.addEventListener("click", async () => {
+    const text = document.getElementById(btn.dataset.copy).textContent.trim();
+    try {
+      await navigator.clipboard.writeText(text);
+      btn.textContent = "Copied";
+      btn.dataset.done = "true";
+      setTimeout(() => {
+        btn.textContent = "Copy";
+        delete btn.dataset.done;
+      }, 1600);
+    } catch {
+      btn.textContent = "Press Cmd C";
+      setTimeout(() => { btn.textContent = "Copy"; }, 1600);
+    }
+  });
+}
 
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach((entry) => {
-        if (entry.isIntersecting) {
-          const id = entry.target.id;
-          navLinks.forEach((link) => {
-            link.classList.toggle('active', link.getAttribute('href') === `#${id}`);
-          });
-        }
-      });
-    }, { rootMargin: '-30% 0px -60% 0px' });
-
-    sections.forEach((section) => observer.observe(section));
-  </script>
+// Mark the section you are in. rootMargin pins the trigger near the top third
+// so a short section at the end of the page can still take the mark.
+const links = [...document.querySelectorAll(".bar-nav a")];
+const spy = new IntersectionObserver(
+  (entries) => {
+    for (const entry of entries) {
+      if (!entry.isIntersecting) continue;
+      for (const link of links) {
+        link.classList.toggle("active", link.getAttribute("href") === "#" + entry.target.id);
+      }
+    }
+  },
+  { rootMargin: "-25% 0px -65% 0px" }
+);
+for (const section of document.querySelectorAll("section[id]")) spy.observe(section);
+</script>
 
 </body>
 </html>
