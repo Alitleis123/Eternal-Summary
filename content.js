@@ -544,20 +544,10 @@
   };
 
   // The mark. An infinity for "eternal", carrying the one gradient the
-  // interface allows itself. It replaced a plain gradient donut: the right
-  // colours in a shape that said nothing, and nothing to do with the icon in
-  // the toolbar. The gradient id is scoped by the shadow root it lands in.
-  const MARK = `<svg width="34" height="20" viewBox="0 0 48 28" fill="none" aria-hidden="true">
-      <defs>
-        <linearGradient id="es-mark" x1="4" y1="5" x2="44" y2="23" gradientUnits="userSpaceOnUse">
-          <stop stop-color="#38BDF8"/><stop offset=".5" stop-color="#7B8CFF"/><stop offset="1" stop-color="#C084FC"/>
-        </linearGradient>
-      </defs>
-      <path d="M13 5c9 0 13 18 22 18 9 0 11-18 0-18-9 0-13 18-22 18-9 0-11-18 0-18z"
-            stroke="url(#es-mark)" stroke-width="3.5" stroke-linejoin="round"/>
-    </svg>`;
-
-  const brandMark = () => el("span", "mark", MARK);
+  // interface allows itself. The shape lives in ui.css rather than here,
+  // because listener.js draws the same mark on the selection trigger and the
+  // stylesheet is the only thing the two of them share.
+  const brandMark = () => el("span", "mark");
 
   const createStream = (container, { onSourceClick } = {}) => {
     const stream = el("div", "stream");

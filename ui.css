@@ -57,10 +57,16 @@ svg { display: block; flex: none; }
    An infinity, the same figure as the icon in the toolbar, where this used to
    be a gradient donut that matched nothing. */
 .mark {
-  display: flex;
+  display: block;
   flex: none;
-  align-items: center;
+  width: 34px;
+  height: 20px;
+  background: center / contain no-repeat
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 28' fill='none'%3E%3Cdefs%3E%3ClinearGradient id='m' x1='4' y1='5' x2='44' y2='23' gradientUnits='userSpaceOnUse'%3E%3Cstop stop-color='%2338BDF8'/%3E%3Cstop offset='.5' stop-color='%237B8CFF'/%3E%3Cstop offset='1' stop-color='%23C084FC'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath d='M13 5c9 0 13 18 22 18 9 0 11-18 0-18-9 0-13 18-22 18-9 0-11-18 0-18z' stroke='url(%23m)' stroke-width='3.5' stroke-linejoin='round'/%3E%3C/svg%3E");
 }
+
+/* The trigger sits on the page beside a selection, so it wears a smaller one. */
+.mark-sm { width: 24px; height: 14px; }
 
 /* ============ the rail ============
    A side panel, not a modal. The page stays legible next to it, which is why
