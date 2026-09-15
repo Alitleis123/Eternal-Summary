@@ -1,7 +1,7 @@
 /* Eternal Summary UI. Loaded into every shadow root.
    Direction: an editorial reading instrument. The chrome is quiet and set in
    the reading face at readable sizes — no shouted micro-caps, no hard boxes.
-   Soft geometry, warm neutrals, and one orbital ring carrying the only
+   Soft geometry, warm neutrals, and one infinity mark carrying the only
    gradient in the interface. */
 
 :host { all: initial; }
@@ -52,24 +52,15 @@ svg { display: block; flex: none; }
   color: var(--dim);
 }
 
-/* ============ the ring ============
-   The one gradient in the interface. It is the mark, so it never leaves. */
-.ring {
-  position: relative;
-  border-radius: 50%;
+/* ============ the mark ============
+   The one gradient in the interface. It is the mark, so it never leaves.
+   An infinity, the same figure as the icon in the toolbar, where this used to
+   be a gradient donut that matched nothing. */
+.mark {
+  display: flex;
   flex: none;
-  background: conic-gradient(from 140deg, #38BDF8, #7B8CFF, #C084FC, #38BDF8);
+  align-items: center;
 }
-.ring::after {
-  content: "";
-  position: absolute;
-  inset: 3px;
-  border-radius: 50%;
-  background: var(--rail);
-}
-@keyframes orbit { to { transform: rotate(360deg); } }
-
-.ring-sm { width: 30px; height: 30px; }
 
 /* ============ the rail ============
    A side panel, not a modal. The page stays legible next to it, which is why

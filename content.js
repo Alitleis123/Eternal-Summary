@@ -543,10 +543,21 @@
     down: '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M19 12l-7 7-7-7"/></svg>',
   };
 
-  const ring = (size) => {
-    const node = el("div", `ring ${size}`);
-    return node;
-  };
+  // The mark. An infinity for "eternal", carrying the one gradient the
+  // interface allows itself. It replaced a plain gradient donut: the right
+  // colours in a shape that said nothing, and nothing to do with the icon in
+  // the toolbar. The gradient id is scoped by the shadow root it lands in.
+  const MARK = `<svg width="34" height="20" viewBox="0 0 48 28" fill="none" aria-hidden="true">
+      <defs>
+        <linearGradient id="es-mark" x1="4" y1="5" x2="44" y2="23" gradientUnits="userSpaceOnUse">
+          <stop stop-color="#38BDF8"/><stop offset=".5" stop-color="#7B8CFF"/><stop offset="1" stop-color="#C084FC"/>
+        </linearGradient>
+      </defs>
+      <path d="M13 5c9 0 13 18 22 18 9 0 11-18 0-18-9 0-13 18-22 18-9 0-11-18 0-18z"
+            stroke="url(#es-mark)" stroke-width="3.5" stroke-linejoin="round"/>
+    </svg>`;
+
+  const brandMark = () => el("span", "mark", MARK);
 
   const createStream = (container, { onSourceClick } = {}) => {
     const stream = el("div", "stream");
@@ -784,7 +795,7 @@
     requestAnimationFrame(() => root.classList.add("in"));
 
     const bar = el("div", "head");
-    const mark = ring("ring-sm");
+    const mark = brandMark();
     const wordmark = el("div", "wordmark");
     const name = el("div", "name");
     name.textContent = "Selection";
@@ -1113,7 +1124,7 @@
 
   // --- head
   const head = el("div", "head");
-  const mark = ring("ring-sm");
+  const mark = brandMark();
   const wordmark = el("div", "wordmark");
   const name = el("div", "name");
   name.textContent = "Eternal Summary";
