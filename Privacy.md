@@ -14,7 +14,7 @@ The backend keeps none of this. Text is used to generate the response and is dis
 
 ## What stays on your device
 
-Summaries are cached in your browser's extension storage for thirty minutes so that reopening a page you already summarized does not cost another request. Your settings are stored the same way. Neither ever leaves your device, and clearing the extension's data removes both. Saved summaries can also be cleared from the gear in the panel header.
+Summaries are cached in your browser's extension storage for thirty minutes so that reopening a page you already summarized does not cost another request. Your settings are stored the same way. Neither leaves your device. Clear them from the gear in the panel header, or by clearing the extension's data.
 
 ## What is never collected
 

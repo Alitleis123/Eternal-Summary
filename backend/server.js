@@ -224,16 +224,16 @@ const summarizePrompt = (mode, language) =>
 
 // A highlighted passage is not a page: there is no verdict to pass on it, and
 // nothing to gain from being told a sentence is worth reading. What it does
-// need is permission to come back empty. Length is the wrong test for that —
-// one line can carry a whole claim, and a column of filenames can run long and
-// say nothing — so the model is asked to judge whether there is anything to
+// need is permission to come back empty. Length is the wrong test for that,
+// since one line can carry a whole claim and a column of filenames can run long
+// and say nothing, so the model is asked to judge whether there is anything to
 // condense, and the card handles the empty case.
 const selectionPrompt = (mode, language) =>
   [
     "You summarize a passage a reader highlighted on a web page.",
     MODE_INSTRUCTIONS[mode],
     "Return JSON only, with keys: summary, sources.",
-    "If the passage carries nothing you could usefully condense — a bare filename, a label, a heading, a fragment with no claim in it — return an empty summary rather than restating it in other words.",
+    "If the passage carries nothing you could usefully condense, such as a bare filename, a label, a heading, or a fragment with no claim in it, return an empty summary rather than restating it in other words.",
     "Judge that on what the passage says, not on how long it is.",
     "sources is an array of up to 3 short snippets copied verbatim from the passage.",
     languageRule(language, "summary"),

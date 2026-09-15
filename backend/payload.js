@@ -1,9 +1,9 @@
 // Reading the model's reply.
 //
-// The model is asked for JSON, and usually obliges. When it does not — a reply
-// cut short by the output limit, a stray code fence, a plain-prose answer — the
-// panel must still get readable text. It must never get the JSON itself: a
-// summary that opens with `{ "summary": "` is worse than no summary at all.
+// The model is asked for JSON, and usually obliges. When it does not, whether
+// from a reply cut short by the output limit, a stray code fence or a plain
+// prose answer, the panel must still get readable text. It must never get the
+// JSON itself: a summary opening with `{ "summary": "` is worse than none.
 
 export const stripCodeFences = (text) => {
   const trimmed = String(text ?? "").trim();
@@ -62,7 +62,7 @@ export const readPayload = (content, key) => {
   const salvaged = salvageString(text, key);
   if (salvaged) return { text: salvaged, sources: [], parsed: false };
 
-  // Not JSON at all — the model answered in plain prose, which is fine to use.
+  // Not JSON at all: the model answered in plain prose, which is fine to use.
   // Anything that still smells like an object is scaffolding, so drop it.
   return { text: looksLikeJson(text) ? "" : text.trim(), sources: [], parsed: false };
 };

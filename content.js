@@ -856,7 +856,7 @@
 
     // Document coordinates, not viewport. The card and the passage then live in
     // the same space, so scrolling carries both together with no JavaScript in
-    // the frame at all — where before, a fixed card had to be re-derived and
+    // the frame at all, where before a fixed card had to be re-derived and
     // rewritten every frame and so always trailed the text by one.
     const place = () => {
       const base = anchorBox();
@@ -885,7 +885,7 @@
     };
 
     // Scrolling the page needs nothing: the browser moves the card with the
-    // text. A scroll inside some other container is different — that moves the
+    // text. A scroll inside some other container is different: that moves the
     // passage through the document without moving the card, so it still has to
     // be followed.
     const onScroll = (e) => {
