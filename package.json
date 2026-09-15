@@ -6,7 +6,8 @@
   "private": true,
   "scripts": {
     "test": "node --test --test-concurrency=1 test/**/*.test.js",
-    "check": "node --check background.js && node --check listener.js && node --check content.js && node --check backend/server.js"
+    "check": "node --check background.js && node --check listener.js && node --check content.js && node --check backend/server.js",
+    "shots": "node tools/shots.mjs"
   },
   "author": "Ali Tleis",
   "license": "SEE LICENSE IN LICENSE"
