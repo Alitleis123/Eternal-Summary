@@ -1,7 +1,7 @@
 /* Eternal Summary UI. Loaded into every shadow root.
    Direction: an editorial reading instrument. The chrome is quiet and set in
    the reading face at readable sizes — no shouted micro-caps, no hard boxes.
-   Soft geometry, warm neutrals, and one orbital ring carrying the only
+   Soft geometry, warm neutrals, and one infinity mark carrying the only
    gradient in the interface. */
 
 :host { all: initial; }
@@ -52,24 +52,21 @@ svg { display: block; flex: none; }
   color: var(--dim);
 }
 
-/* ============ the ring ============
-   The one gradient in the interface. It is the mark, so it never leaves. */
-.ring {
-  position: relative;
-  border-radius: 50%;
+/* ============ the mark ============
+   The one gradient in the interface. It is the mark, so it never leaves.
+   An infinity, the same figure as the icon in the toolbar, where this used to
+   be a gradient donut that matched nothing. */
+.mark {
+  display: block;
   flex: none;
-  background: conic-gradient(from 140deg, #38BDF8, #7B8CFF, #C084FC, #38BDF8);
+  width: 34px;
+  height: 20px;
+  background: center / contain no-repeat
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 28' fill='none'%3E%3Cdefs%3E%3ClinearGradient id='m' x1='4' y1='5' x2='44' y2='23' gradientUnits='userSpaceOnUse'%3E%3Cstop stop-color='%2338BDF8'/%3E%3Cstop offset='.5' stop-color='%237B8CFF'/%3E%3Cstop offset='1' stop-color='%23C084FC'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath d='M13 5c9 0 13 18 22 18 9 0 11-18 0-18-9 0-13 18-22 18-9 0-11-18 0-18z' stroke='url(%23m)' stroke-width='3.5' stroke-linejoin='round'/%3E%3C/svg%3E");
 }
-.ring::after {
-  content: "";
-  position: absolute;
-  inset: 3px;
-  border-radius: 50%;
-  background: var(--rail);
-}
-@keyframes orbit { to { transform: rotate(360deg); } }
 
-.ring-sm { width: 30px; height: 30px; }
+/* The trigger sits on the page beside a selection, so it wears a smaller one. */
+.mark-sm { width: 24px; height: 14px; }
 
 /* ============ the rail ============
    A side panel, not a modal. The page stays legible next to it, which is why

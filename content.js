@@ -543,10 +543,11 @@
     down: '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M19 12l-7 7-7-7"/></svg>',
   };
 
-  const ring = (size) => {
-    const node = el("div", `ring ${size}`);
-    return node;
-  };
+  // The mark. An infinity for "eternal", carrying the one gradient the
+  // interface allows itself. The shape lives in ui.css rather than here,
+  // because listener.js draws the same mark on the selection trigger and the
+  // stylesheet is the only thing the two of them share.
+  const brandMark = () => el("span", "mark");
 
   const createStream = (container, { onSourceClick } = {}) => {
     const stream = el("div", "stream");
@@ -784,7 +785,7 @@
     requestAnimationFrame(() => root.classList.add("in"));
 
     const bar = el("div", "head");
-    const mark = ring("ring-sm");
+    const mark = brandMark();
     const wordmark = el("div", "wordmark");
     const name = el("div", "name");
     name.textContent = "Selection";
@@ -1113,7 +1114,7 @@
 
   // --- head
   const head = el("div", "head");
-  const mark = ring("ring-sm");
+  const mark = brandMark();
   const wordmark = el("div", "wordmark");
   const name = el("div", "name");
   name.textContent = "Eternal Summary";

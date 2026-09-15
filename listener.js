@@ -165,11 +165,9 @@ if (window.__esListenerLoaded) {
     button.type = "button";
     button.className = "trigger";
 
-    // Same orbital mark as the rail, so the trigger reads as the same tool.
+    // The same mark as the rail, so the trigger reads as the same tool.
     const mark = document.createElement("span");
-    mark.className = "ring ring-sm";
-    mark.style.width = "16px";
-    mark.style.height = "16px";
+    mark.className = "mark mark-sm";
 
     const label = document.createElement("span");
     label.textContent = "Summarize";

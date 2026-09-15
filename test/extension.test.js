@@ -213,6 +213,24 @@ describe("style isolation", () => {
     assert.equal(await inCard("getComputedStyle(s.querySelector('.trigger')).fontSize"), "13px");
     assert.equal(await inCard("getComputedStyle(s.querySelector('.trigger')).textTransform"), "none");
   });
+
+  // The mark is drawn by the stylesheet, and the trigger is built in
+  // listener.js while the panel is built in content.js. Nothing but this
+  // catches the shape being renamed on one side and left behind on the other,
+  // which is how the trigger once shipped as an empty 16px gap.
+  test("both the panel and the trigger draw the mark", async () => {
+    const painted = async (read, label) => {
+      const box = JSON.parse(await read("JSON.stringify((() => { const m = s.querySelector('.mark'); if (!m) return null; const r = m.getBoundingClientRect(); return { w: r.width, h: r.height, bg: getComputedStyle(m).backgroundImage }; })())"));
+      assert.ok(box, `${label}: no .mark element`);
+      assert.ok(box.w > 8 && box.h > 6, `${label}: mark is ${box.w}x${box.h}`);
+      assert.match(box.bg, /^url\("data:image\/svg/, `${label}: mark has no artwork`);
+    };
+    await painted(inCard, "trigger");
+    await openPanel();
+    await painted(inPanel, "panel");
+    await closePanel();
+    await sleep(500);
+  });
 });
 
 describe("markdown", () => {
