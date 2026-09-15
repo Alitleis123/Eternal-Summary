@@ -18,7 +18,7 @@ Live site: https://alitleis123.github.io/Eternal-Summary/
 - **Local caching.** Summaries are kept in extension storage for thirty minutes, so reopening a page you already read costs nothing.
 - **Reading time, and whether it is worth it.** The header shows how long the page would take to read. Beside it, a one line verdict: worth reading, worth a skim, or probably skippable, with the reason.
 - **Any language.** Summarize and ask in one of thirteen languages regardless of what the page is written in. Source snippets stay in the original so they can still be found on the page.
-- **Settings.** The gear in the panel header opens them. Pin a default format, stop remembering the last one, turn off the page highlight or the floating Summarize button, drop the typing animation, move the panel to either side at three widths, size the selection card, and clear saved summaries.
+- **Settings.** Behind the gear in the panel header. Panel side and width, selection card size, default format, answer language, and switches for the floating button, the passage highlight, the typing animation and the cache.
 
 ## Screenshots
 
@@ -75,10 +75,10 @@ To point the extension at your own deployment, change `API_BASE` in `background.
 | Method | Path | Body | Returns |
 | --- | --- | --- | --- |
 | `GET` | `/healthz` | | `ok` |
-| `POST` | `/api/summarize` | `{ text, mode }` | `{ summary, sources }` |
+| `POST` | `/api/summarize` | `{ text, mode, scope }` | `{ summary, sources, verdict }` |
 | `POST` | `/api/ask` | `{ text, messages, selection }` | `{ answer, sources }` |
 
-`mode` is one of `tldr`, `bullets`, `key-points`, or `simple`. Both endpoints are rate limited to 30 requests per minute per IP.
+`mode` is one of `tldr`, `bullets`, `key-points`, or `simple`. `scope: "selection"` summarizes a highlighted passage: no verdict, and an empty summary when there is nothing to condense. Both endpoints are rate limited to 30 requests per minute per IP.
 
 ## Tests
 
@@ -104,6 +104,7 @@ Eternal-Summary/
 ├── ui.css             Styles for the panel and the selection card
 ├── icons/             Extension icons, 16 through 512
 ├── test/              End-to-end tests and the CDP driver
+├── tools/             Screenshot capture and the store package build
 ├── backend/           Express service that calls the Gemini API
 └── docs/              Project site, published with GitHub Pages
 ```
