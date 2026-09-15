@@ -13,6 +13,10 @@ const PORT = 4192;
 const CDP_PORT = 9292;
 const PAGE = `http://localhost:${PORT}/tools/demo-article.html`;
 const OUT = new URL("../docs/shots/", import.meta.url);
+// The Chrome Web Store accepts 1280x800 or 640x400 and nothing else, so the
+// listing images are captured at that size rather than resized afterwards:
+// scaling a screenshot of an interface softens every hairline in it.
+const STORE_OUT = new URL("../docs/store/", import.meta.url);
 
 // What the panel will show. Written to read like the demo article, because a
 // screenshot full of lorem ipsum advertises nothing.
@@ -62,6 +66,7 @@ ${body || ""}`;
 
 if (!findChrome()) throw new Error("No Chrome binary found. Set CHROME_PATH.");
 await mkdir(OUT, { recursive: true });
+await mkdir(STORE_OUT, { recursive: true });
 
 const server = await startServer(PORT);
 const chrome = await launch({ port: PORT, cdpPort: CDP_PORT, url: PAGE });
@@ -71,13 +76,56 @@ await cdp.call("Emulation.setDeviceMetricsOverride", {
   width: 1360, height: 860, deviceScaleFactor: 2, mobile: false,
 });
 
-const shot = async (name, clip) => {
+const shot = async (name, clip, dir = OUT) => {
   const { data } = await cdp.call("Page.captureScreenshot", {
     format: "png",
     ...(clip ? { clip: { ...clip, scale: 2 } } : {}),
   });
-  await writeFile(join(OUT.pathname, `${name}.png`), Buffer.from(data, "base64"));
-  console.log(`  wrote ${name}.png`);
+  await writeFile(join(dir.pathname, `${name}.png`), Buffer.from(data, "base64"));
+  console.log(`  wrote ${dir === OUT ? "shots" : "store"}/${name}.png`);
+};
+
+// The listing images, at the one viewport the store takes. Captured in a second
+// pass at the end so the docs images keep the wider frame they are cropped for.
+const storePass = async () => {
+  await cdp.call("Emulation.setDeviceMetricsOverride", {
+    width: 1280, height: 800, deviceScaleFactor: 1, mobile: false,
+  });
+  await boot();
+  await cdp.evaluate(stillText);
+  await openPanel();
+  await shot("1-panel", null, STORE_OUT);
+
+  await cdp.evaluate(`(() => {
+    const s = document.getElementById('ai-overlay').shadowRoot;
+    [...s.querySelectorAll('.seg')].find((b) => b.textContent.trim() === 'Bullets').click();
+  })()`);
+  await sleep(2200);
+  await shot("2-bullets", null, STORE_OUT);
+
+  await cdp.evaluate(`(() => {
+    const s = document.getElementById('ai-overlay').shadowRoot;
+    const input = s.querySelector('.field input');
+    input.value = 'What was the hardest part of keeping it running?';
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  })()`);
+  await sleep(2400);
+  await shot("3-questions", null, STORE_OUT);
+
+  await boot();
+  await cdp.evaluate(stillText);
+  await cdp.evaluate("document.getElementById('p3').scrollIntoView({ block: 'center' })");
+  await sleep(500);
+  await cdp.evaluate(`(() => {
+    const range = document.createRange();
+    range.selectNodeContents(document.getElementById('p3'));
+    const sel = getSelection(); sel.removeAllRanges(); sel.addRange(range);
+    document.dispatchEvent(new KeyboardEvent('keyup', { key: 'a', bubbles: true }));
+  })()`);
+  await sleep(700);
+  await cdp.evaluate(`document.getElementById('es-selection-popup').shadowRoot.querySelector('.trigger').click()`);
+  await sleep(2400);
+  await shot("4-selection", null, STORE_OUT);
 };
 
 const boot = async () => {
@@ -149,6 +197,8 @@ await shot("trigger");
 await cdp.evaluate(`document.getElementById('es-selection-popup').shadowRoot.querySelector('.trigger').click()`);
 await sleep(2400);
 await shot("selection");
+
+await storePass();
 
 cdp.close();
 chrome.proc.kill();
