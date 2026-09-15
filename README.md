@@ -6,7 +6,7 @@ A Chrome extension that summarizes the page you are reading, explains anything y
 
 Live site: https://alitleis123.github.io/Eternal-Summary/
 
-![The panel open on an article, with sources expanded](docs/shots/panel.png)
+![The panel open beside an article, showing a summary, a worth reading verdict, and numbered sources](docs/shots/panel.png)
 
 ## Features
 
@@ -18,7 +18,7 @@ Live site: https://alitleis123.github.io/Eternal-Summary/
 - **Local caching.** Summaries are kept in extension storage for thirty minutes, so reopening a page you already read costs nothing.
 - **Reading time, and whether it is worth it.** The header shows how long the page would take to read. Beside it, a one line verdict: worth reading, worth a skim, or probably skippable, with the reason.
 - **Any language.** Summarize and ask in one of thirteen languages regardless of what the page is written in. Source snippets stay in the original so they can still be found on the page.
-- **Settings.** The gear in the panel header opens them. Pin a default format, stop remembering the last one, turn off the page highlight or the floating Summarize button, drop the typing animation, move the panel to either side at three widths, and clear saved summaries.
+- **Settings.** The gear in the panel header opens them. Pin a default format, stop remembering the last one, turn off the page highlight or the floating Summarize button, drop the typing animation, move the panel to either side at three widths, size the selection card, and clear saved summaries.
 
 ## Screenshots
 
