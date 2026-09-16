@@ -103,15 +103,6 @@ const storePass = async () => {
   await sleep(2200);
   await shot("2-bullets", null, STORE_OUT);
 
-  await cdp.evaluate(`(() => {
-    const s = document.getElementById('ai-overlay').shadowRoot;
-    const input = s.querySelector('.field input');
-    input.value = 'What was the hardest part of keeping it running?';
-    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-  })()`);
-  await sleep(2400);
-  await shot("3-questions", null, STORE_OUT);
-
   await boot();
   await cdp.evaluate(stillText);
   await cdp.evaluate("document.getElementById('p3').scrollIntoView({ block: 'center' })");
@@ -123,6 +114,12 @@ const storePass = async () => {
     document.dispatchEvent(new KeyboardEvent('keyup', { key: 'a', bubbles: true }));
   })()`);
   await sleep(700);
+
+  // The button before it is pressed, then the card it opens. This pair replaced
+  // a shot of a follow-up in the panel, whose top half was the bullets shot
+  // over again, where the button appeared in no image at all.
+  await shot("3-highlight", null, STORE_OUT);
+
   await cdp.evaluate(`document.getElementById('es-selection-popup').shadowRoot.querySelector('.trigger').click()`);
   await sleep(2400);
   await shot("4-selection", null, STORE_OUT);
