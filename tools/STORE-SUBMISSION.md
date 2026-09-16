@@ -74,9 +74,15 @@ each says what breaks without it.
 > extension cannot obtain the text it summarizes.
 
 **`scripting`**
-> Used to inject the panel into the current tab when the user opens it. The
-> interface is rendered in a shadow root on the page so that it can sit beside
-> the article and scroll with it, which an extension popup cannot do.
+> Used once, in background.js, to inject the content script into a tab that was
+> already open before the extension was installed or updated. A manifest content
+> script only auto-injects into pages loaded afterwards, so without this the
+> toolbar icon does nothing on every tab the user already had open. The code
+> tries to message the tab first and only injects when that message fails.
+>
+> Version 1.0 of this extension declared this permission without using it, which
+> was rejected under Use of Permissions, correctly. The call was added in a later
+> version and this submission uses it.
 
 **`storage`**
 > Used to hold the user's settings, panel side and width, summary format,
