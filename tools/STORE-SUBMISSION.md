@@ -33,7 +33,7 @@ captures to `docs/store/`.
 > Eternal Summary reads the page you are on and gives you back the gist, beside
 > the article rather than on top of it.
 >
-> - One click, or Cmd+Shift+S, and the page comes back summarized.
+> - One click on the toolbar icon and the page comes back summarized.
 > - Every summary carries numbered footnotes quoting the page. Click one and the
 >   article scrolls to that passage and highlights it.
 > - It tells you whether a page is worth your time: read, skim, or skip, with one
@@ -58,8 +58,8 @@ captures to `docs/store/`.
 
 1. `1-panel.png` - A summary beside the article, with the passages it drew on.
 2. `2-bullets.png` - Four styles. Switching re-reads the page.
-3. `3-questions.png` - Follow-up questions, answered from the page.
-4. `4-selection.png` - Highlight a passage for a summary of just that passage.
+3. `3-highlight.png` - Select any passage and the Summarize button comes to it.
+4. `4-selection.png` - The card is about that passage alone.
 
 ---
 
