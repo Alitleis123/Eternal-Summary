@@ -13,6 +13,7 @@ const PORT = 4192;
 const CDP_PORT = 9292;
 const PAGE = `http://localhost:${PORT}/tools/demo-article.html`;
 const OUT = new URL("../docs/shots/", import.meta.url);
+const PROMO = `http://localhost:${PORT}/tools/promo.html`;
 // The Chrome Web Store accepts 1280x800 or 640x400 and nothing else, so the
 // listing images are captured at that size rather than resized afterwards:
 // scaling a screenshot of an interface softens every hairline in it.
@@ -125,6 +126,32 @@ const storePass = async () => {
   await shot("4-selection", null, STORE_OUT);
 };
 
+// The two promo tiles the listing takes, at the only sizes it accepts. Built
+// from markup rather than by hand so the wordmark, the gradient and the panel
+// shot stay in step with everything else, and run last because the marquee
+// embeds the store screenshot captured above.
+const promoPass = async () => {
+  await cdp.call("Emulation.setDeviceMetricsOverride", {
+    width: 1500, height: 1000, deviceScaleFactor: 1, mobile: false,
+  });
+  await cdp.call("Page.navigate", { url: PROMO });
+  // The tiles are set in Newsreader, fetched from Google Fonts. Capturing
+  // before it lands gets the Georgia fallback, which is a different wordmark.
+  await sleep(2600);
+  await cdp.evaluate("document.fonts.ready");
+  await sleep(400);
+
+  for (const [id, name] of [["small", "promo-small-440x280"], ["marquee", "promo-marquee-1400x560"]]) {
+    const box = JSON.parse(await cdp.evaluate(`(() => {
+      const r = document.getElementById('${id}').getBoundingClientRect();
+      return JSON.stringify({ x: r.x + scrollX, y: r.y + scrollY, width: r.width, height: r.height });
+    })()`));
+    const { data } = await cdp.call("Page.captureScreenshot", { format: "png", clip: { ...box, scale: 1 } });
+    await writeFile(join(STORE_OUT.pathname, `${name}.png`), Buffer.from(data, "base64"));
+    console.log(`  wrote store/${name}.png ${box.width}x${box.height}`);
+  }
+};
+
 const boot = async () => {
   await cdp.call("Page.navigate", { url: PAGE });
   await sleep(900);
@@ -196,6 +223,7 @@ await sleep(2400);
 await shot("selection");
 
 await storePass();
+await promoPass();
 
 cdp.close();
 chrome.proc.kill();
