@@ -4,7 +4,7 @@
 
 A Chrome extension that summarizes the page you are reading, explains anything you highlight, and answers follow-up questions without leaving the tab.
 
-Live site: https://alitleis123.github.io/Eternal-Summary/
+[Add to Chrome](https://chromewebstore.google.com/detail/eternal-summary/cpdeianknlpdhlbfdgckdcgfglbhkjbf), or read about it on the [live site](https://alitleis123.github.io/Eternal-Summary/).
 
 ![The panel open beside an article, showing a summary, a worth reading verdict, and numbered sources](docs/shots/panel.png)
 
@@ -36,6 +36,12 @@ Live site: https://alitleis123.github.io/Eternal-Summary/
 
 ## Install
 
+[Add it from the Chrome Web Store.](https://chromewebstore.google.com/detail/eternal-summary/cpdeianknlpdhlbfdgckdcgfglbhkjbf) It talks to a hosted backend by default, so there is nothing to configure. Works in Chrome, Brave, Edge, Arc, and other Chromium browsers.
+
+### From source
+
+To run a change you made, or to read what you are running first:
+
 1. Clone the repository:
    ```bash
    git clone https://github.com/Alitleis123/Eternal-Summary.git
@@ -43,7 +49,7 @@ Live site: https://alitleis123.github.io/Eternal-Summary/
 2. Open `chrome://extensions` and turn on **Developer mode**.
 3. Click **Load unpacked** and select the cloned folder.
 
-The extension talks to a hosted backend by default, so there is nothing else to configure. Works in Chrome, Brave, Edge, and other Chromium browsers.
+A source copy and the store copy can be installed side by side. They are separate extensions to Chrome, with separate storage.
 
 ## Running your own backend
 

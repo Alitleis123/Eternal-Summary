@@ -364,6 +364,19 @@ h1 em {
 }
 .install p { color: var(--dim); font-size: 0.97rem; max-width: var(--measure); }
 
+/* The source route, under the store one. Its own heading rather than more
+   numbered steps, so the count restarts without reading as step five. */
+.sub {
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: 1.5rem;
+  letter-spacing: -0.008em;
+  margin-top: 4rem;
+  padding-top: 3rem;
+  border-top: 1px solid var(--line-dim);
+}
+.install-note { color: var(--dim); font-size: 0.97rem; max-width: var(--measure); margin-top: 0.8rem; }
+
 
 .code {
   display: flex;
@@ -465,7 +478,7 @@ footer { border-top: 1px solid var(--line-dim); padding: 3rem 0 4rem; }
       article instead of on top of it, so you never lose your place.
     </p>
     <div class="cta-row">
-      <a class="cta cta-primary" href="#install">Install it</a>
+      <a class="cta cta-primary" href="https://chromewebstore.google.com/detail/eternal-summary/cpdeianknlpdhlbfdgckdcgfglbhkjbf">Add to Chrome</a>
       <a class="cta cta-ghost" href="https://github.com/Alitleis123/Eternal-Summary">
         <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
         Read the source
@@ -591,8 +604,27 @@ footer { border-top: 1px solid var(--line-dim); padding: 3rem 0 4rem; }
 
   <section id="install">
     <p class="eyebrow">Install</p>
-    <h2>Four steps, about a minute.</h2>
-    <p class="lede">Not on the Chrome Web Store yet, so it loads unpacked. That also means you can read every line of what you are running.</p>
+    <h2>Two clicks, and it is in your toolbar.</h2>
+    <p class="lede">Add it the way you add anything else, and it keeps itself up to date. No account, nothing to configure.</p>
+
+    <div class="cta-row">
+      <a class="cta cta-primary" href="https://chromewebstore.google.com/detail/eternal-summary/cpdeianknlpdhlbfdgckdcgfglbhkjbf">Add to Chrome</a>
+      <a class="cta cta-ghost" href="#source">Run it from source</a>
+    </div>
+
+    <ol class="install">
+      <li>
+        <h3>Add it to Chrome</h3>
+        <p>From the store page. Chrome, Edge, Brave, Arc, and any other Chromium browser.</p>
+      </li>
+      <li>
+        <h3>Open something worth reading</h3>
+        <p>Click the mark in your toolbar, or press <kbd>Cmd+Shift+S</kbd>. The panel opens beside the article.</p>
+      </li>
+    </ol>
+
+    <h3 class="sub" id="source">Or run it from source</h3>
+    <p class="install-note">Every line of what the store ships is in the repository. Load your own copy to read it first, or to try a change. Chrome treats the two as separate extensions, so both can sit in the toolbar at once.</p>
 
     <ol class="install">
       <li>
@@ -603,16 +635,8 @@ footer { border-top: 1px solid var(--line-dim); padding: 3rem 0 4rem; }
         </div>
       </li>
       <li>
-        <h3>Open your extensions page</h3>
-        <p>Go to <kbd>chrome://extensions</kbd> and turn on <strong>Developer mode</strong>, top right.</p>
-      </li>
-      <li>
         <h3>Load it unpacked</h3>
-        <p>Click <strong>Load unpacked</strong> and choose the folder you just cloned. The mark appears in your toolbar.</p>
-      </li>
-      <li>
-        <h3>Open something worth reading</h3>
-        <p>Click the icon on any article. If you change the code later, reload the extension from the same page to pick it up.</p>
+        <p>At <kbd>chrome://extensions</kbd>, turn on <strong>Developer mode</strong>, then click <strong>Load unpacked</strong> and choose the folder you cloned.</p>
       </li>
     </ol>
   </section>
@@ -648,6 +672,7 @@ footer { border-top: 1px solid var(--line-dim); padding: 3rem 0 4rem; }
         <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
         Repository
       </a>
+      <a href="https://chromewebstore.google.com/detail/eternal-summary/cpdeianknlpdhlbfdgckdcgfglbhkjbf">Chrome Web Store</a>
       <a href="privacy.html">Privacy</a>
       <a href="https://github.com/Alitleis123/Eternal-Summary/blob/main/LICENSE">License</a>
     </div>

@@ -1,7 +1,12 @@
-# Chrome Web Store submission
+# Chrome Web Store listing
 
-Everything the dashboard asks for, written out so a resubmission does not mean
-reconstructing it from memory. Nothing here ships in the extension.
+Published. Version 1.6.0 went live on 18 September 2026:
+
+https://chromewebstore.google.com/detail/eternal-summary/cpdeianknlpdhlbfdgckdcgfglbhkjbf
+
+Everything the dashboard asks for is written out below, so an update does not
+mean reconstructing it from memory. What follows is what the live listing says.
+Nothing in this file ships in the extension.
 
 Build the upload with `npm run package`, which writes
 `eternal-summary-<version>.zip` containing only the nine files the manifest
@@ -10,13 +15,17 @@ captures to `docs/store/`.
 
 ---
 
-## Before you upload
+## Before an update
 
-- [ ] Register as a developer, one time, 5 USD, at the [developer dashboard](https://chrome.google.com/webstore/devconsole)
+- [ ] Bump `version` in `manifest.json`, the store rejects a version it has
+      already seen
 - [ ] `npm test` and `npm run check` pass
 - [ ] `npm run package` and `npm run shots`
-- [ ] Bump `version` in `manifest.json` if this is not the first submission, the
-      store rejects a version it has already seen
+- [ ] Edit the listing copy here first if it is changing, then paste it into the
+      dashboard, so this file stays the source
+
+Developer registration is done, it is a one time 5 USD fee at the
+[developer dashboard](https://chrome.google.com/webstore/devconsole).
 
 ## Listing
 
@@ -82,7 +91,7 @@ each says what breaks without it.
 >
 > Version 1.0 of this extension declared this permission without using it, which
 > was rejected under Use of Permissions, correctly. The call was added in a later
-> version and this submission uses it.
+> version, and the published version uses it.
 
 **`storage`**
 > Used to hold the user's settings, panel side and width, summary format,
@@ -113,16 +122,17 @@ each says what breaks without it.
 
 ---
 
-## What to expect
+## Review
 
-Broad host permissions mean manual review. Days to weeks, not hours. The most
-common cause of rejection here is a permission justification that restates the
-permission instead of explaining the need, which is what the answers above are
-written to avoid.
+Broad host permissions mean manual review, and an update is reviewed again.
+Days to weeks, not hours. Version 1.0 was rejected under Use of Permissions for
+declaring `scripting` without calling it. The other common cause of rejection is
+a permission justification that restates the permission instead of explaining
+the need, which is what the answers above are written to avoid.
 
-## Before this gets traffic
+## Now that it is public
 
-Publishing means strangers calling the Fly backend on your Gemini key. The rate
-limit is 30 requests per minute per IP, which stops one abuser and not a
-thousand ordinary users. Worth setting a quota alert on the key, and deciding
-in advance what happens if it gets popular.
+Strangers call the Fly backend on the Gemini key behind it. The rate limit is 30
+requests per minute per IP, which stops one abuser and not a thousand ordinary
+users. Keep a quota alert on the key, and decide in advance what happens if this
+gets popular.
