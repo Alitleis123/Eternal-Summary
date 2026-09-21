@@ -1,0 +1,53 @@
+<!doctype html><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;1,6..72,400&display=swap" rel="stylesheet">
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  body{background:#0B0A0E}
+  .tile{position:relative;overflow:hidden;background:#100F14;font-family:-apple-system,BlinkMacSystemFont,system-ui,sans-serif;color:#EDEAE4}
+  .tile::before{content:"";position:absolute;width:150%;height:200%;left:-25%;top:-60%;
+    background:radial-gradient(closest-side,rgba(123,140,255,.16),transparent 70%)}
+  .serif{font-family:"Newsreader",Georgia,serif;font-weight:400}
+  .grad{background:linear-gradient(100deg,#38BDF8,#7B8CFF 45%,#C084FC);-webkit-background-clip:text;background-clip:text;color:transparent;font-style:italic}
+
+  /* 440x280 */
+  #small{width:440px;height:280px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px}
+  #small .name{font-size:29px;letter-spacing:.01em;position:relative}
+  #small .sub{font-size:13px;color:#A8A3AE;position:relative}
+
+  /* 1400x560 */
+  #marquee{width:1400px;height:560px;display:grid;grid-template-columns:1fr 1fr;align-items:center}
+  #marquee .copy{padding:0 0 0 76px;position:relative}
+  #marquee .wm{display:flex;align-items:center;gap:13px;margin-bottom:30px}
+  #marquee .wm span{font-size:22px}
+  #marquee h1{font-size:57px;line-height:1.05;letter-spacing:-.02em;max-width:15ch}
+  #marquee p{margin-top:22px;font-size:18px;color:#A8A3AE;max-width:34ch;line-height:1.5}
+  #marquee .shot{position:relative;height:100%;overflow:hidden}
+  /* Anchored right: the panel is the product, so the article is what gets
+     cropped when the frame is narrower than the shot. */
+  #marquee .shot img{height:100%;width:100%;object-fit:cover;object-position:right center;
+    border-left:1px solid rgba(237,234,228,.11);box-shadow:-30px 0 80px rgba(0,0,0,.65);display:block}
+</style>
+<svg width="0" height="0" style="position:absolute"><defs>
+  <linearGradient id="g" x1="4" y1="5" x2="44" y2="23" gradientUnits="userSpaceOnUse">
+    <stop stop-color="#38BDF8"/><stop offset=".5" stop-color="#7B8CFF"/><stop offset="1" stop-color="#C084FC"/>
+  </linearGradient>
+  <path id="inf" d="M13 5c9 0 13 18 22 18 9 0 11-18 0-18-9 0-13 18-22 18-9 0-11-18 0-18z"/>
+</defs></svg>
+
+<div class="tile" id="small">
+  <svg width="132" height="77" viewBox="0 0 48 28" fill="none" style="position:relative"><use href="#inf" stroke="url(#g)" stroke-width="3.1" stroke-linejoin="round"/></svg>
+  <div class="name serif">Eternal Summary</div>
+  <div class="sub">Summarize any page, beside the article</div>
+</div>
+
+<div class="tile" id="marquee">
+  <div class="copy">
+    <div class="wm">
+      <svg width="42" height="25" viewBox="0 0 48 28" fill="none"><use href="#inf" stroke="url(#g)" stroke-width="3.4" stroke-linejoin="round"/></svg>
+      <span class="serif">Eternal Summary</span>
+    </div>
+    <h1 class="serif">Read the page, <span class="grad">not all of it</span>.</h1>
+    <p>A summary beside the article, with the passages it drew on. Then ask it questions.</p>
+  </div>
+  <div class="shot"><img src="/docs/store/1-panel.png" alt=""></div>
+</div>
