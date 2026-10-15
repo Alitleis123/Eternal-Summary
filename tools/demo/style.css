@@ -3,25 +3,33 @@
 html,body {margin:0;width:1920px;height:1080px;overflow:hidden;}
 body {background:#100F14;color:#EDEAE4;font-family:system-ui,sans-serif;}
 #root {position:relative;width:100%;height:100%;overflow:hidden;background:#100F14;}
-.topline {position:absolute;inset:0 96px auto;height:56px;display:flex;align-items:center;justify-content:space-between;}
-.wordmark {font:400 29px/1 "Newsreader",serif;color:#EDEAE4;}
-.chapter,.caption {font-size:26px;line-height:1.2;color:#EDEAE4;}
-.chapter {color:#C1BACA;}
-.browser {position:absolute;left:96px;top:56px;width:1728px;height:1014px;border-radius:12px;overflow:hidden;border:1px solid #48434F;background:#FBFAF7;}
-.toolbar {height:42px;display:flex;align-items:center;padding:0 27px;background:#27242D;color:#EDEAE4;border-bottom:1px solid #48434F;}
-.page-title {font-size:19px;line-height:1.2;}
-.extension-icon {position:absolute;right:32px;top:7px;width:28px;height:28px;}
-#usage,#opening {position:absolute;left:0;top:42px;width:1728px;height:972px;object-fit:fill;}
-.caption {position:absolute;right:96px;top:12px;max-width:900px;height:33px;display:flex;align-items:center;}
-.caption span {display:block;}
-.pointer-layer {position:absolute;inset:0;pointer-events:none;}
-.demo-cursor {position:absolute;left:-3px;top:-2px;transform-origin:3px 2px;filter:drop-shadow(0 2px 2px #100F1480);}
-.focus-camera {position:absolute;overflow:hidden;opacity:0;border-radius:12px;box-shadow:0 12px 40px #100F1455;pointer-events:none;}
-.focus-source {position:absolute;width:1920px;height:1080px;}
-.focus-video {position:absolute;left:97px;top:99px;width:1728px;height:972px;object-fit:fill;}
-.click-ring {position:absolute;width:44px;height:44px;border:2px solid #B6BDFF;border-radius:50%;opacity:0;}
-#outro {position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:#100F14;}
-.outro-inner {display:flex;flex-direction:column;align-items:center;gap:25px;}
-.outro-inner img {image-rendering:auto;}
-h1 {margin:0;font:400 92px/1.1 "Newsreader",serif;}
-.outro-inner p {margin:12px 0 0;padding:17px 33px;border:1px solid #EDEAE4;border-radius:50px;background:#EDEAE4;color:#100F14;font-size:30px;line-height:1.2;}
+.caption {position:absolute;left:48px;top:48px;width:1824px;height:124px;display:flex;align-items:center;font:400 76px/1.08 "Newsreader",serif;color:#EDEAE4;}
+.caption > span {display:block;}
+.caption .lead {color:#A8A3AE;}
+/* The viewport only clips. In wide shots the browser window floats on the
+   page background; zoomed in, the window fills it edge to edge. */
+#viewport {position:absolute;left:48px;top:204px;width:1824px;height:828px;overflow:hidden;border-radius:12px;}
+#camera {position:absolute;left:0;top:0;width:1120px;height:666px;transform-origin:0 0;will-change:transform;border-radius:9px;overflow:hidden;box-shadow:0 0 0 1px rgba(237,234,228,.14),0 18px 50px rgba(0,0,0,.45);}
+#usage,#usage-soft {position:absolute;left:0;top:36px;width:1120px;height:630px;object-fit:fill;}
+
+/* A plain Chromium toolbar, drawn here because headless capture has none. */
+.toolbar {position:absolute;left:0;top:0;width:1120px;height:36px;background:#201F27;border-bottom:1px solid rgba(237,234,228,.08);font-family:"Segoe UI",system-ui,sans-serif;color:#EDEAE4;}
+.tb-icon {position:absolute;top:10px;width:16px;height:16px;fill:none;stroke:#A8A3AE;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;}
+.omnibox {position:absolute;left:92px;top:5px;width:900px;height:26px;border-radius:13px;background:#100F14;display:flex;align-items:center;gap:9px;padding:0 13px;font-size:13px;line-height:1;}
+.omnibox svg {width:14px;height:14px;fill:none;stroke:#A8A3AE;stroke-width:1.5;stroke-linecap:round;}
+.omnibox .path {color:#857F8D;margin-left:-9px;}
+#ext-hover {position:absolute;left:1042px;top:4px;width:28px;height:28px;border-radius:50%;background:rgba(237,234,228,.13);opacity:0;}
+.extension-icon {position:absolute;left:1047px;top:9px;width:18px;height:18px;}
+#tip-anchor {position:absolute;left:936px;top:42px;width:240px;display:flex;justify-content:center;pointer-events:none;}
+#tooltip {padding:5px 9px 6px;border-radius:6px;background:#2E2D35;border:1px solid rgba(237,234,228,.12);box-shadow:0 4px 14px rgba(0,0,0,.4);font:400 12px/1.2 "Segoe UI",system-ui,sans-serif;color:#EDEAE4;white-space:nowrap;opacity:0;}
+
+#pointer-layer {position:absolute;inset:0;pointer-events:none;}
+#cursor {position:absolute;left:-2px;top:-1px;transform-origin:2px 1px;filter:drop-shadow(0 1px 1px #100F1480);}
+.click-ring {position:absolute;width:24px;height:24px;border:1.5px solid #B6BDFF;border-radius:50%;opacity:0;}
+
+#outro {position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse 900px 620px at 50% 40%,rgba(123,140,255,.13),rgba(123,140,255,0) 70%),#100F14;opacity:0;}
+.outro-inner {display:flex;flex-direction:column;align-items:center;}
+.outro-inner img {display:block;}
+h1 {margin:30px 0 0;font:400 116px/1.1 "Newsreader",serif;}
+.cta {margin-top:50px;padding:26px 58px 28px;border-radius:999px;background:#EDEAE4;color:#14131A;font:500 52px/1 "Segoe UI",system-ui,sans-serif;}
+.works {margin:38px 0 0;font:400 36px/1.2 "Segoe UI",system-ui,sans-serif;color:#A8A3AE;}

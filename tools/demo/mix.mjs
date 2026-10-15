@@ -13,17 +13,32 @@ import { RATE, DURATION, amp, db, peak, run, decode, wav, measure, ffprobe } fro
 const DIR = fileURLToPath(new URL(".", import.meta.url));
 const root = resolve(DIR, "../.."), generated = resolve(DIR, "generated");
 const input = resolve(process.argv[2] || join(root, "docs/demo.mp4"));
-const out = resolve(process.argv[3] || join(tmpdir(), "es-demo-review-4"));
+const out = resolve(process.argv[3] || join(tmpdir(), "es-demo-review-6"));
 const assets = process.env.BRAG_ASSETS || join(homedir(), ".codex/skills/brag/assets");
 await mkdir(out, { recursive: true });
 const inputHash = videoHash(input);
 const cues = JSON.parse(await readFile(join(generated, "sfx-cues.json"), "utf8"));
 const clickCues = cues.filter(c => ["toolbar", "mode", "source", "click"].includes(c.type));
 const sfx = decode(join(generated, "sfx.wav"), [], 2);
-await copyFile(join(generated, "sfx.wav"), join(out, "sfx-stem.wav"));
-const summary = { videoStreamSha256Before: inputHash, targetLufs: -16,
+const log = JSON.parse(await readFile(join(generated, "action-log.json"), "utf8"));
+const clickAt = target => log.actions.find(a => a.type === "click" && a.target === target).time + log.offset;
+const toolbarTime = clickAt("Extension toolbar icon");
+// Music and SFX keep the balance approved in round 5, where music sat 6 LU
+// under the original. Both rise together by MIX_GAIN_DB so phones play it
+// at a normal level. The outro starts where the footage hands over.
+const MIX_GAIN_DB = 2, OUTRO = 22.35;
+// The SFX stem as it sits in the mix, after the shared gain.
+const sfxMix = Float32Array.from(sfx, v => v * amp(MIX_GAIN_DB));
+await wav(join(out, "sfx-stem.wav"), sfxMix);
+const keyTimes = log.actions.filter(a => a.type === "key").map(a => a.time + log.offset);
+const typing = ["-ss", (keyTimes[0] - .1).toFixed(3), "-t", (keyTimes.at(-1) - keyTimes[0] + .3).toFixed(3)];
+const summary = { videoStreamSha256Before: inputHash, musicStemTargetLufs: -22.04 + MIX_GAIN_DB,
+  previousMusicStemLufs: -22.04, sfxGainDb: MIX_GAIN_DB, outroStart: OUTRO,
   safetyLimiter: { ceilingDb: -2.2, oversampleHz: 192000, attackMs: 5, releaseMs: 80 },
-  ducking: { depthDb: 5, clickDepthDb: 3, shape: "cosine, in dB", ranges: [[13.55, 13.9, 21.7, 22.4], [30.5, 31.3, 34.6, 35.45]] },
+  // Typing through the answer, then the selection card through the outro.
+  ducking: { depthDb: 5, clickDepthDb: 3, shape: "cosine, in dB", ranges: [
+    [clickAt("Follow-up input") - .3, clickAt("Follow-up input"), clickAt("Answer source 1") - .5, clickAt("Answer source 1")],
+    [clickAt("Summarize selection") - .3, clickAt("Summarize selection"), OUTRO - .4, OUTRO]] },
   stems: { sfx: measure(join(out, "sfx-stem.wav")) }, variants: [] };
 summary.stems.sfx.meters = await meters(join(out, "sfx-stem.wav"), "sfx-stem");
 
@@ -65,12 +80,10 @@ function duck(t) {
   return amp(-depth);
 }
 
-// Both excerpts start with the hook at frame 0. A documented strong beat
-// lands on the fixed 3.2 second toolbar click. No picture timing changes.
+// The preset's strong beat follows the recorded toolbar click.
+// Only A is required. Music is six LU below the previous A music stem.
 for (const variant of [
-  { id: "A", volume: 12, strongCue: 8.7423, start: 5.5423 },
-  { id: "B", volume: 11, strongCue: 8.9629, start: 5.7629 },
-  { id: "C", volume: null },
+  { id: "A", volume: 12, strongCue: 8.7423, start: 8.7423 - toolbarTime },
 ]) {
   let music = new Float32Array(sfx.length), musicGain = 0;
   const stemName = variant.volume ? `vol-${variant.volume}` : "sfx-only";
@@ -79,33 +92,27 @@ for (const variant of [
     const preset = JSON.parse(await readFile(join(assets, "music/cues", `${stem}.music-cues.json`), "utf8"));
     if (!preset.strongCues.some(c => Math.abs(c.time - variant.strongCue) < .0001)) throw new Error("Music sync cue missing from preset");
     const source = join(assets, "music", `${stem}.mp3`);
-    music = decode(source, ["atrim=duration=40", "asetpts=PTS-STARTPTS", "highpass=f=65", "highshelf=f=2800:g=-3", "lowpass=f=11000",
+    music = decode(source, [`atrim=duration=${DURATION}`, "asetpts=PTS-STARTPTS", "highpass=f=65", "highshelf=f=2800:g=-3", "lowpass=f=11000",
       "acompressor=threshold=0.1:ratio=3:attack=0.1:release=100:knee=2:detection=peak:link=maximum"], 2, ["-ss", String(variant.start)]);
     for (let i = 0; i < music.length; i += 2) {
       const t = i / 2 / RATE;
-      const envelope = duck(t) * smooth(t / .08) * (1 - smooth((t - 36.6) / 3.4));
+      const envelope = duck(t) * smooth(t / .08) * (1 - smooth((t - OUTRO) / (DURATION - OUTRO)));
       music[i] *= envelope; music[i + 1] *= envelope;
     }
     await wav(join(out, `music-${variant.id}-raw.wav`), music);
     const raw = measure(join(out, `music-${variant.id}-raw.wav`));
-    musicGain = -16.1 - Number(raw.input_i);
-    // Adjust only music. A, B and C share the identical SFX at identical gain.
-    for (let attempt = 0; attempt < 3; attempt++) {
-      const temp = Float32Array.from(sfx, (v, i) => v + (music[i] || 0) * amp(musicGain));
-      await wav(join(out, "measure-mix.wav"), temp);
-      const integrated = Number(measure(join(out, "measure-mix.wav")).input_i);
-      if (Math.abs(integrated + 16) < .04) break;
-      musicGain += -16 - integrated;
-    }
+    // Measure only to set a constant music gain. Never normalize the full mix
+    // or raise the SFX to compensate for shorter, more closely spaced actions.
+    musicGain = summary.musicStemTargetLufs - Number(raw.input_i);
     music = Float32Array.from({ length: sfx.length }, (_, i) => (music[i] || 0) * amp(musicGain));
     const musicPath = join(out, `music-${variant.id}-stem.wav`);
     await wav(musicPath, music);
     summary.stems[`music${variant.id}`] = measure(musicPath);
     summary.stems[`music${variant.id}`].meters = await meters(musicPath, `music-${variant.id}-stem`);
     variant.music = { source, title: `Happy Beats / Business Moves vol. ${variant.volume}`, sourceStart: variant.start,
-      sourceEnd: variant.start + 40, strongCue: variant.strongCue, toolbarTime: 3.2, gainDb: musicGain };
+      sourceEnd: variant.start + DURATION, strongCue: variant.strongCue, toolbarTime, gainDb: musicGain };
   }
-  const premaster = Float32Array.from(sfx, (v, i) => v + music[i]);
+  const premaster = Float32Array.from(sfxMix, (v, i) => v + music[i]);
   const prePath = join(out, `mix-${variant.id}-premaster.wav`), master = join(out, `mix-${variant.id}.wav`);
   await wav(prePath, premaster);
   const preMeasure = measure(prePath);
@@ -154,22 +161,21 @@ await writeFile(join(out, "cue-list.csv"), "time,type,file,target,pitch,gainVari
 await writeFile(join(out, "per-cue-peaks.json"), JSON.stringify({ isolatedTypes: types, overlappedWindows: overlappedTypes, cues: perCue }, null, 2) + "\n");
 summary.perCueTypePeaksDb = types;
 const keys = cues.filter(c => ["typing", "space", "enter"].includes(c.type));
-const log = JSON.parse(await readFile(join(generated, "action-log.json"), "utf8"));
 const loggedKeys = log.actions.filter(a => a.type === "key");
 if (keys.length !== loggedKeys.length || keys.some((k, i) => Math.abs(k.time - loggedKeys[i].time - log.offset) > 1e-6)) throw new Error("Keystroke timing changed");
 if (keys.some((k, i) => i && k.file === keys[i - 1].file)) throw new Error("Repeated adjacent keyboard sample");
 summary.keystrokeAudit = { count: keys.length, maxTimingErrorSeconds: 0, immediateRepeats: 0, uniqueSamples: new Set(keys.map(k => k.file)).size };
-summary.noMusicNote = "C retains the same SFX gain as A and B. Its lower integrated loudness is intentional; normalizing sparse UI effects to -16 would crush or amplify clicks and defeat the comparison.";
+summary.sfxNote = `Original samples, processing and per-cue gain are unchanged. The stem is raised ${MIX_GAIN_DB} dB with the music, so the balance holds. Per-cue peaks are before that gain.`;
 
 // Standalone scientific images and passage audio for review, outside Git.
 const a = summary.variants[0].path;
 for (const [name, inputPath, extra] of [
-  ["A-full-mix", a, []], ["typing-only", join(out, "sfx-stem.wav"), ["-ss", "13.75", "-t", "3.85"]],
+  ["A-full-mix", a, []], ["typing-only", join(out, "sfx-stem.wav"), typing],
 ]) {
   run(["-v", "error", "-y", ...extra, "-i", inputPath, "-filter_complex", "[0:a]showwavespic=s=1600x400:split_channels=1:colors=0x167d8d|0x507050[v]", "-map", "[v]", "-frames:v", "1", "-update", "1", join(out, `${name}-waveform.png`)]);
   run(["-v", "error", "-y", ...extra, "-i", inputPath, "-filter_complex", "[0:a]showspectrumpic=s=1600x600:legend=1:scale=log:fscale=log:color=viridis[v]", "-map", "[v]", "-frames:v", "1", "-update", "1", join(out, `${name}-spectrogram.png`)]);
 }
-run(["-v", "error", "-y", "-ss", "13.75", "-t", "3.85", "-i", join(out, "sfx-stem.wav"), "-c:a", "pcm_s24le", join(out, "typing-only.wav")]);
+run(["-v", "error", "-y", ...typing, "-i", join(out, "sfx-stem.wav"), "-c:a", "pcm_s24le", join(out, "typing-only.wav")]);
 await writeFile(join(out, "audio-report.json"), JSON.stringify(summary, null, 2) + "\n");
 // Publish only after every variant, stream hash and loudness check passes.
 await copyFile(summary.variants[0].path, join(root, "docs/demo.mp4"));

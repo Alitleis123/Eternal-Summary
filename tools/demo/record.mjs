@@ -12,10 +12,14 @@ import { startServer, findChrome, sleep } from "../../test/driver.js";
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const OUT = fileURLToPath(new URL("generated/", import.meta.url));
-const REVIEW = process.env.DEMO_REVIEW_DIR || join(tmpdir(), "es-demo-review-3");
+const REVIEW = process.env.DEMO_REVIEW_DIR || join(tmpdir(), "es-demo-review-5");
 const FPS = 30;
-const DURATION = 35;
-const WIDTH = 1120, HEIGHT = 630, DSF = 1.5;
+// Footage ends where the outro begins. The outro adds 3.7 seconds.
+const DURATION = 22.7;
+// A fictional publication, so the panel header reads like a real site
+// instead of "localhost". Chrome resolves it to the local fixture server.
+const HOST = "meridian.example";
+const WIDTH = 1120, HEIGHT = 630, DSF = 3;
 const FFMPEG = process.env.FFMPEG_PATH || "ffmpeg";
 const CHROME = findChrome();
 if (!CHROME) throw new Error("Set CHROME_PATH to Chrome Headless Shell before recording.");
@@ -81,7 +85,8 @@ const chrome = spawn(CHROME, [
   "--no-sandbox", "--disable-gpu", "--deterministic-mode", "--enable-begin-frame-control",
   `--window-size=${WIDTH},${HEIGHT}`, `--force-device-scale-factor=${DSF}`,
   "--hide-scrollbars", "--remote-debugging-port=0", `--user-data-dir=${profile}`,
-  `http://localhost:${port}/tools/demo-article.html`,
+  `--host-resolver-rules=MAP ${HOST} 127.0.0.1`,
+  `http://${HOST}:${port}/tools/demo-article.html`,
 ], { stdio: "ignore", windowsHide: true });
 let cdp, encoder;
 const actions = [], frames = [];
@@ -111,12 +116,13 @@ try {
   await cdp.call("Page.enable");
   // The launch flag produces real device pixels in beginFrame. A CDP
   // emulated scale changes devicePixelRatio without changing this bitmap.
-  const viewport = await cdp.evaluate("({width:innerWidth,height:innerHeight,deviceScaleFactor:devicePixelRatio})");
-  if (viewport.width !== WIDTH || viewport.height !== HEIGHT || viewport.deviceScaleFactor !== DSF) throw new Error(`Unexpected viewport: ${JSON.stringify(viewport)}`);
-  for (let i=0;i<100;i++) {
-    if (await cdp.evaluate("typeof window.__boot === 'function'")) break;
+  // A cold browser profile can take several seconds to load the fixture.
+  for (let i=0;i<400;i++) {
+    if (await cdp.evaluate(`location.hostname === ${JSON.stringify(HOST)} && typeof window.__boot === 'function'`)) break;
     await sleep(50);
   }
+  const viewport = await cdp.evaluate("({width:innerWidth,height:innerHeight,deviceScaleFactor:devicePixelRatio,hostname:location.hostname})");
+  if (viewport.width !== WIDTH || viewport.height !== HEIGHT || viewport.deviceScaleFactor !== DSF || viewport.hostname !== HOST) throw new Error(`Unexpected viewport: ${JSON.stringify(viewport)}`);
   await cdp.evaluate("window.__boot()");
   await cdp.evaluate(`window.__reply = (url, payload) => {
     const r = ${JSON.stringify(replies)};
@@ -124,8 +130,7 @@ try {
     return { ok:true, status:200, text:() => Promise.resolve(JSON.stringify(picked)) };
   };window.__rafTicks=0;function countTick(){window.__rafTicks++;requestAnimationFrame(countTick)};requestAnimationFrame(countTick)`);
   const { virtualTimeTicksBase: base } = await cdp.call("Emulation.setVirtualTimePolicy", { policy: "pause" });
-  // The 945-pixel capture height is odd. Keep this intermediate in 4:4:4;
-  // finish.mjs writes the even-sized delivery composition as yuv420p.
+  // Retain chroma detail in the high-resolution source. Delivery is yuv420p.
   encoder = spawn(FFMPEG, ["-hide_banner", "-loglevel", "warning", "-y", "-f", "image2pipe", "-framerate", String(FPS), "-vcodec", "mjpeg", "-i", "pipe:0", "-an", "-c:v", "libx264", "-crf", "15", "-preset", "fast", "-threads", "2", "-g", "30", "-keyint_min", "30", "-pix_fmt", "yuv444p", "-movflags", "+faststart", join(OUT, "usage.mp4")], { stdio: ["pipe", "ignore", "inherit"], windowsHide: true });
   let encoderError;
   encoder.on("error", error => { encoderError = error; });
@@ -166,25 +171,51 @@ try {
     frames.push({ frame, time: +at().toFixed(6), ...state });
     if (frame < 5 || frame % 30 === 0) console.log(`captured frame ${frame} / ${DURATION*FPS}`);
     // Dense strip around a reveal, plus the wider story contact sheet later.
-    if ([0,48,51,54,57,60,63,66,69,72,75,78,81,90,180,240,420,540,660,720,810,870,900,990,1049].includes(frame)) {
+    if ([0,30,45,58,66,75,90,100,150,190,230,270,330,370,385,395,415,430,445,465,490,500,515,535,545,560,575,600,640,675].includes(frame)) {
       await writeFile(join(OUT, `capture-${String(frame).padStart(4,"0")}.jpg`), lastImage);
     }
     frame++;
   };
   const until = async seconds => { while (frame < Math.round(seconds * FPS)) await capture(); };
+  // Chrome acknowledges input only when virtual time advances. Awaiting each
+  // dispatch stalled about 10 s and could drop a click, so input is sent now
+  // and lands during the next captured frame. Failures are collected and
+  // fail the recording at the end.
+  const inputErrors = [];
+  const input = (method, params) => { cdp.call(method, params).catch(error => inputErrors.push(`${method} ${params.type || ""}: ${error.message}`)); };
   const point = async expression => cdp.evaluate(`(() => {const e=${expression};if(!e)throw new Error('Missing demo target');const r=e.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()`);
-  const click = async (expression, name) => {
-    const p = await point(expression);
+  // Measured boxes let the composition frame and spotlight the real UI
+  // instead of hand-typed coordinates. Viewport (page) CSS pixels.
+  const rect = async (expression, name) => {
+    const r = await cdp.evaluate(`(() => {const e=${expression};if(!e)throw new Error('Missing demo rect: ${name}');const r=e.getBoundingClientRect();return {x:r.x,y:r.y,w:r.width,h:r.height}})()`);
+    log("rect", { ...r, target: name, coordinateSpace: "page" });
+    return r;
+  };
+  // The composition draws the cursor with power2.inOut over the same frames.
+  // Page moves are also sent to Chrome, so real hover states render.
+  const ease = p => p < .5 ? 2 * p * p : 1 - (-2 * p + 2) ** 2 / 2;
+  let cursor = { x: 560, y: 420 };
+  const move = async (to, seconds, name, space = "page") => {
+    const from = { ...cursor }, steps = Math.round(seconds * FPS);
+    log("move", { x: to.x, y: to.y, fromX: from.x, fromY: from.y, duration: steps / FPS, target: name, coordinateSpace: space });
+    for (let i = 1; i <= steps; i++) {
+      const p = ease(i / steps), x = from.x + (to.x - from.x) * p, y = from.y + (to.y - from.y) * p;
+      if (y >= 0) input("Input.dispatchMouseEvent", { type: "mouseMoved", x, y });
+      await capture();
+    }
+    cursor = { x: to.x, y: to.y };
+  };
+  const click = async (p, name) => {
     log("click", { ...p, target: name, coordinateSpace: "page" });
-    await cdp.call("Input.dispatchMouseEvent", { type: "mouseMoved", ...p });
-    await cdp.call("Input.dispatchMouseEvent", { type: "mousePressed", button: "left", clickCount: 1, ...p });
-    await cdp.call("Input.dispatchMouseEvent", { type: "mouseReleased", button: "left", clickCount: 1, ...p });
+    input("Input.dispatchMouseEvent", { type: "mouseMoved", ...p });
+    input("Input.dispatchMouseEvent", { type: "mousePressed", button: "left", clickCount: 1, ...p });
+    input("Input.dispatchMouseEvent", { type: "mouseReleased", button: "left", clickCount: 1, ...p });
     return p;
   };
   const scroll = async (target, seconds, name) => {
     const start = await cdp.evaluate("scrollY");
     const steps = Math.round(seconds * FPS);
-    log("scroll", { x: 350, y: 330, from: start, to: target, duration: seconds, target: name });
+    log("scroll", { from: start, to: target, duration: seconds, target: name });
     for (let i=1;i<=steps;i++) {
       const p=i/steps, eased=p*p*(3-2*p);
       // New Chrome versions return a scroll-completion promise. Awaiting it
@@ -195,58 +226,104 @@ try {
   };
   const panel = "document.getElementById('ai-overlay').shadowRoot";
   const popup = "document.getElementById('es-selection-popup').shadowRoot";
-  log("move", {x:500,y:375,coordinateSpace:"page"});
-  await until(.4);
-  await scroll(96, .7, "Read the article");
-  await until(1.6);
-  log("click", { x: 1088, y: -18, target: "Extension toolbar icon", coordinateSpace: "toolbar" });
+  // The toolbar is drawn by the composition, above the page. Negative y is
+  // toolbar space: TOOLBAR in index.html is 36 CSS pixels tall.
+  const toolbarIcon = { x: 1056, y: -18 };
+  log("move", { ...cursor, fromX: cursor.x, fromY: cursor.y, duration: 0, target: "Start", coordinateSpace: "page" });
+  await until(.45);
+  // A slow, visible trip to the toolbar teaches where the extension starts.
+  await move(toolbarIcon, 1, "Extension toolbar icon", "toolbar");
+  log("hover", { target: "Extension toolbar icon" });
+  await until(1.95);
+  log("click", { ...toolbarIcon, target: "Extension toolbar icon", coordinateSpace: "toolbar" });
   log("accent", { target: "Panel opens" });
   await cdp.evaluate("void window.__onAction({id:1,url:location.href})");
-  await until(7);
-  await click(`[...${panel}.querySelectorAll('.seg')].find(e=>e.textContent==='Bullets')`, "Bullets");
-  await until(12);
-  const inputPoint = await click(`${panel}.querySelector('.field input')`, "Follow-up input");
-  await until(12.3);
-  const question = "What was the hardest part of keeping it running?";
+  await until(2.45);
+  await rect(`${panel}.querySelector('.rail')`, "Panel");
+  await until(3.45);
+  await rect(`${panel}.querySelector('.entry .entry-body')`, "Summary");
+  await until(5.75);
+  const inputPoint = await point(`${panel}.querySelector('.field input')`);
+  await move(inputPoint, .5, "Follow-up input");
+  await until(6.3);
+  await click(inputPoint, "Follow-up input");
+  await rect(`${panel}.querySelector('.field')`, "Input");
+  const question = "What kept it running?";
   for (let i=0;i<question.length;i++) {
-    await until(12.3+i*.063);
+    await until(6.5+i*.055);
     log("key", {...inputPoint, key: question[i], coordinateSpace: "page"});
-    await cdp.call("Input.insertText", { text:question[i] });
+    input("Input.insertText", { text:question[i] });
   }
-  await until(15.7);
+  await until(7.9);
   log("key", {...inputPoint, key:"Enter", coordinateSpace:"page"});
-  await cdp.call("Input.dispatchKeyEvent", {type:"keyDown",key:"Enter",code:"Enter",windowsVirtualKeyCode:13});
-  await cdp.call("Input.dispatchKeyEvent", {type:"keyUp",key:"Enter",code:"Enter",windowsVirtualKeyCode:13});
-  await until(21.3);
-  await click(`${panel}.querySelector('.entry:last-child .ref')`, "Answer source 1");
-  await until(24.4);
-  await click(`${panel}.querySelector('button[aria-label="Close"]')`, "Close panel");
-  await until(24.9);
+  input("Input.dispatchKeyEvent", {type:"keyDown",key:"Enter",code:"Enter",windowsVirtualKeyCode:13});
+  input("Input.dispatchKeyEvent", {type:"keyUp",key:"Enter",code:"Enter",windowsVirtualKeyCode:13});
+  await until(9.2);
+  await rect(`${panel}.querySelector('.entry.ask')`, "Question");
+  await rect(`${panel}.querySelector('.entry:last-child')`, "Answer");
+  await until(11.55);
+  const sourcePoint = await point(`${panel}.querySelector('.entry:last-child .ref')`);
+  await move(sourcePoint, .5, "Answer source 1");
+  await until(12.25);
+  await click(sourcePoint, "Answer source 1");
+  // The product scrolls for about 0.85 s and clears the highlight 2.4 s
+  // after the click, so the composition reaches the passage by 13.95.
+  await until(13.3);
+  await rect("[...document.querySelectorAll('body *')].find(n => n.style.getPropertyValue('background-color'))", "Source passage");
+  await until(14.95);
+  const closePoint = await point(`${panel}.querySelector('button[aria-label="Close"]')`);
+  await move(closePoint, .4, "Close panel");
+  await until(15.4);
+  await click(closePoint, "Close panel");
+  await until(15.75);
   const target = await cdp.evaluate("document.getElementById('p3').getBoundingClientRect().top+scrollY-110");
-  await scroll(target,.9,"Find a paragraph");
-  await until(26.3);
+  await scroll(target,.4,"Find a paragraph");
+  await rect("document.getElementById('p3')", "Paragraph");
   const selection = await cdp.evaluate(`(() => {const node=document.getElementById('p3').firstChild;const r=document.createRange();r.setStart(node,0);r.setEnd(node,1);const b=r.getBoundingClientRect();return {length:node.length,x:b.x,y:b.y+b.height/2}})()`);
+  await move(selection, .3, "Paragraph selection");
+  await until(16.5);
   log("mousedown", {x:selection.x,y:selection.y,coordinateSpace:"page",target:"Paragraph selection"});
-  await cdp.call("Input.dispatchMouseEvent",{type:"mousePressed",button:"left",clickCount:1,x:selection.x,y:selection.y});
-  for(let i=1;i<=48;i++) {
-    const end=Math.round(selection.length*i/48);
+  input("Input.dispatchMouseEvent",{type:"mousePressed",button:"left",clickCount:1,x:selection.x,y:selection.y});
+  // Let Chrome take the press before the native selection starts growing.
+  await capture();
+  for(let i=1;i<=24;i++) {
+    const end=Math.round(selection.length*i/24);
     const p=await cdp.evaluate(`(() => {const n=document.getElementById('p3').firstChild;const s=getSelection();s.setBaseAndExtent(n,0,n,${end});const r=document.createRange();r.setStart(n,Math.max(0,${end}-1));r.setEnd(n,${end});const b=r.getBoundingClientRect();return {x:b.right,y:b.y+b.height/2}})()`);
     log("selection",{...p,coordinateSpace:"page",characters:end,target:"Paragraph selection"});
     await capture();
   }
   const end=actions.at(-1);
-  await cdp.call("Input.dispatchMouseEvent",{type:"mouseReleased",button:"left",clickCount:1,x:end.x,y:end.y});
+  input("Input.dispatchMouseEvent",{type:"mouseReleased",button:"left",clickCount:1,x:end.x,y:end.y});
   // Retain the progressively extended selection, and let the real listener
   // process mouseup. No product markup or text animation is replaced.
   log("mouseup",{x:end.x,y:end.y,coordinateSpace:"page",target:"Paragraph selection"});
-  await until(28.5);
-  await click(`${popup}.querySelector('.trigger')`,"Summarize selection");
+  cursor = { x: end.x, y: end.y };
+  await until(17.4);
+  await rect(`${popup}.querySelector('.trigger')`, "Trigger");
+  await rect("getSelection().getRangeAt(0)", "Selection");
+  // Let the floating button sit on screen before the cursor travels to it.
+  await until(17.75);
+  const triggerPoint = await point(`${popup}.querySelector('.trigger')`);
+  await move(triggerPoint, .7, "Summarize selection");
+  await until(18.9);
+  await click(triggerPoint, "Summarize selection");
   log("accent",{target:"Selection card opens"});
+  // The card changes height while it loads and streams, so its box is
+  // sampled every 0.1 s. The spotlight follows these samples exactly.
+  for (let t = 19; t <= 20.41; t += .1) {
+    await until(t);
+    const box = await cdp.evaluate(`(() => {const e=${popup}.querySelector('.card');if(!e)return null;const r=e.getBoundingClientRect();return {x:r.x,y:r.y,w:r.width,h:r.height}})()`);
+    if (box) log("rect", { ...box, target: "Card frame", coordinateSpace: "page" });
+  }
+  await rect(`${popup}.querySelector('.card')`, "Card");
   await until(DURATION);
+  // Let the last dispatches settle, then refuse a recording that lost input.
+  await capture();
+  if (inputErrors.length) throw new Error(`Input failed: ${inputErrors.join("; ")}`);
   encoder.stdin.end();
   const [code]=await encoderExit;
   if(code!==0) throw new Error(`Footage encoder exited ${code}`);
-  const report={fps:FPS,duration:DURATION,viewport,capture:{...captureSize,method:"HeadlessExperimental.beginFrame",scaleSource:"--force-device-scale-factor=1.5"},composition:{width:1920,height:1080},offset:1.6,actions,consoleErrors:cdp.errors};
+  const report={fps:FPS,duration:DURATION,viewport,capture:{...captureSize,method:"HeadlessExperimental.beginFrame",scaleSource:`--force-device-scale-factor=${DSF}`},composition:{width:1920,height:1080},offset:0,actions,consoleErrors:cdp.errors};
   await writeFile(join(OUT,"action-log.json"),JSON.stringify(report,null,2)+"\n");
   await writeFile(join(OUT,"frame-audit.json"),JSON.stringify(frames,null,2)+"\n");
   await copyFile(join(OUT,"action-log.json"),join(REVIEW,"action-log.json"));

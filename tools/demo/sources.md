@@ -1,223 +1,258 @@
 # Demo sources
 
-This is a 40 second recording of the extension in use, with a short hook and
-outro. The source is the real `tools/demo-article.html` served by
-`test/driver.js`, with the actual background, listener, panel, selection
-button, selection card, text reveals and source highlighting. Only the model
-replies are fixed. `record.mjs` reads the existing `REPLIES` literal from
-`tools/shots.mjs`, so the video and screenshots use identical reply copy.
-It keeps the product's text animation enabled.
+The demo is 26.4 seconds. It opens on the article, then the cursor travels
+to the toolbar for a full second, so a viewer sees where the extension
+starts. The extension's name appears as a tooltip and the click lands at
+1.97 seconds. The summary finishes at 3.3. The question,
+answer and source sequence runs from 5.75 to 15.4 seconds, the longest part
+of the cut. The Summarize button after a highlight sits on screen for 1.5
+seconds before the click.
+
+The source is the real `tools/demo-article.html` served by `test/driver.js`.
+The extension handles the panel, page reflow, hover states, text reveals,
+selection button, selection card and source highlight. Only the model
+replies are fixed. `record.mjs` reads the existing `REPLIES` literal in
+`tools/shots.mjs`. Chrome maps the fictional host `meridian.example` to the
+local fixture server, so the panel header reads "meridian.example · 2 min
+read" instead of "localhost". No product copy or product styles change.
 
 ## Regeneration
 
-The commands are at the top of `index.html`. Use Node 22 or later, FFmpeg and
-FFprobe on PATH, plus Chrome Headless Shell from Hyperframes 0.8.159.
-`CHROME_PATH` points at the headless shell. `FFMPEG_PATH` may override the
-FFmpeg executable for the record, build and finish scripts.
+Use Node 22 or later, Hyperframes 0.8.159, FFmpeg, FFprobe and Chrome
+Headless Shell with beginFrame support. Set `CHROME_PATH` to the headless
+shell. `FFMPEG_PATH` and `FFPROBE_PATH` override the executables, and
+Hyperframes also needs both on PATH. `BRAG_ASSETS` can override
+`C:\Users\alitl\.codex\skills\brag\assets` for the external music and cue
+preset. Set `DO_NOT_TRACK=1` so the Hyperframes CLI sends no usage
+telemetry. There are no model calls, signed-in profiles or visible windows.
 
-1. `record.mjs` starts a local fixture server on a free port and a separate
-   headless browser profile. It uses CDP input for clicks and typing. The
-   paragraph selection extends a native selection range over 48 frames.
-2. It pauses virtual time, advances two steps of 1/60 second, then captures
-   each 30 fps frame with `HeadlessExperimental.beginFrame`. This preserves
-   the extension's normal 60 Hz text reveal speed. There is no real-time
-   screen recorder or skipped wall-clock deadline.
-3. Chrome launches with `--window-size=1120,630` and
-   `--force-device-scale-factor=1.5`. There is no CDP device-scale override.
-   The CSS layout remains 1120x630, and beginFrame returns real 1680x945
-   device pixels. The recorder checks every bitmap's dimensions. The panel
-   still occupies 38% of the recorded width. The intermediate uses H.264
-   yuv444p because its 945-pixel height is odd. Delivery is 1920x1080 yuv420p.
-4. The recording goes straight to FFmpeg through an image pipe. No frame
-   directory is needed for the render. `generated/` contains `usage.mp4`,
-   sample captures, `action-log.json` and `frame-audit.json`. These are ignored
-   by Git. The action log has times and coordinates for clicks, typed
-   characters, Enter, scroll gestures and each selection extension.
-5. `build.mjs` writes the cursor schedule and a deterministic stereo SFX WAV
-   from that log. The audio section below describes sample selection,
-   filtering, pitch variation and exact cue gains. All 49 keystrokes retain
-   their recorded timing. `generated/sfx-cues.json` lists every sound.
-6. Hyperframes renders the footage, small step labels, toolbar icon, cursor,
-   click rings and outro. Two localized camera moves enlarge whole UI text
-   blocks over the original footage. Each uses the same source media time
-   and a cursor inside the same transformed wrapper. Crops end in UI padding.
-   The answer view grows to 1.25x from 17 to 17.8 seconds, holds until 21.7,
-   then returns by 22.4. The selection card grows to 1.3x from 30.5 to 31.3,
-   holds until 34.6, then returns by 35.45. Both use `sine.inOut` easing.
-   Media playback belongs to Hyperframes. One paused GSAP timeline controls
-   the overlays.
-7. `finish.mjs` extracts the settled summary at 6.4 seconds as the poster,
-   replaces only frame 0, and writes H.264 yuv420p at CRF 22 with AAC and
-   faststart to `docs/demo.mp4`. It writes `docs/shots/demo-poster.jpg` too.
-8. `mix.mjs` builds the final music and SFX stems, then remuxes the approved
-   video with `-c:v copy`, AAC at 256 kbps and faststart. It verifies stream
-   hashes, loudness, true peak, size, atom order and keystroke timing before
-   replacing `docs/demo.mp4` with A. It does not touch the poster. B, C,
-   stems, meter logs, cue reports and signal plots stay outside Git.
+Run from the repository root. The same commands appear in `index.html`.
 
-The record and review browser profiles, servers and encoders are disposable.
-The scripts close their own processes in cleanup. They do not use the shared
-desktop, signed-in browser profiles or a model API.
+```powershell
+node tools/demo/record.mjs
+node tools/demo/build.mjs
+npx hyperframes@0.8.159 check tools/demo
+npx hyperframes@0.8.159 render tools/demo --fps 30 --resolution landscape-4k --video-frame-format png --crf 10 --workers 2 --output brag-output/demo-raw.mp4
+node tools/demo/finish.mjs brag-output/demo-raw.mp4
+node tools/demo/mix.mjs
+node tools/demo/review.mjs
+npm test
+npm run check
+```
 
-## Timeline
+The scripts limit FFmpeg encoders and filter pools to two threads, and the
+render uses two Hyperframes workers. Raw media, profiles, action logs, stems
+and caches stay outside Git. Review artifacts default to
+`%TEMP%\es-demo-review-6`. `DEMO_REVIEW_DIR` overrides the recorder's review
+directory. `mix.mjs` takes an approved video path and a review directory as
+optional arguments. `review.mjs` takes a review directory.
+
+1. `record.mjs` starts a disposable fixture server and an isolated browser
+   profile. Chrome launches with `--window-size=1120,630`,
+   `--force-device-scale-factor=3` and a host resolver rule for
+   `meridian.example`. The CSS layout stays 1120 by 630, while beginFrame
+   returns 3360 by 1890 device pixels. Every bitmap is checked.
+2. The recorder pauses virtual time, advances two steps of 1/60 second, and
+   captures each 30 fps frame with `HeadlessExperimental.beginFrame`. This
+   keeps the product's text reveal speed. The 22.7 second recording has
+   682 frames and no browser console errors.
+3. Chrome acknowledges input only when virtual time advances. Awaiting each
+   dispatch stalled for about 10 seconds and once dropped the Summarize
+   click, so the recorder sends input without waiting and Chrome handles it
+   in the next captured frame. Failed dispatches are collected and fail the
+   recording.
+4. Cursor moves are logged with their start, end and duration. Moves over
+   the page also go to Chrome frame by frame on the same `power2.inOut`
+   curve the composition draws, so real hover states appear on the source
+   button, the close button and the Summarize button.
+5. The recorder logs measured boxes for the panel, summary, input, question,
+   answer, source passage, paragraph, Summarize button, selection and card.
+   It samples the card every 0.1 seconds while it loads and streams. The
+   composition frames and spotlights the UI from these boxes.
+6. JPEG frames go straight into an FFmpeg image pipe. The H.264 yuv444p
+   intermediate keeps chroma detail at CRF 15. `generated/` holds the
+   footage, a few stills, `action-log.json` and `frame-audit.json`.
+7. `build.mjs` writes the action schedule and the SFX WAV from the action
+   log. It also writes `usage-soft.mp4`, a 1680 by 946 copy of the footage
+   for the focus layer, which is only ever seen blurred and dimmed.
+8. Hyperframes owns media playback. One paused GSAP timeline controls the
+   camera, focus, toolbar, captions, pointer, rings and outro. The render
+   runs at 4K, which is Chrome at device scale 2, with PNG frame extraction
+   and CRF 10. Hyperframes extracts video frames at the output size, so a
+   1080p render shrank the 3360 pixel footage to 1920 before the camera
+   zoomed in 3.1 times. Text came out about 1.8 times upscaled and soft. At
+   4K the extracted frames keep the source detail.
+9. `finish.mjs` takes the settled summary at 4.6 seconds for
+   `docs/shots/demo-poster.jpg`, then scales the 4K render to 1080p with
+   Lanczos and encodes `docs/demo.mp4` once as H.264 yuv420p at CRF 16,
+   preset slow, with AAC and faststart. Round 6 first shipped at CRF 20
+   from a 2.6 Mbps render, about 1.1 Mbps after two lossy passes.
+10. `mix.mjs` builds the music and SFX mix, replaces the audio with AAC at
+    256 kbps, and copies the H.264 stream. It checks the video hash,
+    loudness, true peak, size, atom order and keystroke timing before it
+    replaces the delivered file.
+11. `review.mjs` checks the delivery format and summary timing, then samples
+    every 1.5 seconds into `contact-phone.jpg`, with 390 pixel tiles, and
+    `contact-full.jpg`. It also saves single phone frames of the toolbar,
+    summary, question, answer, source, Summarize button and selection.
+
+## Timeline and captions
+
+Captions use Newsreader at 76 pixels in a band above the UI, so they never
+cover the panel. Two of them set up the line in a dimmer color, then land
+the point in full white. Each enters over 0.28 seconds and fades out over
+0.16 seconds before the next one.
 
 | Time | Caption | Product action |
 | --- | --- | --- |
-| 0 to 1.6 | Read the page, not all of it. | Article before opening the extension |
-| 1.6 to 8.6 | Summarize the page | Scroll, toolbar click at 3.2, summary reveal and verdict |
-| 8.6 to 13.6 | Switch to bullets | Click Bullets and reveal the list |
-| 13.6 to 22.9 | Ask a follow-up | Focus input, type, Enter at 17.3, reveal answer |
-| 22.9 to 26 | Jump to the source | Click source 1, article scrolls and highlights the passage |
-| 26 to 36.6 | Summarize a highlight | Close, scroll, drag selection, Summarize at 30.1, reveal card |
-| 36.6 to 40 | Eternal Summary. Add to Chrome | Outro |
+| 0 to 5.75 | A long article. A short answer. | Cursor to the toolbar from 0.47, tooltip at 1.63, click at 1.97, panel opens, summary done at 3.3 |
+| 5.75 to 11.55 | Get answers without leaving the page. | Input click at 6.3, typing 6.5 to 7.6, Enter at 7.9, answer done at 8.93 |
+| 11.55 to 15.4 | See exactly where the answer came from. | Source click at 12.27, the page scrolls to the passage, close at 15.4 |
+| 15.4 to 22.7 | Only need one paragraph? Highlight it. | Scroll, select from 16.5 to 17.33, Summarize button shown, click at 18.9, card done at 20.2 |
+| 22.35 to 26.4 | Eternal Summary. Add to Chrome. | Outro with the icon, an "Add to Chrome" button and "Works in Chrome, Brave, Edge and Arc." |
+
+## Camera and focus
+
+The UI sits in an 1824 by 828 viewport at output position 48,204. The
+camera moves the whole browser window, a 36 pixel drawn toolbar above
+1120 by 630 CSS pixels of footage. In the wide opening shot the window
+floats on the page background at scale 1.2. Zoomed in, it fills the
+viewport, and the page beside the panel stays in frame.
+
+Moves, in camera CSS pixels:
+
+| Move | Time | Framing |
+| --- | --- | --- |
+| Push in on the toolbar | 0.5 to 1.55 | Scale 2.3, the window's top right corner with background around it |
+| Panel header | 2.05 to 2.75 | Scale 2.35, panel flush right, header, verdict and tabs |
+| Summary | 3 to 3.7 | Scale 3.1, centered on the summary text |
+| Input | 5.8 to 6.3 | Scale 3.1, the end of the summary, sources and input |
+| Question and answer | 7.95 to 8.6 | Fitted to the question and answer, about 2.7 |
+| Answer and source side by side | 12.3 to 12.95 | Full width at scale 1.63 |
+| Source passage | 13.45 to 13.95 | Fitted to the highlighted passage |
+| Paragraph | 15.4 to 16 | Fitted to the paragraph |
+| Summarize button | 17.4 to 18 | Fitted to the button and selection |
+| Selection card | 18.95 to 19.6 | Fitted to the card's header and text |
+
+Focus uses two copies of the footage. The lower copy fades to
+`blur(1.4px) brightness(0.45) saturate(0.6)`, and the toolbar fades with
+it. The upper copy is sharp and cropped to the focused UI with a rounded
+`clip-path` from the measured boxes. The crop changes only while the
+lower copy is clear, so focus fades in and out instead of wiping.
+Chrome's `backdrop-filter` was tried first and dropped, because it
+mirrored the page text inside a scaled layer.
+
+| Focus | Time |
+| --- | --- |
+| Panel, page dimmed beside it | 2.1 to 12.7 |
+| Source passage | 13.45 to the close move at 14.97 |
+| Summarize button, then the card it opens | 17.4 to the outro |
+
+The product clears the source highlight 2.4 seconds after the click. The
+passage spotlight stays after the blue goes, and fades before the close
+click, because the page reflows when the panel closes. The card spotlight
+follows the card's sampled box as it loads and grows.
+
+At scale 3.1, one CSS pixel is 3.1 output pixels from three source pixels,
+1.03 times the recorded resolution.
 
 ## Audio
 
-No voice. A is the recommended music and SFX mix in `docs/demo.mp4`.
-B uses the same SFX with another track. C has those same SFX at the same
-gain with no music. The MP3s and review variants are not committed.
+There is no voice.
 
-### Music sources and timing
+### Music
 
-Music by Sascha Ende at [ende.app](https://ende.app/en), under
+The mix uses "Happy Beats / Business Moves vol. 12" by Sascha Ende at
+[ende.app](https://ende.app/en), under
 [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). The
-[ende.app standard license](https://ende.app/en/standard-license) also
-makes attribution optional. Credits are retained here.
+[standard license](https://ende.app/en/standard-license) also makes
+attribution optional. The source stays outside Git at
+`C:\Users\alitl\.codex\skills\brag\assets\music\happy-beats-business-moves-vol-12-by-ende-dot-app.mp3`.
+The strong cue at 8.7423 seconds lands on the toolbar click. The script
+checks the cue against the track's JSON in `music/cues/`.
 
-- A uses "Happy Beats / Business Moves vol. 12". Its steadier pulse suits
-  reading better than the more energetic bundled tracks. Exact source:
-  `C:\Users\alitl\.codex\skills\brag\assets\music\happy-beats-business-moves-vol-12-by-ende-dot-app.mp3`.
-  The excerpt starts at source time 5.5423 seconds. The preset's strong beat
-  at 8.7423 lands on the toolbar click at video time 3.2 seconds.
-- B uses "Happy Beats / Business Moves vol. 11" for a warmer, more rhythmic
-  comparison. Exact source:
-  `C:\Users\alitl\.codex\skills\brag\assets\music\happy-beats-business-moves-vol-11-by-ende-dot-app.mp3`.
-  The excerpt starts at 5.7629 seconds. Its strong cue at 8.9629 also lands
-  on the toolbar click at 3.2 seconds.
+Round 5 set the music six LU below the original. This round keeps that
+balance and lifts music and SFX together by 2 dB, so a phone plays the
+video at a normal level. The music stem targets -20.04 LUFS. Music keeps
+the 65 Hz high-pass, the 3 dB shelf cut above 2.8 kHz, the 11 kHz low-pass
+and the peak compressor at threshold 0.1, ratio 3, attack 0.1 ms, release
+100 ms and no makeup gain. It enters over 80 ms and fades out across the
+outro from 22.35 seconds. Five dB cosine ducks cover the typing through
+the source click, and the selection card through the outro. Their ramps
+come from the action log. UI clicks keep brief 3 dB dips.
 
-The cue JSONs are beside those MP3s in `music/cues/`, named
-`<track-stem>.music-cues.json`. Their Markdown summaries and the brag
-skill's `references/audio.md` informed the selection. The script checks
-that both selected cues exist in those presets. Both tracks start with
-the opening hook at time 0, with an 80 ms entrance to avoid a cut click.
-The outro fades the music from 36.6 to 40 seconds.
+### Keyboard and UI effects
 
-Music has a 65 Hz high-pass, a 3 dB high shelf cut above 2.8 kHz and an
-11 kHz low-pass. A music-only peak compressor controls the drums with
-threshold 0.1, ratio 3, attack 0.1 ms, release 100 ms and no makeup gain.
-After gain matching, the music peaks below the toolbar click. A cosine
-envelope ducks it by 5 dB over the typing and first punch-in, with ramps
-at 13.55 to 13.9 and 21.7 to 22.4 seconds. The second punch-in has ramps
-at 30.5 to 31.3 and 34.6 to 35.45. Brief 3 dB dips around UI clicks let
-their transients lead. The script adjusts only the music gain to target
-about -16 LUFS for each music mix. SFX levels are identical in A, B and C.
-
-### Keyboard and UI sources
-
-`audit-keyboard.mjs` measures all 32 bundled files from
+The keyboard samples are eight CC0 files from
 [Keyboard Soundpack #1](https://opengameart.org/content/keyboard-soundpack-1-typing-and-single-keystrokes)
-by unicae_games, CC0. The page identifies the recorded keyboard as a
-Cherry KC 1000. The processing aims for a quiet laptop keyboard.
+by unicae_games. Letters use `keypress-003.wav`, `007`, `011`, `014`,
+`020` and `025`. Space uses `002` and Enter uses `028`. A seeded generator
+picks samples without immediate repeats, with up to 2 dB of gain and
+3 percent pitch variation. Base isolated peaks are -19 dBFS for letters,
+-17 for Space and -14.5 for Enter, before the shared lift.
 
-The objective audit records peak, RMS, duration, active duration, noise
-floor, spectral centroid and energy above 5 kHz. The centroid uses a
-2048-point Hann FFT with power weighting. Noise floor is the 10th
-percentile of 5 ms RMS windows, including each recording's quiet tail.
-Accepted files have centroid below 2850 Hz, noise floor below -61 dBFS,
-crest below 24.8 dB and original peak below -5 dBFS. Eight pass. All 32
-measurements, rejection reasons and an ordered audition reel are saved
-in the review directory. This was an objective, headless audition.
+The other CC0 samples are from
+[Kenney Interface Sounds](https://kenney.nl/assets/interface-sounds). The
+toolbar click is -6.5 dBFS, still the loudest click. The other clicks are
+-8 and the selection mouse-down is -11. Panel and card openings are -10.5,
+35 ms after their clicks, with the seeded 200 ms noise whoosh at -27.
 
-Letters use `keypress-003.wav`, `007`, `011`, `014`, `020` and `025`.
-Space reserves `keypress-002.wav`; Enter reserves `keypress-028.wav`.
-These small original CC0 files are committed in `assets/sfx/`. A seeded
-generator assigns each recorded keystroke a sample with no immediate
-repeats, gain variation of up to 2 dB either way and pitch variation of
-up to 3 percent. There are 49 keystrokes and zero timing error relative
-to the action log. No streaming text receives a sound.
+The toolbar click was -5.5 before. With the 2 dB lift it summed with the
+music's strong beat to an oversampled peak above the -2.2 dBFS limiter
+ceiling. Lowering that one click by 1 dB keeps the mix under the ceiling
+without limiting. A 3 dB lift needed more than that, so the lift is 2 dB.
 
-Keys have a 140 Hz high-pass, 3 dB high shelf cut above 2.2 kHz and a
-3.8 kHz low-pass. A soft saturation curve rounds narrow spikes. The
-script trims recorded pre-roll, retains up to 85 ms of body, and applies
-a 1.5 ms attack and 22 ms tail fade. Letters peak at a base -19 dBFS,
-Space at -17 and Enter at -14.5, before per-hit variation.
+### Delivery measurements
 
-The other committed samples are from
-[Kenney Interface Sounds](https://kenney.nl/assets/interface-sounds), CC0:
+These are measured values from FFmpeg analysis of the delivered file and
+the stems in the review directory.
 
-- Toolbar uses `click_003.ogg`, with an isolated peak of -5.50 dBFS.
-- Mode uses `switch_007.ogg`; source uses `click_005.ogg`. Both peak at -8.
-- Input, close and selection-summary clicks use `click_002.ogg` at -8.
-  The selection drag's mouse-down uses it at -11.
-- Panel opening uses `drop_001.ogg`; selection card uses `drop_002.ogg`.
-  Both start 35 ms after the click and peak at -10.5.
-- Each opening also has an original 200 ms filtered-noise whoosh at -27.
-  `build.mjs` synthesizes it from seeded noise with a falling cutoff and
-  a sine-squared envelope. There is no third-party whoosh recording.
+| Signal | Integrated LUFS, loudnorm | Integrated LUFS, ebur128 | True peak dBTP |
+| --- | --- | --- | --- |
+| Round 5 music stem | -22.04 | -22.0 | -11.52 |
+| Music stem | -20.04 target | -19.9 | -10.0 |
+| SFX stem after the lift | | -26.8 | -4.4 |
+| Round 5 final | -21.95 | -21.9 | -3.83 |
+| Final after AAC | -19.93 | -19.7 | -2.72 |
 
-The previous impact thud and casino slide are unused. There are 60 cues
-including 49 keys and two quiet whoosh layers. Maximum isolated processed
-peaks by type are -17.17 for letters, -15.22 for Space and -14.37 for Enter.
-The full SFX stem peaks at -5.50 dBFS. `per-cue-peaks.json` distinguishes
-isolated cue peaks from windows that also contain overlapping cue tails.
+The music excerpt starts at source time 6.7756 seconds, so the strong cue
+lands on the toolbar click at 1.967. Its constant gain after filtering and
+ducking is +3.97 dB. The premaster measures -2.69 dBTP, under the safety
+limiter's -2.2 dBFS ceiling, so the limiter applies no gain reduction. The
+limiter keeps 192 kHz oversampling, 5 ms attack, 80 ms release and no
+makeup gain. All 22 keystroke cues match the action log with zero timing
+error and no immediate sample repeats.
 
-### Rebuild and delivery measurements
+The delivered file is 7,037,300 bytes, 26.4 seconds and 792 frames,
+1920 by 1080 at 30 fps, H.264 yuv420p. Video averages about 1.86 Mbps and
+the 4K master about 12.2 Mbps. Audio is AAC stereo at 48 kHz, about
+262 kbps. `moov` comes before `mdat`. The video stream SHA256 is
+`2a17e2388c876b4e003ee6efdd3b40139652d44d229b44e78410091f5de06c4c`, the
+same before and after the audio mix.
 
-With FFmpeg and FFprobe on PATH or their `FFMPEG_PATH` and `FFPROBE_PATH`
-overrides set, run these from the repository root:
+The recording took under two minutes. The 4K Hyperframes render took
+about 3 minutes 30 seconds with two workers on the VM's GPU. A crop of the
+summary text at 5 seconds now matches the raw 3x capture's sharpness. The
+1080p render path was visibly softer at the same frame. `hyperframes check`
+passes with zero runtime, layout, motion and contrast findings. Two
+non-blocking lint warnings suggest sub-compositions for the toolbar and
+outro. All 70 repo tests pass, along with `npm run check`, syntax checks
+on the demo scripts and `git diff --check`.
 
-```powershell
-node tools/demo/audit-keyboard.mjs C:\Users\alitl\.codex\skills\brag\assets C:\Users\alitl\AppData\Local\Temp\es-demo-review-4
-node tools/demo/build.mjs
-node tools/demo/mix.mjs
-```
-
-`BRAG_ASSETS` can override the external music and cue-preset directory.
-`mix.mjs` accepts an approved video path and a review directory as optional
-arguments. The default approved video is `docs/demo.mp4`; the default review
-directory is `%TEMP%\es-demo-review-4`. It stages all outputs before replacing
-A. A second build produced identical SHA256 file hashes for A, B and C.
-
-The final safety limiter uses 192 kHz oversampling, a -2.2 dBFS ceiling,
-5 ms attack, 80 ms release and disabled automatic makeup. Its gain reduction
-is 0.00 dB for all three variants. Premaster true peaks are -2.66, -4.32 and
--5.38 dBTP, each below the limiter ceiling. AAC remains below -1.5 dBTP.
-
-Actual `ebur128=peak=true` and `volumedetect` output after AAC encoding:
-
-| Mix | Integrated LUFS | True peak dBTP | Mean dBFS | Maximum dBFS | Bytes |
-| --- | --- | --- | --- | --- | --- |
-| A, vol. 12 | -15.9 | -2.7 | -18.2 | -2.7 | 5201376 |
-| B, vol. 11 | -15.9 | -4.4 | -18.1 | -4.5 | 5196583 |
-| C, SFX only | -28.4 | -5.4 | -40.7 | -5.5 | 4020772 |
-
-The PCM music stems measure -15.9 LUFS each, with true peaks of -6.3 for
-A and -6.4 for B. The SFX stem measures -28.4 LUFS and -5.4 dBTP. The
-`loudnorm` analysis independently reads full mixes at -16.04, -16.03 and
--28.42 LUFS. Both meters' actual results are retained in the report.
-C intentionally stays quieter. Raising sparse effects to -16 LUFS would
-change the SFX comparison and require heavy peak compression.
-
-All variants are 40 seconds, H.264 yuv420p, 1920x1080, 30 fps and 1200 frames.
-AAC is encoded at 256 kbps, 48 kHz stereo. FFprobe reports 262123 bps for A
-and 261164 for B. C's long silences reduce its actual AAC rate to 26128 bps.
-All have `moov` before `mdat` and remain below 12 MB.
-
-The approved round 3 video stream SHA256, and the matching stream SHA256 in
-A, B and C, is
-`5c77271565fb13aed2cfe184ca864df4c0ac5435dae3bafab448eb0a04c56393`.
-Frame 0 and the poster are unchanged. The review directory contains raw
-FFprobe, `volumedetect` and `ebur128` output for each variant, stem meters,
-cue lists, per-cue peaks, the full-mix waveform and spectrogram, and the
-typing-only waveform and spectrogram. `audio-report.json` records the mix
-settings and verification results.
+The contact sheets and transition frames were viewed. At 390 pixels wide,
+the captions, summary, answer, passage and card text read. Frames around
+each spotlight change were checked one by one, for the cursor at the top
+edge after the toolbar click, the crop over reflowing text after the
+panel closes, and the empty box before the card fades in. The sheets are
+`%TEMP%\es-demo-review-6\contact-phone.jpg` and
+`%TEMP%\es-demo-review-6\contact-full.jpg`.
 
 ## Included dependencies
 
-- Newsreader variable font from Google Fonts `ofl/newsreader`. Its SIL Open
-  Font License is included in `assets/newsreader-OFL.txt`.
-- GSAP 3.15.0 from npm. Its copyright notice and standard license link remain
+- Newsreader variable font from Google Fonts `ofl/newsreader`. The SIL
+  Open Font License is in `assets/newsreader-OFL.txt`.
+- GSAP 3.15.0. Its copyright notice and standard license link remain
   in `assets/gsap.min.js`.
 - The extension's own 32 and 128 pixel icons, copied from `icons/`.
-- Hyperframes 0.8.159. No browser, FFmpeg binary, installed package, raw
-  footage or render cache is committed.
+- Hyperframes 0.8.159. No browser, FFmpeg executable, installed package,
+  raw footage or render cache is committed.
