@@ -1,23 +1,18 @@
 <!doctype html>
 <!--
-  Rebuild the usage demo from the repo root, with Node 22+, ffmpeg, ffprobe:
-    npx hyperframes@0.8.159 browser ensure --force
-    Set CHROME_PATH to that Chrome Headless Shell and FFMPEG_PATH if needed.
-    record.mjs uses --window-size=1120,630 and --force-device-scale-factor=1.5.
-    It checks that beginFrame returns 1680x945 images. Do not emulate a DSF.
+  Rebuild from the repo root with Node 22+, FFmpeg and FFprobe:
+    Set CHROME_PATH to the installed Chrome Headless Shell.
+    Set FFMPEG_PATH and FFPROBE_PATH when the tools are outside PATH.
     node tools/demo/record.mjs
     node tools/demo/build.mjs
     npx hyperframes@0.8.159 check tools/demo
     npx hyperframes@0.8.159 render tools/demo --fps 30 --quality delivery --workers 2 --output brag-output/demo-raw.mp4
     node tools/demo/finish.mjs brag-output/demo-raw.mp4
     node tools/demo/mix.mjs
-  For an audio-only revision, run build.mjs and mix.mjs on the approved
-  docs/demo.mp4. mix.mjs copies the video stream and never changes frame 0.
-  Headless only. record.mjs runs the real extension on demo-article.html,
-  using the reply literal in tools/shots.mjs and the existing test harness.
-  Raw footage, frame audits, action logs and the SFX mix are regenerated in
-  ignored generated/. No network model calls or voice. Music stays outside Git.
-  finish.mjs selects the settled summary at 6.4s and bakes it as frame 0.
+  Headless capture uses 1120x630 CSS pixels at device scale 3, producing
+  3360x1890 source frames through an image pipe. Fixed replies come from
+  tools/shots.mjs. The real extension owns layout and text reveals.
+  generated/ and review artifacts stay outside Git. Only mix A is built.
 -->
 <html lang="en">
 <head>
@@ -29,82 +24,65 @@
   <script src="generated/actions.js"></script>
 </head>
 <body>
-<main id="root" data-composition-id="eternal-demo" data-duration="40" data-width="1920" data-height="1080">
-  <div id="topline" class="topline clip" data-start="0" data-duration="36.6" data-track-index="1"><span class="wordmark">Eternal Summary</span><span class="chapter" id="hook">Read the page, not all of it.</span></div>
-  <div class="browser" id="browser">
-    <div id="toolbar" class="toolbar clip" data-start="0" data-duration="36.6" data-track-index="1"><span class="page-title">The lighthouse that outlived its empire</span><img class="extension-icon" src="assets/icon-32.png" alt="Eternal Summary toolbar icon"></div>
-    <video id="usage" class="clip" src="generated/usage.mp4" data-start="1.6" data-duration="35" data-track-index="0" muted playsinline></video>
-    <img id="opening" class="clip" src="generated/capture-0000.jpg" data-start="0" data-duration="1.6" data-track-index="1" alt="The lighthouse article before the extension opens">
+<main id="root" data-composition-id="eternal-demo" data-duration="28" data-width="1920" data-height="1080">
+  <div id="step-summary" class="caption clip" data-start="0" data-duration="5" data-track-index="2"><span>A long article. A short answer.</span></div>
+  <div id="step-question" class="caption clip" data-start="5" data-duration="8.9" data-track-index="2"><span>Get answers without leaving the page.</span></div>
+  <div id="step-source" class="caption clip" data-start="13.9" data-duration="3.7" data-track-index="2"><span>See exactly where the answer came from.</span></div>
+  <div id="step-selection" class="caption clip" data-start="17.6" data-duration="7" data-track-index="2"><span>Only need one paragraph? Highlight it.</span></div>
+  <div id="viewport">
+    <div id="camera" data-layout-allow-overflow>
+      <div id="toolbar" class="toolbar clip" data-start="0" data-duration="24.6" data-track-index="1"><span class="page-title">The lighthouse that outlived its empire</span><img class="extension-icon" src="assets/icon-32.png" alt="Eternal Summary toolbar icon"></div>
+      <video id="usage" class="clip" src="generated/usage.mp4" data-start="0" data-duration="24.6" data-track-index="0" muted playsinline></video>
+      <div id="pointer-layer" aria-hidden="true" data-layout-ignore>
+        <svg id="cursor" width="20" height="26" viewBox="0 0 30 38"><path d="M3 2v29l7-8 6 12 5-3-6-11 11-1z" fill="#EDEAE4" stroke="#100F14" stroke-width="2"/></svg>
+      </div>
+    </div>
   </div>
-  <div id="step-summary" class="caption clip" data-start="1.6" data-duration="7" data-track-index="2"><span>Summarize the page</span></div>
-  <div id="step-bullets" class="caption clip" data-start="8.6" data-duration="5" data-track-index="2"><span>Switch to bullets</span></div>
-  <div id="step-question" class="caption clip" data-start="13.6" data-duration="9.3" data-track-index="2"><span>Ask a follow-up</span></div>
-  <div id="step-source" class="caption clip" data-start="22.9" data-duration="3.1" data-track-index="2"><span>Jump to the source</span></div>
-  <div id="step-selection" class="caption clip" data-start="26" data-duration="10.6" data-track-index="2"><span>Summarize a highlight</span></div>
-  <div id="pointer-layer" class="pointer-layer" aria-hidden="true">
-    <svg id="cursor" class="demo-cursor" width="30" height="38" viewBox="0 0 30 38"><path d="M3 2v29l7-8 6 12 5-3-6-11 11-1z" fill="#EDEAE4" stroke="#100F14" stroke-width="2"/></svg>
-  </div>
-  <div id="focus-answer" class="focus-camera"><div class="focus-source" data-layout-allow-overflow><video id="usage-answer" class="focus-video clip" src="generated/usage.mp4" data-start="17" data-duration="5.4" data-media-start="15.4" data-track-index="3" muted playsinline></video></div></div>
-  <div id="focus-selection" class="focus-camera"><div class="focus-source" data-layout-allow-overflow><video id="usage-selection" class="focus-video clip" src="generated/usage.mp4" data-start="30.5" data-duration="4.95" data-media-start="28.9" data-track-index="4" muted playsinline></video></div></div>
-  <section id="outro" class="clip" data-start="36.6" data-duration="3.4" data-track-index="5">
-    <article class="outro-inner"><img src="assets/icon-128.png" width="74" height="74" alt=""><h1>Eternal Summary</h1><p>Add to Chrome</p></article>
+  <section id="outro" class="clip" data-start="24.6" data-duration="3.4" data-track-index="5">
+    <article class="outro-inner"><img src="assets/icon-128.png" width="100" height="100" alt=""><h1>Eternal Summary.</h1><p>Add to Chrome.</p></article>
   </section>
-  <audio id="interaction-sfx" src="generated/sfx.wav" data-start="0" data-duration="40" data-track-index="10" data-volume="1"></audio>
+  <audio id="interaction-sfx" src="generated/sfx.wav" data-start="0" data-duration="28" data-track-index="10" data-volume="1"></audio>
 </main>
 <script>
 const tl=gsap.timeline({paused:true});
-// Magnify whole text blocks over the unchanged browser view. Each lens uses
-// the same source time and cursor coordinates. Its crop ends in UI padding,
-// so nearby article lines never get cut by a full-frame camera crop.
-const cameras=[
-  {id:'answer',box:[690,116,430,458],origin:'100% 100%'},
-  {id:'selection',box:[240,269,400,331],origin:'50% 100%'},
-];
-const footageScale=1728/1120;
-for(const camera of cameras){
-  const [x,y,w,h]=camera.box;
-  const left=97+x*footageScale,top=99+y*footageScale;
-  const lens=document.getElementById(`focus-${camera.id}`);
-  Object.assign(lens.style,{left:`${left}px`,top:`${top}px`,width:`${w*footageScale}px`,height:`${h*footageScale}px`,transformOrigin:camera.origin});
-  const source=lens.firstElementChild;source.style.left=`${-left}px`;source.style.top=`${-top}px`;
-  const pointer=document.getElementById('pointer-layer').cloneNode(true);pointer.removeAttribute('id');pointer.querySelector('svg').removeAttribute('id');
-  source.append(pointer);
-}
-tl.set('#focus-answer',{opacity:1},17);
-tl.fromTo('#focus-answer',{scale:1},{scale:1.25,duration:.8,ease:'sine.inOut'},17);
-tl.to('#focus-answer',{scale:1,duration:.7,ease:'sine.inOut'},21.7);
-tl.set('#focus-answer',{opacity:0},22.4);
-tl.set('#focus-selection',{opacity:1},30.5);
-tl.fromTo('#focus-selection',{scale:1},{scale:1.3,duration:.8,ease:'sine.inOut'},30.5);
-tl.to('#focus-selection',{scale:1,duration:.85,ease:'sine.inOut'},34.6);
-tl.set('#focus-selection',{opacity:0},35.45);
-tl.to('#hook',{opacity:0,duration:.18,ease:'sine.in'},1.42);
-// Small labels stay out of the footage.
+// One camera transforms the entire browser, footage and pointer together.
+// Coordinates are CSS source pixels. Captions occupy their own fixed band.
+const wide={scale:1.255,x:209.2,y:0};
+const summary={scale:3.15,x:1824-1120*3.15,y:-770};
+const input={scale:3.25,x:1824-1120*3.25,y:828-660*3.25};
+const answer={scale:3.25,x:1824-1120*3.25,y:-960};
+const source={scale:1.65,x:-24,y:-180};
+const passage={scale:2.5,x:62,y:-453.5};
+const paragraph={scale:2.1,x:-264,y:-160};
+const selection={scale:3.25,x:-518,y:-951.75};
+tl.fromTo('#camera',wide,{...summary,duration:1.05,ease:'power2.inOut'},.2);
+tl.to('#camera',{...input,duration:.5,ease:'sine.inOut'},4.5);
+tl.to('#camera',{...answer,duration:.65,ease:'sine.inOut'},6.6);
+tl.to('#camera',{...source,duration:.6,ease:'sine.inOut'},13.9);
+tl.to('#camera',{...passage,duration:.5,ease:'sine.inOut'},15.3);
+tl.to('#camera',{...paragraph,duration:.55,ease:'sine.inOut'},17.6);
+tl.to('#camera',{...selection,duration:.65,ease:'sine.inOut'},19.2);
 document.querySelectorAll('.caption').forEach(c=>{
-  const at=Number(c.dataset.start);
-  tl.fromTo(c.firstElementChild,{y:7,opacity:0},{y:0,opacity:1,duration:.25,ease:'power2.out'},at);
+  tl.fromTo(c.firstElementChild,{y:10,opacity:0},{y:0,opacity:1,duration:.2,ease:'power2.out'},Number(c.dataset.start));
 });
-const map=p=>({x:97+p.x*(1728/1120),y:99+p.y*(972/630)});
-let previous={x:860,y:620}, previousAt=0;
-for(const [index,action] of window.demoActions.entries()){
-  if(action.x===undefined || action.type==='key' || action.type==='mouseup')continue;
-  const target=map(action), at=action.time+1.6;
-  const dragging=action.type==='selection';
-  const duration=dragging?1/30:Math.min(.65,Math.max(.12,at-previousAt));
-  tl.fromTo('.demo-cursor',previous,{...target,duration,ease:dragging?'none':'power2.inOut',immediateRender:false},Math.max(0,at-duration));
+const map=p=>({x:p.x,y:30+p.y});
+let previous={x:500,y:405},previousAt=0;
+for(const action of window.demoActions){
+  if(action.x===undefined||action.type==='key'||action.type==='mouseup')continue;
+  const target=map(action),at=action.time,dragging=action.type==='selection';
+  const duration=dragging?1/30:Math.min(.4,Math.max(.1,at-previousAt));
+  tl.fromTo('#cursor',previous,{...target,duration,ease:dragging?'none':'power2.inOut',immediateRender:false},Math.max(0,at-duration));
   previous=target;previousAt=at;
-  if(action.type==='click' || action.type==='mousedown'){
-    for(const layer of document.querySelectorAll('.pointer-layer')){
-      const ring=document.createElement('div');ring.className='click-ring';ring.style.left=`${target.x-22}px`;ring.style.top=`${target.y-22}px`;layer.append(ring);
-      tl.fromTo(ring,{scale:.25,opacity:0},{scale:.45,opacity:.65,duration:.05,ease:'power1.out'},at);
-      tl.to(ring,{scale:1.3,opacity:0,duration:.36,ease:'power2.out'},at+.05);
-    }
-    tl.to('.demo-cursor',{scale:.86,duration:.07,ease:'power1.in'},at);
-    tl.to('.demo-cursor',{scale:1,duration:.14,ease:'power2.out'},at+.07);
+  if(action.type==='click'||action.type==='mousedown'){
+    const ring=document.createElement('div');ring.className='click-ring';ring.style.left=`${target.x-12}px`;ring.style.top=`${target.y-12}px`;document.getElementById('pointer-layer').append(ring);
+    tl.fromTo(ring,{scale:.25,opacity:0},{scale:.45,opacity:.65,duration:.05,ease:'power1.out'},at);
+    tl.to(ring,{scale:1.3,opacity:0,duration:.36,ease:'power2.out'},at+.05);
+    tl.to('#cursor',{scale:.86,duration:.07,ease:'power1.in'},at);
+    tl.to('#cursor',{scale:1,duration:.14,ease:'power2.out'},at+.07);
   }
 }
-tl.to('.demo-cursor',{opacity:0,duration:.2},35.9);
-tl.fromTo('.outro-inner',{y:14,opacity:0},{y:0,opacity:1,duration:.5,ease:'power3.out'},36.6);
+tl.to('#cursor',{opacity:0,duration:.2},23.9);
+tl.fromTo('.outro-inner',{y:14,opacity:0},{y:0,opacity:1,duration:.4,ease:'power3.out'},24.6);
 window.__timelines['eternal-demo']=tl;
 </script>
 </body>

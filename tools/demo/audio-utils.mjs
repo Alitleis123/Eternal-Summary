@@ -2,14 +2,14 @@ import { spawnSync } from "node:child_process";
 import { writeFile } from "node:fs/promises";
 
 export const RATE = 48000;
-export const DURATION = 40;
+export const DURATION = 28;
 export const ffmpeg = process.env.FFMPEG_PATH || "ffmpeg";
 export const ffprobe = process.env.FFPROBE_PATH || "ffprobe";
 export const db = value => 20 * Math.log10(Math.max(1e-12, value));
 export const amp = value => 10 ** (value / 20);
 export const peak = samples => samples.reduce((p, s) => Math.max(p, Math.abs(s)), 0);
 export function run(args, options = {}) {
-  const r = spawnSync(ffmpeg, ["-hide_banner", "-nostdin", ...args], {
+  const r = spawnSync(ffmpeg, ["-hide_banner", "-nostdin", "-threads", "2", "-filter_threads", "2", "-filter_complex_threads", "2", ...args], {
     maxBuffer: 100 * 1024 * 1024, windowsHide: true, ...options,
   });
   if (r.error) throw r.error;
