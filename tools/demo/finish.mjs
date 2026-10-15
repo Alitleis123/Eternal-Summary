@@ -17,9 +17,12 @@ const run = (args) => {
   if (result.error) throw result.error;
   if (result.status !== 0) throw new Error(`ffmpeg exited ${result.status}`);
 };
-run(["-ss", "4.6", "-i", input, "-frames:v", "1", "-q:v", "2", "-update", "1", poster]);
+// The render is 4K so Hyperframes keeps the 3x footage's detail. Lanczos
+// brings it to 1080p, which also sharpens captions and the drawn toolbar.
+const toHd = "scale=1920:1080:flags=lanczos";
+run(["-ss", "4.6", "-i", input, "-frames:v", "1", "-vf", toHd, "-q:v", "2", "-update", "1", poster]);
 run([
   "-i", input,
-  "-map", "0:v:0", "-map", "0:a:0", "-c:v", "libx264", "-crf", "20", "-preset", "slow",
+  "-map", "0:v:0", "-map", "0:a:0", "-vf", toHd, "-c:v", "libx264", "-crf", "16", "-preset", "slow",
   "-threads", "2", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "256k", "-movflags", "+faststart", output,
 ]);

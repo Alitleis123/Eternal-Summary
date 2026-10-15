@@ -32,7 +32,7 @@ Run from the repository root. The same commands appear in `index.html`.
 node tools/demo/record.mjs
 node tools/demo/build.mjs
 npx hyperframes@0.8.159 check tools/demo
-npx hyperframes@0.8.159 render tools/demo --fps 30 --quality delivery --workers 2 --output brag-output/demo-raw.mp4
+npx hyperframes@0.8.159 render tools/demo --fps 30 --resolution landscape-4k --video-frame-format png --crf 10 --workers 2 --output brag-output/demo-raw.mp4
 node tools/demo/finish.mjs brag-output/demo-raw.mp4
 node tools/demo/mix.mjs
 node tools/demo/review.mjs
@@ -73,12 +73,20 @@ optional arguments. `review.mjs` takes a review directory.
    intermediate keeps chroma detail at CRF 15. `generated/` holds the
    footage, a few stills, `action-log.json` and `frame-audit.json`.
 7. `build.mjs` writes the action schedule and the SFX WAV from the action
-   log, and copies the footage to `usage-soft.mp4` for the focus layer.
+   log. It also writes `usage-soft.mp4`, a 1680 by 946 copy of the footage
+   for the focus layer, which is only ever seen blurred and dimmed.
 8. Hyperframes owns media playback. One paused GSAP timeline controls the
-   camera, focus, toolbar, captions, pointer, rings and outro.
+   camera, focus, toolbar, captions, pointer, rings and outro. The render
+   runs at 4K, which is Chrome at device scale 2, with PNG frame extraction
+   and CRF 10. Hyperframes extracts video frames at the output size, so a
+   1080p render shrank the 3360 pixel footage to 1920 before the camera
+   zoomed in 3.1 times. Text came out about 1.8 times upscaled and soft. At
+   4K the extracted frames keep the source detail.
 9. `finish.mjs` takes the settled summary at 4.6 seconds for
-   `docs/shots/demo-poster.jpg`, then encodes `docs/demo.mp4` as H.264
-   yuv420p at CRF 20 with AAC and faststart.
+   `docs/shots/demo-poster.jpg`, then scales the 4K render to 1080p with
+   Lanczos and encodes `docs/demo.mp4` once as H.264 yuv420p at CRF 16,
+   preset slow, with AAC and faststart. Round 6 first shipped at CRF 20
+   from a 2.6 Mbps render, about 1.1 Mbps after two lossy passes.
 10. `mix.mjs` builds the music and SFX mix, replaces the audio with AAC at
     256 kbps, and copies the H.264 stream. It checks the video hash,
     loudness, true peak, size, atom order and keystroke timing before it
@@ -215,14 +223,17 @@ limiter keeps 192 kHz oversampling, 5 ms attack, 80 ms release and no
 makeup gain. All 22 keystroke cues match the action log with zero timing
 error and no immediate sample repeats.
 
-The delivered file is 4,496,815 bytes, 26.4 seconds and 792 frames,
-1920 by 1080 at 30 fps, H.264 yuv420p. Audio is AAC stereo at 48 kHz,
-about 262 kbps. `moov` comes before `mdat`. The video stream SHA256 is
-`7293d9cf4bc2e575524548f32bb73bcc42d0864cca772a2ce24661e7f3e3bedc`, the
+The delivered file is 7,037,300 bytes, 26.4 seconds and 792 frames,
+1920 by 1080 at 30 fps, H.264 yuv420p. Video averages about 1.86 Mbps and
+the 4K master about 12.2 Mbps. Audio is AAC stereo at 48 kHz, about
+262 kbps. `moov` comes before `mdat`. The video stream SHA256 is
+`2a17e2388c876b4e003ee6efdd3b40139652d44d229b44e78410091f5de06c4c`, the
 same before and after the audio mix.
 
-The recording took under two minutes. The Hyperframes render took about
-1 minute 50 seconds with two workers on the VM's GPU. `hyperframes check`
+The recording took under two minutes. The 4K Hyperframes render took
+about 3 minutes 30 seconds with two workers on the VM's GPU. A crop of the
+summary text at 5 seconds now matches the raw 3x capture's sharpness. The
+1080p render path was visibly softer at the same frame. `hyperframes check`
 passes with zero runtime, layout, motion and contrast findings. Two
 non-blocking lint warnings suggest sub-compositions for the toolbar and
 outro. All 70 repo tests pass, along with `npm run check`, syntax checks

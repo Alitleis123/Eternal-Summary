@@ -6,7 +6,7 @@
     node tools/demo/record.mjs
     node tools/demo/build.mjs
     npx hyperframes@0.8.159 check tools/demo
-    npx hyperframes@0.8.159 render tools/demo --fps 30 --quality delivery --workers 2 --output brag-output/demo-raw.mp4
+    npx hyperframes@0.8.159 render tools/demo --fps 30 --resolution landscape-4k --video-frame-format png --crf 10 --workers 2 --output brag-output/demo-raw.mp4
     node tools/demo/finish.mjs brag-output/demo-raw.mp4
     node tools/demo/mix.mjs
     node tools/demo/review.mjs

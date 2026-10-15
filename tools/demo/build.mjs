@@ -1,10 +1,10 @@
 ﻿// Cursor schedule and deterministic SFX from the recorded action log.
 // node tools/demo/build.mjs
 // Then node tools/demo/mix.mjs to replace audio without re-encoding picture.
-import { readFile, writeFile, mkdir, copyFile } from "node:fs/promises";
+import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
-import { decode, RATE, DURATION, amp, db, peak, random, wav } from "./audio-utils.mjs";
+import { decode, RATE, DURATION, amp, db, peak, random, wav, run } from "./audio-utils.mjs";
 
 const DIR = fileURLToPath(new URL(".", import.meta.url));
 const OUT = resolve(DIR, "generated");
@@ -12,8 +12,10 @@ await mkdir(OUT, { recursive: true });
 const log = JSON.parse(await readFile(resolve(OUT, "action-log.json"), "utf8"));
 await writeFile(resolve(OUT, "actions.js"), `window.demoActions = ${JSON.stringify(log.actions)};\n`);
 // The focus blur filters its own copy of the footage. A separate file keeps
-// Hyperframes from discovering one video twice.
-await copyFile(resolve(OUT, "usage.mp4"), resolve(OUT, "usage-soft.mp4"));
+// Hyperframes from discovering one video twice. It is only ever seen
+// blurred and dimmed, so half resolution keeps PNG frame extraction light.
+run(["-v", "error", "-y", "-i", resolve(OUT, "usage.mp4"), "-vf", "scale=1680:946:flags=lanczos",
+  "-c:v", "libx264", "-crf", "16", "-preset", "fast", "-pix_fmt", "yuv420p", "-an", resolve(OUT, "usage-soft.mp4")]);
 const rng = random(0x45534b34);
 const keyName = n => `keypress-${String(n).padStart(3, "0")}.wav`;
 // All 32 were measured. These pass centroid < 2850 Hz, noise floor < -61
