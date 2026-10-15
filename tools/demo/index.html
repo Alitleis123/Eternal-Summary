@@ -47,21 +47,33 @@
 const tl=gsap.timeline({paused:true});
 // One camera transforms the entire browser, footage and pointer together.
 // Coordinates are CSS source pixels. Captions occupy their own fixed band.
+// A centered aperture follows the panel or card borders without scaling text.
+const fullWindow='inset(0px 0px 0px 0px round 12px)';
+const panelWindow=scale=>{
+  const inset=(1824-430*scale)/2;
+  return `inset(0px ${inset}px 0px ${inset}px round 12px)`;
+};
+const cardWindow='inset(20px 262px 0px 262px round 36px)';
+const panelX=scale=>912-905*scale;
 const wide={scale:1.255,x:209.2,y:0};
-const summary={scale:3.15,x:1824-1120*3.15,y:-770};
-const input={scale:3.25,x:1824-1120*3.25,y:828-660*3.25};
-const answer={scale:3.25,x:1824-1120*3.25,y:-960};
+const summary={scale:3.15,x:panelX(3.15),y:-770};
+const input={scale:3.25,x:panelX(3.25),y:828-660*3.25};
+const answer={scale:3.25,x:panelX(3.25),y:-960};
 const source={scale:1.65,x:-24,y:-180};
 const passage={scale:2.5,x:62,y:-453.5};
 const paragraph={scale:2.1,x:-264,y:-160};
 const selection={scale:3.25,x:-518,y:-951.75};
 tl.fromTo('#camera',wide,{...summary,duration:1.05,ease:'power2.inOut'},.2);
+tl.fromTo('#viewport',{clipPath:fullWindow},{clipPath:panelWindow(3.15),duration:1.05,ease:'power2.inOut'},.2);
 tl.to('#camera',{...input,duration:.5,ease:'sine.inOut'},4.5);
+tl.to('#viewport',{clipPath:panelWindow(3.25),duration:.5,ease:'sine.inOut'},4.5);
 tl.to('#camera',{...answer,duration:.65,ease:'sine.inOut'},6.6);
 tl.to('#camera',{...source,duration:.6,ease:'sine.inOut'},13.9);
+tl.to('#viewport',{clipPath:fullWindow,duration:.6,ease:'sine.inOut'},13.9);
 tl.to('#camera',{...passage,duration:.5,ease:'sine.inOut'},15.3);
 tl.to('#camera',{...paragraph,duration:.55,ease:'sine.inOut'},17.6);
 tl.to('#camera',{...selection,duration:.65,ease:'sine.inOut'},19.2);
+tl.to('#viewport',{clipPath:cardWindow,duration:.65,ease:'sine.inOut'},19.2);
 document.querySelectorAll('.caption').forEach(c=>{
   tl.fromTo(c.firstElementChild,{y:10,opacity:0},{y:0,opacity:1,duration:.2,ease:'power2.out'},Number(c.dataset.start));
 });

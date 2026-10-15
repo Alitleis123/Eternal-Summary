@@ -98,17 +98,37 @@ exceeds 0.3 seconds per word and the 1.5 second minimum.
 
 ## Camera and sharpness
 
-The UI sits in a clipped 1824 by 828 viewport at output position 48,204.
+The UI sits inside an 1824 by 828 viewport at output position 48,204.
+A rounded clip mask changes the visible window width with the camera.
+Panel holds show only the panel, centered horizontally on the dark frame.
+The summary window is 1354.5 pixels wide. The input and answer windows are
+1397.5 pixels wide. Their edges follow the source panel's borders at CSS
+x 690 and 1120. No article is visible beside the panel during these holds.
+
+The selection result uses a centered 1300 pixel wide window aligned to the
+card's CSS borders at x 240 and 640. Its top clips 20 pixels below the
+viewport top, at the card's top border. Its 36 pixel rounded corners match
+the scaled card corners and remove the article behind them. Other windows
+keep the existing 12 pixel corner radius, defined by `--window-radius`.
+
+The mask narrows from 0.2 to 1.25 seconds, follows the scale change from
+4.5 to 5, and widens again from 13.9 to 14.5 for the source jump. It stays
+wide through the highlighted passage and paragraph selection, then narrows
+to the card from 19.2 to 19.85. Mask and camera use the same easing and
+time windows. Article fragments can pass through while the camera moves;
+the panel and card holds contain only their own UI.
+
 One wrapper contains the entire source frame, a 30 pixel browser toolbar,
 pointer and click rings. Its transform origin is 0,0. All camera coordinates
-below are relative to that viewport, measured in source CSS pixels before
-scaling. The same source media plays throughout, without retiming or lenses.
+below are relative to the fixed viewport, measured in source CSS pixels
+before scaling. Source media, text scale, captions, action times and audio
+are unchanged by the crop correction.
 
 | Move | Time | Final scale and position |
 | --- | --- | --- |
-| Article to summary | 0.2 to 1.25 | Scale 3.15, x -1704, y -770 |
-| Follow-up input | 4.5 to 5 | Scale 3.25, x -1816, y -1317 |
-| Question and answer | 6.6 to 7.25 | Scale 3.25, x -1816, y -960 |
+| Article to summary | 0.2 to 1.25 | Scale 3.15, x -1938.75, y -770 |
+| Follow-up input | 4.5 to 5 | Scale 3.25, x -2029.25, y -1317 |
+| Question and answer | 6.6 to 7.25 | Scale 3.25, x -2029.25, y -960 |
 | Article and source | 13.9 to 14.5 | Scale 1.65, x -24, y -180 |
 | Highlighted source passage | 15.3 to 15.8 | Scale 2.5, x 62, y -453.5 |
 | Paragraph selection | 17.6 to 18.15 | Scale 2.1, x -264, y -160 |
@@ -211,15 +231,18 @@ stays below the required -1.5 dBTP limit. All 22 keystroke cue timestamps
 match the action log exactly, with zero timing error and zero immediate
 sample repeats. Eight keyboard samples appear in the new cut.
 
-The delivered file is 5,347,138 bytes, 28.000 seconds, 840 frames,
+The delivered file is 5,189,441 bytes, 28.000 seconds, 840 frames,
 1920 by 1080, 30 fps, H.264 yuv420p. Audio is AAC, stereo, 48 kHz,
-encoded at 256 kbps. `moov` starts at byte 32, before `mdat` at 31728.
+encoded at 256 kbps. `moov` starts at byte 32, before `mdat` at 31784.
 The video stream SHA256 is
-`6c0e0242b2ee2cec4d474d97235a30d55fabc32fb01020613469fd8bdc3bfaea`.
+`8a545227b44f04cd095e3759fb2ead635a500f7c7354f909caa2add272658628`.
 It is identical before and after the audio mix.
+The AAC stream SHA256 is
+`197c44fe9c30b41205e608047ebfbcad77c8a51ee0c14d2c47322076d98343ff`.
+It matches the approved audio in commit `2355dfe` exactly.
 
 The final Hyperframes render used screenshot capture with the VM's hardware
-GPU and completed in 1 minute 53.4 seconds. Lint and check pass. The check
+GPU and completed in 2 minutes 33.0 seconds. Lint and check pass. The check
 has zero runtime, layout and contrast findings. Two non-blocking structural
 warnings suggest sub-compositions for the toolbar and outro. The keyframe
 diagnostic and camera proof are retained in the review directory. All 70
@@ -227,7 +250,8 @@ repo tests pass, along with `npm run check` and syntax checks on the demo
 scripts. `git diff --check` passes.
 
 The final contact sheets were viewed. At 390 pixels wide, the captions,
-summary, question, answer and selection result are readable. The source
+summary, question, answer and selection result are readable. Panel and card
+holds contain no article fragments. The source
 sequence first shows the page scroll with its source button visible, then
 moves into the highlighted passage. The sheets sample frames 0, 45, 90
 and every following 45th frame through frame 810, with timestamps.

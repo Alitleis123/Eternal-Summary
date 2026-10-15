@@ -2,10 +2,10 @@
 * {box-sizing:border-box;}
 html,body {margin:0;width:1920px;height:1080px;overflow:hidden;}
 body {background:#100F14;color:#EDEAE4;font-family:system-ui,sans-serif;}
-#root {position:relative;width:100%;height:100%;overflow:hidden;background:#100F14;}
+#root {--window-radius:12px;position:relative;width:100%;height:100%;overflow:hidden;background:#100F14;}
 .caption {position:absolute;left:48px;top:48px;width:1824px;height:124px;display:flex;align-items:center;font:400 76px/1.08 "Newsreader",serif;color:#EDEAE4;}
 .caption span {display:block;}
-#viewport {position:absolute;left:48px;top:204px;width:1824px;height:828px;overflow:hidden;border-radius:12px;background:#17161B;}
+#viewport {position:absolute;left:48px;top:204px;width:1824px;height:828px;overflow:hidden;border-radius:var(--window-radius);background:#17161B;}
 #camera {position:absolute;left:0;top:0;width:1120px;height:660px;transform-origin:0 0;will-change:transform;}
 .toolbar {position:absolute;left:0;top:0;width:1120px;height:30px;display:flex;align-items:center;padding:0 18px;background:#27242D;color:#EDEAE4;border-bottom:1px solid #48434F;}
 .page-title {font-size:13px;line-height:1.2;}
