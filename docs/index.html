@@ -343,11 +343,20 @@ h1 em {
   background: var(--raise);
 }
 .shots figcaption { color: var(--faint); font-size: 0.89rem; line-height: 1.5; }
-.demo-video { width: 100%; border-radius: 11px; border: 1px solid var(--line); display: block; }
+.demo-video {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  margin-top: 3rem;
+  border-radius: 11px;
+  border: 1px solid var(--line);
+  background: var(--raise);
+  display: block;
+}
+.demo-video + .shots { margin-top: 2rem; }
 
 /* ============ install ============ */
 .install { margin-top: 3rem; display: grid; grid-template-columns: 1fr 1fr; gap: 0 4rem; counter-reset: step; }
-.install li { list-style: none; padding: 1.7rem 0; border-top: 1px solid var(--line-dim); }
+.install li { min-width: 0; list-style: none; padding: 1.7rem 0; border-top: 1px solid var(--line-dim); }
 @media (max-width: 760px) { .install { grid-template-columns: 1fr; } }
 .install h3 {
   font-size: 1.02rem;
@@ -550,9 +559,8 @@ footer { border-top: 1px solid var(--line-dim); padding: 3rem 0 4rem; }
     <h2>Beside the article, never over it.</h2>
     <p class="lede">The page is inset by the width of the panel rather than covered, which is why jumping to a source can scroll the article without closing anything.</p>
 
-    <!-- Drop a demo.mp4 next to this file and it replaces the gallery below.
-         The script targets this element, not the section, so the heading above
-         survives the swap. -->
+    <video class="demo-video" src="demo.mp4" poster="shots/demo-poster.jpg" controls playsinline preload="metadata" aria-label="Eternal Summary in use: opening a page summary, switching to bullets, typing a follow-up, jumping to a source, and summarizing a highlight, with sound effects"></video>
+
     <div class="shots" id="gallery">
       <figure>
         <img src="shots/panel.png" alt="The panel open beside an article, showing a summary with numbered sources" loading="lazy">
@@ -681,19 +689,6 @@ footer { border-top: 1px solid var(--line-dim); padding: 3rem 0 4rem; }
 </footer>
 
 <script>
-// Prefer a recorded demo when demo.mp4 is present. This replaces the gallery
-// only, which is why it targets #gallery rather than the section: the old page
-// shared one id between the two and wiped out the heading with it.
-fetch("demo.mp4", { method: "HEAD" })
-  .then((res) => {
-    if (!res.ok) return;
-    const host = document.getElementById("gallery");
-    host.classList.remove("shots");
-    host.innerHTML =
-      '<video class="demo-video" src="demo.mp4" controls playsinline preload="metadata" poster="shots/panel.png"></video>';
-  })
-  .catch(() => {});
-
 // Copy the clone line.
 for (const btn of document.querySelectorAll(".copy")) {
   btn.addEventListener("click", async () => {

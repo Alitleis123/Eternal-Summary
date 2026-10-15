@@ -25,3 +25,8 @@ test/.profile/
 
 # Chrome Web Store upload package
 eternal-summary-*.zip
+
+# Demo video working files
+brag-output/
+tools/demo/generated/
+tools/demo/.hyperframes/
