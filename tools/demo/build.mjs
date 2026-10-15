@@ -1,7 +1,7 @@
 ﻿// Cursor schedule and deterministic SFX from the recorded action log.
 // node tools/demo/build.mjs
 // Then node tools/demo/mix.mjs to replace audio without re-encoding picture.
-import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { readFile, writeFile, mkdir, copyFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
 import { decode, RATE, DURATION, amp, db, peak, random, wav } from "./audio-utils.mjs";
@@ -11,6 +11,9 @@ const OUT = resolve(DIR, "generated");
 await mkdir(OUT, { recursive: true });
 const log = JSON.parse(await readFile(resolve(OUT, "action-log.json"), "utf8"));
 await writeFile(resolve(OUT, "actions.js"), `window.demoActions = ${JSON.stringify(log.actions)};\n`);
+// The focus blur filters its own copy of the footage. A separate file keeps
+// Hyperframes from discovering one video twice.
+await copyFile(resolve(OUT, "usage.mp4"), resolve(OUT, "usage-soft.mp4"));
 const rng = random(0x45534b34);
 const keyName = n => `keypress-${String(n).padStart(3, "0")}.wav`;
 // All 32 were measured. These pass centroid < 2850 Hz, noise floor < -61
@@ -75,7 +78,7 @@ for (const action of log.actions) {
   } else if (action.type === "click") {
     const mode = target === "Bullets", source = target === "Answer source 1", toolbar = target === "Extension toolbar icon";
     place(mode ? "switch_007.ogg" : source ? "click_005.ogg" : toolbar ? "click_003.ogg" : "click_002.ogg",
-      mode ? "mode" : source ? "source" : toolbar ? "toolbar" : "click", time, target, toolbar ? -5.5 : -8);
+      mode ? "mode" : source ? "source" : toolbar ? "toolbar" : "click", time, target, toolbar ? -6.5 : -8);
   } else if (action.type === "mousedown") {
     place("click_002.ogg", "selection", time, target, -11);
   } else if (action.type === "accent") {

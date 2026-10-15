@@ -13,7 +13,7 @@ import { RATE, DURATION, amp, db, peak, run, decode, wav, measure, ffprobe } fro
 const DIR = fileURLToPath(new URL(".", import.meta.url));
 const root = resolve(DIR, "../.."), generated = resolve(DIR, "generated");
 const input = resolve(process.argv[2] || join(root, "docs/demo.mp4"));
-const out = resolve(process.argv[3] || join(tmpdir(), "es-demo-review-5"));
+const out = resolve(process.argv[3] || join(tmpdir(), "es-demo-review-6"));
 const assets = process.env.BRAG_ASSETS || join(homedir(), ".codex/skills/brag/assets");
 await mkdir(out, { recursive: true });
 const inputHash = videoHash(input);
@@ -21,12 +21,24 @@ const cues = JSON.parse(await readFile(join(generated, "sfx-cues.json"), "utf8")
 const clickCues = cues.filter(c => ["toolbar", "mode", "source", "click"].includes(c.type));
 const sfx = decode(join(generated, "sfx.wav"), [], 2);
 const log = JSON.parse(await readFile(join(generated, "action-log.json"), "utf8"));
-const toolbarTime = log.actions.find(a => a.target === "Extension toolbar icon").time + log.offset;
-await copyFile(join(generated, "sfx.wav"), join(out, "sfx-stem.wav"));
-const summary = { videoStreamSha256Before: inputHash, musicStemTargetLufs: -22.04,
-  previousMusicStemLufs: -16.04, requestedMusicReductionDb: 6,
+const clickAt = target => log.actions.find(a => a.type === "click" && a.target === target).time + log.offset;
+const toolbarTime = clickAt("Extension toolbar icon");
+// Music and SFX keep the balance approved in round 5, where music sat 6 LU
+// under the original. Both rise together by MIX_GAIN_DB so phones play it
+// at a normal level. The outro starts where the footage hands over.
+const MIX_GAIN_DB = 2, OUTRO = 22.35;
+// The SFX stem as it sits in the mix, after the shared gain.
+const sfxMix = Float32Array.from(sfx, v => v * amp(MIX_GAIN_DB));
+await wav(join(out, "sfx-stem.wav"), sfxMix);
+const keyTimes = log.actions.filter(a => a.type === "key").map(a => a.time + log.offset);
+const typing = ["-ss", (keyTimes[0] - .1).toFixed(3), "-t", (keyTimes.at(-1) - keyTimes[0] + .3).toFixed(3)];
+const summary = { videoStreamSha256Before: inputHash, musicStemTargetLufs: -22.04 + MIX_GAIN_DB,
+  previousMusicStemLufs: -22.04, sfxGainDb: MIX_GAIN_DB, outroStart: OUTRO,
   safetyLimiter: { ceilingDb: -2.2, oversampleHz: 192000, attackMs: 5, releaseMs: 80 },
-  ducking: { depthDb: 5, clickDepthDb: 3, shape: "cosine, in dB", ranges: [[4.8, 5.2, 13.9, 14.5], [19.2, 19.85, 23.9, 24.6]] },
+  // Typing through the answer, then the selection card through the outro.
+  ducking: { depthDb: 5, clickDepthDb: 3, shape: "cosine, in dB", ranges: [
+    [clickAt("Follow-up input") - .3, clickAt("Follow-up input"), clickAt("Answer source 1") - .5, clickAt("Answer source 1")],
+    [clickAt("Summarize selection") - .3, clickAt("Summarize selection"), OUTRO - .4, OUTRO]] },
   stems: { sfx: measure(join(out, "sfx-stem.wav")) }, variants: [] };
 summary.stems.sfx.meters = await meters(join(out, "sfx-stem.wav"), "sfx-stem");
 
@@ -84,7 +96,7 @@ for (const variant of [
       "acompressor=threshold=0.1:ratio=3:attack=0.1:release=100:knee=2:detection=peak:link=maximum"], 2, ["-ss", String(variant.start)]);
     for (let i = 0; i < music.length; i += 2) {
       const t = i / 2 / RATE;
-      const envelope = duck(t) * smooth(t / .08) * (1 - smooth((t - 24.6) / 3.4));
+      const envelope = duck(t) * smooth(t / .08) * (1 - smooth((t - OUTRO) / (DURATION - OUTRO)));
       music[i] *= envelope; music[i + 1] *= envelope;
     }
     await wav(join(out, `music-${variant.id}-raw.wav`), music);
@@ -100,7 +112,7 @@ for (const variant of [
     variant.music = { source, title: `Happy Beats / Business Moves vol. ${variant.volume}`, sourceStart: variant.start,
       sourceEnd: variant.start + DURATION, strongCue: variant.strongCue, toolbarTime, gainDb: musicGain };
   }
-  const premaster = Float32Array.from(sfx, (v, i) => v + music[i]);
+  const premaster = Float32Array.from(sfxMix, (v, i) => v + music[i]);
   const prePath = join(out, `mix-${variant.id}-premaster.wav`), master = join(out, `mix-${variant.id}.wav`);
   await wav(prePath, premaster);
   const preMeasure = measure(prePath);
@@ -153,17 +165,17 @@ const loggedKeys = log.actions.filter(a => a.type === "key");
 if (keys.length !== loggedKeys.length || keys.some((k, i) => Math.abs(k.time - loggedKeys[i].time - log.offset) > 1e-6)) throw new Error("Keystroke timing changed");
 if (keys.some((k, i) => i && k.file === keys[i - 1].file)) throw new Error("Repeated adjacent keyboard sample");
 summary.keystrokeAudit = { count: keys.length, maxTimingErrorSeconds: 0, immediateRepeats: 0, uniqueSamples: new Set(keys.map(k => k.file)).size };
-summary.sfxNote = "Original samples, processing and per-cue gain are unchanged. Shorter duration and fewer cues can change integrated stem LUFS.";
+summary.sfxNote = `Original samples, processing and per-cue gain are unchanged. The stem is raised ${MIX_GAIN_DB} dB with the music, so the balance holds. Per-cue peaks are before that gain.`;
 
 // Standalone scientific images and passage audio for review, outside Git.
 const a = summary.variants[0].path;
 for (const [name, inputPath, extra] of [
-  ["A-full-mix", a, []], ["typing-only", join(out, "sfx-stem.wav"), ["-ss", "5.2", "-t", "1.6"]],
+  ["A-full-mix", a, []], ["typing-only", join(out, "sfx-stem.wav"), typing],
 ]) {
   run(["-v", "error", "-y", ...extra, "-i", inputPath, "-filter_complex", "[0:a]showwavespic=s=1600x400:split_channels=1:colors=0x167d8d|0x507050[v]", "-map", "[v]", "-frames:v", "1", "-update", "1", join(out, `${name}-waveform.png`)]);
   run(["-v", "error", "-y", ...extra, "-i", inputPath, "-filter_complex", "[0:a]showspectrumpic=s=1600x600:legend=1:scale=log:fscale=log:color=viridis[v]", "-map", "[v]", "-frames:v", "1", "-update", "1", join(out, `${name}-spectrogram.png`)]);
 }
-run(["-v", "error", "-y", "-ss", "5.2", "-t", "1.6", "-i", join(out, "sfx-stem.wav"), "-c:a", "pcm_s24le", join(out, "typing-only.wav")]);
+run(["-v", "error", "-y", ...typing, "-i", join(out, "sfx-stem.wav"), "-c:a", "pcm_s24le", join(out, "typing-only.wav")]);
 await writeFile(join(out, "audio-report.json"), JSON.stringify(summary, null, 2) + "\n");
 // Publish only after every variant, stream hash and loudness check passes.
 await copyFile(summary.variants[0].path, join(root, "docs/demo.mp4"));

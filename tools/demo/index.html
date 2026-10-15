@@ -9,10 +9,12 @@
     npx hyperframes@0.8.159 render tools/demo --fps 30 --quality delivery --workers 2 --output brag-output/demo-raw.mp4
     node tools/demo/finish.mjs brag-output/demo-raw.mp4
     node tools/demo/mix.mjs
+    node tools/demo/review.mjs
   Headless capture uses 1120x630 CSS pixels at device scale 3, producing
   3360x1890 source frames through an image pipe. Fixed replies come from
-  tools/shots.mjs. The real extension owns layout and text reveals.
-  generated/ and review artifacts stay outside Git. Only mix A is built.
+  tools/shots.mjs. The real extension owns layout, hover states and text
+  reveals. Camera framing and the focus dim use boxes measured during the
+  recording. generated/ and review artifacts stay outside Git.
 -->
 <html lang="en">
 <head>
@@ -24,77 +26,185 @@
   <script src="generated/actions.js"></script>
 </head>
 <body>
-<main id="root" data-composition-id="eternal-demo" data-duration="28" data-width="1920" data-height="1080">
-  <div id="step-summary" class="caption clip" data-start="0" data-duration="5" data-track-index="2"><span>A long article. A short answer.</span></div>
-  <div id="step-question" class="caption clip" data-start="5" data-duration="8.9" data-track-index="2"><span>Get answers without leaving the page.</span></div>
-  <div id="step-source" class="caption clip" data-start="13.9" data-duration="3.7" data-track-index="2"><span>See exactly where the answer came from.</span></div>
-  <div id="step-selection" class="caption clip" data-start="17.6" data-duration="7" data-track-index="2"><span>Only need one paragraph? Highlight it.</span></div>
+<main id="root" data-composition-id="eternal-demo" data-duration="26.4" data-width="1920" data-height="1080">
+  <div id="step-summary" class="caption clip" data-start="0" data-duration="5.75" data-track-index="2"><span><span class="lead">A long article.</span> A short answer.</span></div>
+  <div id="step-question" class="caption clip" data-start="5.75" data-duration="5.8" data-track-index="2"><span>Get answers without leaving the page.</span></div>
+  <div id="step-source" class="caption clip" data-start="11.55" data-duration="3.85" data-track-index="2"><span>See exactly where the answer came from.</span></div>
+  <div id="step-selection" class="caption clip" data-start="15.4" data-duration="7.3" data-track-index="2"><span><span class="lead">Only need one paragraph?</span> Highlight it.</span></div>
   <div id="viewport">
     <div id="camera" data-layout-allow-overflow>
-      <div id="toolbar" class="toolbar clip" data-start="0" data-duration="24.6" data-track-index="1"><span class="page-title">The lighthouse that outlived its empire</span><img class="extension-icon" src="assets/icon-32.png" alt="Eternal Summary toolbar icon"></div>
-      <video id="usage" class="clip" src="generated/usage.mp4" data-start="0" data-duration="24.6" data-track-index="0" muted playsinline></video>
+      <video id="usage-soft" class="clip" src="generated/usage-soft.mp4" data-start="0" data-duration="22.7" data-track-index="3" muted playsinline aria-hidden="true"></video>
+      <video id="usage" class="clip" src="generated/usage.mp4" data-start="0" data-duration="22.7" data-track-index="0" muted playsinline></video>
+      <div id="toolbar" class="toolbar clip" data-start="0" data-duration="22.7" data-track-index="1" data-layout-allow-overflow>
+        <svg class="tb-icon" style="left:14px" viewBox="0 0 16 16"><path d="M13 8H3M7.5 3.5 3 8l4.5 4.5"/></svg>
+        <svg class="tb-icon" style="left:40px;opacity:.45" viewBox="0 0 16 16"><path d="M3 8h10M8.5 3.5 13 8l-4.5 4.5"/></svg>
+        <svg class="tb-icon" style="left:66px" viewBox="0 0 16 16"><path d="M13 8a5 5 0 1 1-1.5-3.6M13 2.5v3h-3"/></svg>
+        <div class="omnibox"><svg viewBox="0 0 14 14"><path d="M2 4h6M11 4h1M2 10h1M6 10h6"/><circle cx="9.5" cy="4" r="1.6"/><circle cx="4.5" cy="10" r="1.6"/></svg><span class="host">meridian.example</span><span class="path">/the-lighthouse-that-outlived-its-empire</span></div>
+        <div id="ext-hover"></div>
+        <img class="extension-icon" src="assets/icon-32.png" alt="Eternal Summary toolbar icon">
+        <svg class="tb-icon" style="left:1074px;stroke-width:2" viewBox="0 0 24 24"><path d="M20.5 11H19V7a2 2 0 0 0-2-2h-4V3.5a2.5 2.5 0 0 0-5 0V5H4a2 2 0 0 0-2 2v3.8h1.5a2.7 2.7 0 0 1 0 5.4H2V20a2 2 0 0 0 2 2h3.8v-1.5a2.7 2.7 0 0 1 5.4 0V22H17a2 2 0 0 0 2-2v-4h1.5a2.5 2.5 0 0 0 0-5Z"/></svg>
+        <svg class="tb-icon" style="left:1097px;stroke-width:2.4" viewBox="0 0 16 16"><path d="M8 3.2v.1M8 8v.1M8 12.8v.1"/></svg>
+        <div id="tip-anchor"><div id="tooltip">Eternal Summary</div></div>
+      </div>
       <div id="pointer-layer" aria-hidden="true" data-layout-ignore>
         <svg id="cursor" width="20" height="26" viewBox="0 0 30 38"><path d="M3 2v29l7-8 6 12 5-3-6-11 11-1z" fill="#EDEAE4" stroke="#100F14" stroke-width="2"/></svg>
       </div>
     </div>
   </div>
-  <section id="outro" class="clip" data-start="24.6" data-duration="3.4" data-track-index="5">
-    <article class="outro-inner"><img src="assets/icon-128.png" width="100" height="100" alt=""><h1>Eternal Summary.</h1><p>Add to Chrome.</p></article>
+  <section id="outro" class="clip" data-start="22.35" data-duration="4.05" data-track-index="5">
+    <article class="outro-inner">
+      <img src="assets/icon-128.png" width="116" height="116" alt="">
+      <h1>Eternal Summary.</h1>
+      <div class="cta">Add to Chrome</div>
+      <p class="works">Works in Chrome, Brave, Edge and Arc.</p>
+    </article>
   </section>
-  <audio id="interaction-sfx" src="generated/sfx.wav" data-start="0" data-duration="28" data-track-index="10" data-volume="1"></audio>
+  <audio id="interaction-sfx" src="generated/sfx.wav" data-start="0" data-duration="26.4" data-track-index="10" data-volume="1"></audio>
 </main>
 <script>
 const tl=gsap.timeline({paused:true});
-// One camera transforms the entire browser, footage and pointer together.
-// Coordinates are CSS source pixels. Captions occupy their own fixed band.
-// A centered aperture follows the panel or card borders without scaling text.
-const fullWindow='inset(0px 0px 0px 0px round 12px)';
-const panelWindow=scale=>{
-  const inset=(1824-430*scale)/2;
-  return `inset(0px ${inset}px 0px ${inset}px round 12px)`;
+// One camera transforms the browser, footage and pointer together.
+// Coordinates are camera CSS pixels: the page sits 36px below the toolbar.
+const TOP=36,W=1120,H=666,VW=1824,VH=828;
+const acts=window.demoActions;
+const box=name=>{
+  const r=acts.find(a=>a.type==='rect'&&a.target===name);
+  if(!r)throw new Error(`Missing measured box: ${name}`);
+  return {x:r.x,y:r.y+TOP,w:r.w,h:r.h};
 };
-const cardWindow='inset(20px 262px 0px 262px round 36px)';
-const panelX=scale=>912-905*scale;
-const wide={scale:1.255,x:209.2,y:0};
-const summary={scale:3.15,x:panelX(3.15),y:-770};
-const input={scale:3.25,x:panelX(3.25),y:828-660*3.25};
-const answer={scale:3.25,x:panelX(3.25),y:-960};
-const source={scale:1.65,x:-24,y:-180};
-const passage={scale:2.5,x:62,y:-453.5};
-const paragraph={scale:2.1,x:-264,y:-160};
-const selection={scale:3.25,x:-518,y:-951.75};
-tl.fromTo('#camera',wide,{...summary,duration:1.05,ease:'power2.inOut'},.2);
-tl.fromTo('#viewport',{clipPath:fullWindow},{clipPath:panelWindow(3.15),duration:1.05,ease:'power2.inOut'},.2);
-tl.to('#camera',{...input,duration:.5,ease:'sine.inOut'},4.5);
-tl.to('#viewport',{clipPath:panelWindow(3.25),duration:.5,ease:'sine.inOut'},4.5);
-tl.to('#camera',{...answer,duration:.65,ease:'sine.inOut'},6.6);
-tl.to('#camera',{...source,duration:.6,ease:'sine.inOut'},13.9);
-tl.to('#viewport',{clipPath:fullWindow,duration:.6,ease:'sine.inOut'},13.9);
-tl.to('#camera',{...passage,duration:.5,ease:'sine.inOut'},15.3);
-tl.to('#camera',{...paragraph,duration:.55,ease:'sine.inOut'},17.6);
-tl.to('#camera',{...selection,duration:.65,ease:'sine.inOut'},19.2);
-tl.to('#viewport',{clipPath:cardWindow,duration:.65,ease:'sine.inOut'},19.2);
-document.querySelectorAll('.caption').forEach(c=>{
-  tl.fromTo(c.firstElementChild,{y:10,opacity:0},{y:0,opacity:1,duration:.2,ease:'power2.out'},Number(c.dataset.start));
+const union=(...b)=>{
+  const x=Math.min(...b.map(r=>r.x)),y=Math.min(...b.map(r=>r.y));
+  return {x,y,w:Math.max(...b.map(r=>r.x+r.w))-x,h:Math.max(...b.map(r=>r.y+r.h))-y};
+};
+const grow=(b,p)=>({x:b.x-p,y:b.y-p,w:b.w+2*p,h:b.h+2*p});
+const clamp=(v,lo,hi)=>Math.min(hi,Math.max(lo,v));
+// Center a box at scale s. Zoomed shots keep the window filling the frame,
+// so the page beside the panel stays in view like an ordinary camera move.
+const shot=(b,s)=>({scale:s,
+  x:clamp(VW/2-s*(b.x+b.w/2),VW-W*s,0),
+  y:clamp(VH/2-s*(b.y+b.h/2),VH-H*s,0)});
+const fit=(b,padX,padY,max)=>Math.min(VW/(b.w+2*padX),VH/(b.h+2*padY),max);
+
+const icon={x:1056,y:18};
+const panel=box('Panel'),passage=box('Source passage'),paragraph=box('Paragraph');
+const trigger=box('Trigger'),selected=box('Selection'),card=box('Card');
+const answerBox=union(box('Question'),box('Answer'));
+const triggerBox=union(trigger,selected);
+const wide={scale:1.2,x:(VW-W*1.2)/2,y:(VH-H*1.2)/2};
+// The window's top-right corner, with the page background still around it.
+const toIcon={scale:2.3,x:1540-2.3*icon.x,y:250-2.3*icon.y};
+const panelTop={scale:2.35,x:VW-W*2.35,y:-2.35*TOP};
+const summary=shot(box('Summary'),3.1);
+const input=shot(box('Input'),3.1);
+// Tight vertical padding keeps the summary's source row out of the frame.
+const answer=shot(answerBox,fit(answerBox,60,10,3));
+const side={scale:VW/W,x:0,y:VH-H*VW/W};
+const source=shot(passage,fit(passage,40,110,2.6));
+const pick=shot(paragraph,fit(paragraph,110,150,2.4));
+const offer=shot(triggerBox,fit(triggerBox,50,70,3));
+// Frame the card's header and answer. Its empty follow-up box can fall
+// below the frame, so the text reads at phone size.
+const cardText={...card,h:Math.min(card.h,250)};
+const result=shot(cardText,fit(cardText,50,30,3.2));
+tl.set('#camera',wide,0);
+tl.to('#camera',{...toIcon,duration:1.05,ease:'power2.inOut'},.5);
+tl.to('#camera',{...panelTop,duration:.7,ease:'power2.inOut'},2.05);
+tl.to('#camera',{...summary,duration:.7,ease:'sine.inOut'},3);
+tl.to('#camera',{...input,duration:.5,ease:'sine.inOut'},5.8);
+tl.to('#camera',{...answer,duration:.65,ease:'sine.inOut'},7.95);
+tl.to('#camera',{...side,duration:.65,ease:'power2.inOut'},12.3);
+tl.to('#camera',{...source,duration:.5,ease:'sine.inOut'},13.45);
+tl.to('#camera',{...pick,duration:.6,ease:'power2.inOut'},15.4);
+tl.to('#camera',{...offer,duration:.6,ease:'sine.inOut'},17.4);
+tl.to('#camera',{...result,duration:.65,ease:'sine.inOut'},18.95);
+
+// Focus: a blurred, dimmed copy of the footage sits under the sharp copy,
+// and the sharp copy is cropped to the focused UI. The crop only changes
+// while the soft copy is neutral, so focus fades in and out instead of wiping.
+const n=v=>`${v.toFixed(2)}px`;
+// clip-path is relative to the video element, which starts below the toolbar.
+const crop=(b,r=0)=>{const y=b.y-TOP;return `inset(${n(y)} ${n(W-b.x-b.w)} ${n(H-TOP-y-b.h)} ${n(b.x)} round ${n(r)})`;};
+const all=crop({x:0,y:TOP,w:W,h:H-TOP});
+const soft='blur(1.4px) brightness(0.45) saturate(0.6)',clear='blur(0px) brightness(1) saturate(1)';
+const focusIn=at=>tl.fromTo('#usage-soft, #toolbar',{filter:clear},{filter:soft,duration:.5,ease:'sine.inOut',immediateRender:false},at);
+const focusOut=at=>tl.fromTo('#usage-soft, #toolbar',{filter:soft},{filter:clear,duration:.4,ease:'sine.inOut',immediateRender:false},at);
+const triggerCrop=crop(grow(trigger,8),grow(trigger,8).h/2);
+tl.set('#usage-soft, #toolbar',{filter:clear},0);
+tl.set('#usage',{clipPath:all,opacity:1},0);
+tl.set('#usage',{clipPath:crop(panel)},2.05);
+focusIn(2.1);
+focusOut(12.3);
+tl.set('#usage',{clipPath:crop(grow(passage,12),12)},13.4);
+focusIn(13.45);
+// Fade before the close click: the page reflows when the panel closes,
+// and a crop over moving text would show the wrong lines.
+const closeMoveAt=acts.find(a=>a.type==='move'&&a.target==='Close panel').time;
+focusOut(closeMoveAt);
+tl.set('#usage',{clipPath:all},closeMoveAt+.42);
+tl.set('#usage',{clipPath:triggerCrop},17.3);
+focusIn(17.4);
+// The button vanishes on click and the card fades in about 0.1 s later. The
+// sharp layer only shows inside the crop, so hiding it at the click and
+// fading it in with the card keeps an empty bright box from flashing.
+const frames=acts.filter(a=>a.type==='rect'&&a.target==='Card frame').map(a=>({time:a.time,crop:crop(grow({x:a.x,y:a.y+TOP,w:a.w,h:a.h},1),12)}));
+if(!frames.length)throw new Error('Missing card samples');
+const summarizeAt=acts.find(a=>a.type==='click'&&a.target==='Summarize selection').time;
+tl.set('#usage',{clipPath:frames[0].crop,opacity:0},summarizeAt+1/30);
+tl.to('#usage',{opacity:1,duration:.2,ease:'sine.out'},summarizeAt+.05);
+frames.forEach((f,i)=>{if(i)tl.fromTo('#usage',{clipPath:frames[i-1].crop},{clipPath:f.crop,duration:f.time-frames[i-1].time,ease:'none',immediateRender:false},frames[i-1].time);});
+tl.set('#usage',{clipPath:crop(grow(card,1),12)},frames.at(-1).time+.05);
+
+// Toolbar hover, the extension's name, then the press, at the logged times.
+const hoverAt=acts.find(a=>a.type==='hover').time;
+const pressAt=acts.find(a=>a.type==='click'&&a.target==='Extension toolbar icon').time;
+tl.to('#ext-hover',{opacity:1,duration:.12,ease:'power1.out'},hoverAt-.04);
+tl.fromTo('#tooltip',{opacity:0,y:-3},{opacity:1,y:0,duration:.16,ease:'power2.out'},hoverAt+.16);
+tl.to('#ext-hover',{background:'rgba(237,234,228,.22)',duration:.06},pressAt);
+tl.to('#tooltip',{opacity:0,duration:.1},pressAt);
+tl.to('#ext-hover',{opacity:0,duration:.3},pressAt+.35);
+
+document.querySelectorAll('.caption').forEach((c,i,all)=>{
+  const start=Number(c.dataset.start),end=start+Number(c.dataset.duration);
+  tl.fromTo(c.firstElementChild,{y:12,opacity:0},{y:0,opacity:1,duration:.28,ease:'power2.out'},start+(i?0:.15));
+  if(i<all.length-1)tl.to(c.firstElementChild,{opacity:0,duration:.16,ease:'power1.in'},end-.16);
 });
-const map=p=>({x:p.x,y:30+p.y});
-let previous={x:500,y:405},previousAt=0;
-for(const action of window.demoActions){
-  if(action.x===undefined||action.type==='key'||action.type==='mouseup')continue;
-  const target=map(action),at=action.time,dragging=action.type==='selection';
-  const duration=dragging?1/30:Math.min(.4,Math.max(.1,at-previousAt));
-  tl.fromTo('#cursor',previous,{...target,duration,ease:dragging?'none':'power2.inOut',immediateRender:false},Math.max(0,at-duration));
-  previous=target;previousAt=at;
+
+const map=p=>({x:p.x,y:TOP+p.y});
+const start=acts.find(a=>a.type==='move');
+tl.set('#cursor',map(start),0);
+let previous=map(start);
+for(const action of acts){
+  if(action.type==='move'&&action.duration>0){
+    const target=map(action);
+    tl.fromTo('#cursor',{...map({x:action.fromX,y:action.fromY})},{...target,duration:action.duration,ease:'power2.inOut',immediateRender:false},action.time);
+    previous=target;
+  }else if(action.type==='selection'){
+    const target=map(action);
+    tl.fromTo('#cursor',previous,{...target,duration:1/30,ease:'none',immediateRender:false},action.time-1/30);
+    previous=target;
+  }
   if(action.type==='click'||action.type==='mousedown'){
+    const target=map(action);
     const ring=document.createElement('div');ring.className='click-ring';ring.style.left=`${target.x-12}px`;ring.style.top=`${target.y-12}px`;document.getElementById('pointer-layer').append(ring);
-    tl.fromTo(ring,{scale:.25,opacity:0},{scale:.45,opacity:.65,duration:.05,ease:'power1.out'},at);
-    tl.to(ring,{scale:1.3,opacity:0,duration:.36,ease:'power2.out'},at+.05);
-    tl.to('#cursor',{scale:.86,duration:.07,ease:'power1.in'},at);
-    tl.to('#cursor',{scale:1,duration:.14,ease:'power2.out'},at+.07);
+    tl.fromTo(ring,{scale:.25,opacity:0},{scale:.45,opacity:.65,duration:.05,ease:'power1.out'},action.time);
+    tl.to(ring,{scale:1.3,opacity:0,duration:.36,ease:'power2.out'},action.time+.05);
+    tl.to('#cursor',{scale:.86,duration:.07,ease:'power1.in'},action.time);
+    tl.to('#cursor',{scale:1,duration:.14,ease:'power2.out'},action.time+.07);
   }
 }
-tl.to('#cursor',{opacity:0,duration:.2},23.9);
-tl.fromTo('.outro-inner',{y:14,opacity:0},{y:0,opacity:1,duration:.4,ease:'power3.out'},24.6);
+// After the toolbar press the pointer would sit on the frame's top edge.
+// It hides until it heads for the input.
+const inputMoveAt=acts.find(a=>a.type==='move'&&a.target==='Follow-up input').time;
+tl.to('#cursor',{opacity:0,duration:.2},pressAt+.3);
+tl.to('#cursor',{opacity:1,duration:.15},inputMoveAt);
+tl.to('#cursor',{opacity:0,duration:.25},21.9);
+
+// The background covers the card first, so the type never double-exposes.
+tl.to('#outro',{opacity:1,duration:.3,ease:'sine.inOut'},22.35);
+tl.from('.outro-inner img',{y:18,opacity:0,duration:.5,ease:'power3.out'},22.62);
+tl.from('.outro-inner h1',{y:18,opacity:0,duration:.5,ease:'power3.out'},22.7);
+tl.from('.cta',{y:18,opacity:0,duration:.5,ease:'power3.out'},22.86);
+tl.from('.works',{y:12,opacity:0,duration:.5,ease:'power3.out'},22.98);
 window.__timelines['eternal-demo']=tl;
 </script>
 </body>

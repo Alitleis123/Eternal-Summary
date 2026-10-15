@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import { writeFile } from "node:fs/promises";
 
 export const RATE = 48000;
-export const DURATION = 28;
+export const DURATION = 26.4;
 export const ffmpeg = process.env.FFMPEG_PATH || "ffmpeg";
 export const ffprobe = process.env.FFPROBE_PATH || "ffprobe";
 export const db = value => 20 * Math.log10(Math.max(1e-12, value));

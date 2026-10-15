@@ -17,7 +17,7 @@ const run = (args) => {
   if (result.error) throw result.error;
   if (result.status !== 0) throw new Error(`ffmpeg exited ${result.status}`);
 };
-run(["-ss", "2.8", "-i", input, "-frames:v", "1", "-q:v", "2", "-update", "1", poster]);
+run(["-ss", "4.6", "-i", input, "-frames:v", "1", "-q:v", "2", "-update", "1", poster]);
 run([
   "-i", input,
   "-map", "0:v:0", "-map", "0:a:0", "-c:v", "libx264", "-crf", "20", "-preset", "slow",
