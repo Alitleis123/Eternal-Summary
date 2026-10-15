@@ -1,0 +1,5 @@
+{
+  "$schema": "https://hyperframes.heygen.com/schema/hyperframes.json",
+  "authoringSkill": "brag",
+  "paths": { "assets": "assets" }
+}
