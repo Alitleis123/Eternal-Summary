@@ -66,11 +66,14 @@ Deploying to Vercel: import the repository, set the root directory to `backend`,
 
 ```bash
 cd backend
+vercel link                                  # pick the backend project
 vercel env add GEMINI_API_KEY production
 vercel deploy --prod
 ```
 
 `vercel.json` keeps the server in Washington, D.C. (`iad1`). Google decides what a key may do by where the request comes from, and a free-tier key is refused from some countries, so the server stays in one place instead of running near each reader. `.env` is listed in `.vercelignore`, so the key never ships in an upload.
+
+The server's own rate limit counts per instance, and Vercel runs more than one under load, so add a Firewall rule too: in the project's Firewall, a new rule where Request Path starts with `/api/`, then Rate Limit, 30 requests per 60 seconds, keyed by IP. Hobby includes one such rule.
 
 `GEMINI_API_KEY` is required. Without it the server still starts and serves `/healthz`, but every summarize and ask request fails with a clear message in the logs.
 

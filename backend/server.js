@@ -60,6 +60,8 @@ app.use(express.json({ limit: "200kb" }));
 
 // Light per-IP throttle. The backend fronts a metered API key, so an open
 // endpoint without one is an easy way to burn quota.
+// Each Vercel instance keeps its own count, and Vercel runs more than one
+// under load, so the Firewall rule in the README is what holds across them.
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
 const RATE_LIMIT_MAX = 30;
 const hits = new Map();
