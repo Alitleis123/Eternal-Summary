@@ -55,7 +55,7 @@
   --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 
   --gutter: clamp(1.3rem, 5vw, 4rem);
-  --side: 232px;
+  --side: clamp(290px, 25vw, 360px);
   --bar: 56px;
   --ease: cubic-bezier(0.32, 0.72, 0, 1);
 }
@@ -160,52 +160,117 @@ kbd {
 @keyframes run { from { stroke-dashoffset: 100; opacity: 0.85; } 90% { opacity: 0.85; } to { stroke-dashoffset: 0; opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .mark .run { display: none; } }
 
-/* ============ side rail ============
-   A table of contents down the left, upright at a readable size. */
+/* ============ side panel ============
+   The extension's own panel, open on the right where it opens on any page,
+   summarizing this one. Sizes and colours are ui.css's, so it reads as the
+   real thing. Its sources jump to the passage and paint it the same way. */
 .bar {
   position: fixed;
   top: 0;
-  left: 0;
+  right: 0;
   bottom: 0;
   width: var(--side);
   z-index: 50;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 2.4rem;
-  padding: 1.7rem 1.6rem;
-  background: var(--bg);
-  border-right: 1px solid var(--line-dim);
-  overflow-y: auto;
+  font-size: 15px;
+  background: #16151A;
+  border-left: 1px solid var(--line);
+  box-shadow: -18px 0 48px rgba(0, 0, 0, 0.32);
+  /* Slides in once, as it does when the toolbar icon is clicked. */
+  animation: open 520ms var(--ease) 350ms both;
 }
+@keyframes open { from { transform: translateX(100%); } }
 
 .bar-name {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  text-decoration: none;
-  font-family: var(--serif);
-  font-size: 1.12rem;
-  letter-spacing: 0.01em;
-  white-space: nowrap;
+  gap: 11px;
+  padding: 15px 16px 13px;
+  border-bottom: 1px solid var(--line-dim);
 }
+.bar-word { display: flex; flex-direction: column; min-width: 0; }
+.bar-title { text-decoration: none; font-size: 14px; font-weight: 600; letter-spacing: -0.01em; }
+.bar-meta { font-size: 12px; color: var(--faint); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bar-meta b { color: var(--dim); font-weight: 500; }
 
-.bar-nav { display: flex; flex-direction: column; gap: 0.15rem; width: 100%; }
+.bar-verdict {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 10px 16px 11px;
+  border-bottom: 1px solid var(--line-dim);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+.bar-verdict b { flex: none; font-weight: 600; color: var(--dim); }
+.bar-verdict span { color: var(--faint); }
+
+.bar-stream {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 18px 14px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(150, 180, 205, 0.18) transparent;
+}
+.bar-label { display: flex; align-items: center; gap: 9px; margin-bottom: 9px; font-size: 12.5px; font-weight: 500; color: var(--dim); }
+.bar-label::after { content: ""; height: 1px; flex: 1; background: var(--line-dim); }
+.bar-body { padding-left: 14px; border-left: 2px solid var(--line); line-height: 1.72; }
+
+.bar-refs { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 11px 0 0 16px; font-size: 12.5px; color: var(--faint); }
+.bar-refs span { margin-right: 2px; font-weight: 500; }
+.ref {
+  min-width: 23px;
+  height: 23px;
+  padding: 0 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--dim);
+  text-decoration: none;
+  background: rgba(237, 234, 228, 0.06);
+  border-radius: 999px;
+  transition: color 140ms ease, background 140ms ease;
+}
+.ref:hover { color: var(--ink); background: var(--accent-wash); }
+
+.bar-nav { display: flex; flex-direction: column; gap: 2px; }
 .bar-nav a {
   text-decoration: none;
   color: var(--dim);
-  font-size: 0.94rem;
-  padding: 5px 0 5px 0.85rem;
-  border-left: 1px solid var(--line-dim);
-  transition: color 160ms ease, border-color 160ms ease;
+  font-size: 14px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  transition: color 140ms ease, background 140ms ease;
 }
-.bar-nav a:hover { color: var(--ink); border-left-color: rgba(237, 234, 228, 0.3); }
-.bar-nav a.active { color: var(--ink); border-left-color: var(--accent); }
+.bar-nav a:hover { color: var(--ink); background: rgba(237, 234, 228, 0.05); }
+.bar-nav a.active { color: var(--ink); background: var(--accent-wash); }
 
-/* Pushes the store button to the foot of the rail. */
-.bar-foot { margin-top: auto; }
+/* Where the panel's question box sits. */
+.bar-foot { padding: 14px 16px; border-top: 1px solid var(--line-dim); }
+.bar-foot .cta { width: 100%; justify-content: center; }
 
-/* No room for a column beside the text, so it lies back down across the top. */
+/* What a source jump paints on the page, copied from content.js: a bright
+   flash, then a softer wash that clears after 2.4 seconds. */
+.hit {
+  background-color: rgba(123, 140, 255, 0.24);
+  box-shadow: 0 0 0 6px rgba(123, 140, 255, 0.16);
+  border-radius: 4px;
+  animation: hit 490ms ease;
+}
+@keyframes hit { 0%, 39% { background-color: rgba(123, 140, 255, 0.46); } }
+/* Lands the passage near the middle of the screen, as the panel does. */
+[id^="src-"] { scroll-margin-top: 30vh; }
+
+/* No room for a panel beside the text, so it becomes a bar across the top
+   with only the name and the button. */
 @media (max-width: 900px) {
   .bar {
     position: sticky;
@@ -216,15 +281,18 @@ kbd {
     align-items: center;
     gap: 1rem;
     padding: 0 var(--gutter);
-    border-right: none;
+    border-left: none;
     border-bottom: 1px solid var(--line-dim);
     background: rgba(16, 15, 20, 0.86);
     backdrop-filter: saturate(180%) blur(14px);
-    overflow: visible;
+    box-shadow: none;
+    animation: none;
   }
-  .bar-name { margin-right: auto; }
-  .bar-nav { display: none; }
-  .bar-foot { margin-top: 0; }
+  .bar-name { margin-right: auto; padding: 0; border: none; }
+  .bar-meta, .bar-verdict, .bar-stream { display: none; }
+  .bar-foot { padding: 0; border: none; }
+  .bar-foot .cta { width: auto; }
+  [id^="src-"] { scroll-margin-top: 0; }
 }
 /* Too narrow for the name and the whole label, so the button says Add and
    the rest stays for screen readers. */
@@ -256,12 +324,12 @@ kbd {
 
 /* ============ rhythm ============ */
 .wrap { padding: 0 var(--gutter); max-width: 1180px; margin: 0 auto; }
-/* The rail is out of flow, so the page leaves room for it with padding, which
+/* The panel is out of flow, so the page leaves room for it with padding, which
    keeps the block centred in what is left. */
 @media (min-width: 901px) {
   .wrap {
     max-width: calc(1180px + var(--side));
-    padding-left: calc(var(--side) + var(--gutter));
+    padding-right: calc(var(--side) + var(--gutter));
   }
 }
 
@@ -300,18 +368,8 @@ h2 {
 }
 
 /* ============ hero ============ */
-.hero {
-  padding: clamp(3.5rem, 8vw, 6rem) 0 clamp(4rem, 8vw, 6.5rem);
-  display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
-  gap: clamp(2rem, 5vw, 4.5rem);
-  align-items: center;
-}
-/* Below this the shot would be a thumbnail rather than evidence, so it goes. */
-@media (max-width: 1000px) {
-  .hero { grid-template-columns: 1fr; }
-  .hero-visual { display: none; }
-}
+/* Just the words. The panel open beside them is the picture. */
+.hero { padding: clamp(3.5rem, 8vw, 6rem) 0 clamp(4rem, 8vw, 6.5rem); }
 
 .hero-mark { margin-bottom: 2.2rem; }
 
@@ -344,23 +402,6 @@ h1 {
   list-style: none;
 }
 
-/* The panel as it actually appears, turned a few degrees toward the reader
-   and squared up when the pointer reaches it. */
-.hero-visual { perspective: 1600px; }
-.hero-shot {
-  max-width: 400px;
-  margin-left: auto;
-  border-radius: 12px;
-  border: 1px solid var(--line);
-  overflow: hidden;
-  background: var(--raise);
-  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
-  transform: rotateY(-9deg) rotateX(3deg);
-  transition: transform 700ms var(--ease);
-}
-.hero-visual:hover .hero-shot { transform: none; }
-.hero-shot img { width: 100%; }
-
 /* One staggered entrance on load, the same lift the panel uses. */
 @keyframes lift { from { opacity: 0; transform: translateY(10px); } }
 .hero-copy > * { animation: lift 600ms var(--ease) both; }
@@ -368,7 +409,6 @@ h1 {
 .hero-copy > :nth-child(3) { animation-delay: 140ms; }
 .hero-copy > :nth-child(4) { animation-delay: 210ms; }
 .hero-copy > :nth-child(5) { animation-delay: 280ms; }
-.hero-visual { animation: lift 900ms var(--ease) 200ms both; }
 
 /* ============ watch ============ */
 .video-frame { margin-top: clamp(2.2rem, 4vw, 3.2rem); }
@@ -400,7 +440,8 @@ h1 {
   margin-right: 0.7rem;
 }
 .steps p { color: var(--dim); font-size: 0.95rem; margin-top: 0.3rem; }
-@media (max-width: 760px) {
+/* The panel takes its width from here up to 900px, so the columns give up early. */
+@media (max-width: 1000px) {
   .steps { grid-template-columns: 1fr; }
   .steps li { padding: 1rem 0; }
 }
@@ -436,7 +477,7 @@ h1 {
 }
 .show-split.flip { grid-template-columns: minmax(0, 1.28fr) minmax(0, 0.72fr); }
 .show-split.flip .show-head { order: 2; }
-@media (max-width: 900px) {
+@media (max-width: 1100px) {
   .show-split, .show-split.flip { grid-template-columns: 1fr; }
   .show-split.flip .show-head { order: 0; }
 }
@@ -672,23 +713,45 @@ footer.wrap { padding-top: 3rem; padding-bottom: 4rem; }
 </svg>
 
 <header class="bar">
-  <a href="#top" class="bar-name">
-    <svg class="mark" width="30" height="18" viewBox="0 0 48 28" fill="none" aria-hidden="true">
+  <div class="bar-name">
+    <svg class="mark" width="34" height="20" viewBox="0 0 48 28" fill="none" aria-hidden="true">
       <use href="#es-infinity" stroke="url(#es-mark)" stroke-width="3.5" stroke-linejoin="round"/>
     </svg>
-    Eternal Summary
-  </a>
-  <nav class="bar-nav" aria-label="Sections">
-    <a href="#watch">Watch it work</a>
-    <a href="#what">What it does</a>
-    <a href="#details">Details</a>
-    <a href="#about">About</a>
-    <a href="#install">Install</a>
-  </nav>
-  <a class="cta cta-primary cta-sm bar-foot" href="https://chromewebstore.google.com/detail/eternal-summary/cpdeianknlpdhlbfdgckdcgfglbhkjbf">
-    <svg width="17" height="17" aria-hidden="true"><use href="#chrome"/></svg>
-    <span>Add<span class="more"> to Chrome</span></span>
-  </a>
+    <div class="bar-word">
+      <a href="#top" class="bar-title">Eternal Summary</a>
+      <span class="bar-meta">alitleis123.github.io <b>&middot;</b> 2 min read</span>
+    </div>
+  </div>
+  <p class="bar-verdict"><b>Worth a skim</b> <span>The video shows most of it.</span></p>
+  <div class="bar-stream">
+    <div>
+      <p class="bar-label">Summary</p>
+      <p class="bar-body">This page introduces Eternal Summary, a free Chrome extension that summarizes whatever page you're on. Each summary cites the passages it drew from, and you can ask follow-up questions about the page. It needs no account.</p>
+      <p class="bar-refs">
+        <span>Sources</span>
+        <a class="ref" href="#src-1" title="Jump to: One click summarizes the page you're on, with sources you can check.">1</a>
+        <a class="ref" href="#src-2" title="Jump to: Every page summary shows its sources.">2</a>
+        <a class="ref" href="#src-3" title="Jump to: Then ask it anything.">3</a>
+        <a class="ref" href="#src-4" title="Jump to: Is it free? Yes. There's no account to make and nothing to pay for.">4</a>
+      </p>
+    </div>
+    <nav aria-label="Sections">
+      <p class="bar-label">On this page</p>
+      <div class="bar-nav">
+        <a href="#watch">Watch it work</a>
+        <a href="#what">What it does</a>
+        <a href="#details">Details</a>
+        <a href="#about">About</a>
+        <a href="#install">Install</a>
+      </div>
+    </nav>
+  </div>
+  <div class="bar-foot">
+    <a class="cta cta-primary cta-sm" href="https://chromewebstore.google.com/detail/eternal-summary/cpdeianknlpdhlbfdgckdcgfglbhkjbf">
+      <svg width="17" height="17" aria-hidden="true"><use href="#chrome"/></svg>
+      <span>Add<span class="more"> to Chrome</span></span>
+    </a>
+  </div>
 </header>
 
 <main class="wrap" id="top">
@@ -700,7 +763,7 @@ footer.wrap { padding-top: 3rem; padding-bottom: 4rem; }
         <use class="run" href="#es-infinity" stroke-width="3.2" stroke-linecap="round"/>
       </svg>
       <h1>Read the page,<br><span class="lit">not all of it</span>.</h1>
-      <p class="lead">One click summarizes the page you're on, with sources you can check.</p>
+      <p class="lead" id="src-1">One click summarizes the page you're on, with sources you can check.</p>
       <div class="cta-row">
         <a class="cta cta-primary" href="https://chromewebstore.google.com/detail/eternal-summary/cpdeianknlpdhlbfdgckdcgfglbhkjbf">
           <svg width="18" height="18" aria-hidden="true"><use href="#chrome"/></svg>
@@ -718,11 +781,6 @@ footer.wrap { padding-top: 3rem; padding-bottom: 4rem; }
       </ul>
     </div>
 
-    <div class="hero-visual glow">
-      <div class="hero-shot">
-        <img src="shots/hero.png" alt="The Eternal Summary panel open beside an article, showing a summary, a worth reading verdict, and numbered sources">
-      </div>
-    </div>
   </section>
 
   <section id="watch">
@@ -753,7 +811,7 @@ footer.wrap { padding-top: 3rem; padding-bottom: 4rem; }
 
     <article class="show show-split reveal">
       <div class="show-head">
-        <h3>Every page summary shows its <em>sources</em>.</h3>
+        <h3 id="src-2">Every page summary shows its <em>sources</em>.</h3>
         <p>Click a number and the article scrolls to the quote.</p>
       </div>
       <div class="shot">
@@ -782,7 +840,7 @@ footer.wrap { padding-top: 3rem; padding-bottom: 4rem; }
 
     <article class="show show-split flip reveal">
       <div class="show-head">
-        <h3>Then ask it <em>anything</em>.</h3>
+        <h3 id="src-3">Then ask it <em>anything</em>.</h3>
         <p>If the page doesn't cover it, the answer says so.</p>
       </div>
       <div class="shot">
@@ -843,7 +901,7 @@ footer.wrap { padding-top: 3rem; padding-bottom: 4rem; }
     <h2>The details.</h2>
 
     <div class="faq reveal">
-      <details>
+      <details id="src-4">
         <summary>Is it free?</summary>
         <p>Yes. There's no account to make and nothing to pay for.</p>
       </details>
@@ -930,6 +988,22 @@ const rise = new IntersectionObserver((entries) => {
   }
 }, { rootMargin: "0px 0px -8% 0px" });
 for (const el of document.querySelectorAll(".reveal")) rise.observe(el);
+
+// A source in the panel scrolls to its passage, as the link does anyway, and
+// paints it the way the extension does. A question opens to show its answer.
+const hits = new Map();
+for (const ref of document.querySelectorAll(".ref")) {
+  ref.addEventListener("click", () => {
+    const target = document.querySelector(ref.hash);
+    if (!target) return;
+    if (target.tagName === "DETAILS") target.open = true;
+    clearTimeout(hits.get(target));
+    target.classList.remove("hit");
+    void target.offsetWidth;
+    target.classList.add("hit");
+    hits.set(target, setTimeout(() => target.classList.remove("hit"), 2400));
+  });
+}
 
 // Select or Summarize: show the page before or after the button is pressed.
 const swap = document.querySelector(".swap");
