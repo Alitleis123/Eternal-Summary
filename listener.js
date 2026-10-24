@@ -60,10 +60,6 @@ if (window.__esListenerLoaded) {
     setMode: (mode) => {
       if (typeof mode === "string" && mode) chrome.storage.local.set({ [MODE_KEY]: mode });
     },
-    writeCache: (value) => {
-      if (!value?.summary || !settings.reuseSaved) return;
-      chrome.storage.local.set({ [cacheKey()]: { ...value, ts: Date.now() } });
-    },
     clearCache: () => {
       chrome.storage.local.get(null, (res) => {
         const keys = Object.keys(res || {}).filter((k) => k.startsWith(CACHE_PREFIX));
@@ -93,6 +89,12 @@ if (window.__esListenerLoaded) {
 
       panel.open({
         ...panelCalls,
+        // Under the URL the page had when it was read. A single-page site can
+        // navigate before the reply lands, and the summary is of what was read.
+        writeCache: (value) => {
+          if (!value?.summary || !settings.reuseSaved) return;
+          chrome.storage.local.set({ [key]: { ...value, ts: Date.now() } });
+        },
         popup: popupEl,
         css,
         settings: { ...settings },

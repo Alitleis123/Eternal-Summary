@@ -1159,6 +1159,25 @@ describe("recovery", () => {
     assert.match(await inCard("s.querySelector('.card').textContent"), /tldr mode/);
     await inCard("s.querySelector('.card .icon-btn').click()");
   });
+
+  // A single-page site can move to another article before the reply lands.
+  // The summary is of the page that was read, so that is where it is saved.
+  test("a summary is saved under the page it was read from", async () => {
+    await reload();
+    await evaluate(`(() => {
+      window.__storage = {};
+      window.__reply = () => new Promise((resolve) => {
+        window.__release = () => resolve({ ok: true, status: 200,
+          text: () => Promise.resolve(JSON.stringify({ summary: 'About the first page.', sources: [] })) });
+      });
+    })()`);
+    await openPanel();
+    await evaluate("history.pushState({}, '', '/article.html?next'); window.__release()");
+    await sleep(600);
+    const keys = await evaluate("Object.keys(window.__storage).filter((k) => k.startsWith('summary:'))");
+    assert.deepEqual(keys, [`summary:${PAGE}`]);
+    await evaluate("window.__reply = null");
+  });
 });
 
 // These messages were the bridge between the panel and the extension, and any
