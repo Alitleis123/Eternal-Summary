@@ -1631,7 +1631,7 @@
   rail.addEventListener("keydown", (e) => {
     if (e.key !== "Tab") return;
     const focusable = Array.from(
-      rail.querySelectorAll("button:not([disabled]), input:not([disabled])")
+      rail.querySelectorAll("button:not([disabled]), input:not([disabled]), select:not([disabled])")
     ).filter((node) => node.getClientRects().length > 0);
     if (focusable.length < 2) return;
 

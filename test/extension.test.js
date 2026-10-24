@@ -709,6 +709,22 @@ describe("settings", () => {
     assert.notEqual(await inPanel("getComputedStyle(s.querySelector('.composer')).display"), "none");
   });
 
+  // The focus trap only knew buttons and inputs, so Shift+Tab from the
+  // language picker counted as leaving the dialog and jumped to the end.
+  test("shift+tab from the language picker stays where the browser puts it", async () => {
+    await gear();
+    await sleep(300);
+    const jumped = await inPanel(`(() => {
+      const picker = s.querySelector('.picker select');
+      picker.focus();
+      picker.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, composed: true }));
+      return s.activeElement !== picker;
+    })()`);
+    assert.equal(jumped, false);
+    await gear();
+    await sleep(300);
+  });
+
   test("a switch writes through to storage", async () => {
     await gear();
     await sleep(250);
