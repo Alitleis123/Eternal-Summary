@@ -405,8 +405,10 @@
   const SOURCE_SELECTOR = "p, li, blockquote, td, pre, dd, figcaption, h1, h2, h3, h4, h5, h6";
   const normalCache = new WeakMap();
 
+  // Letters and marks in any script. \w is ASCII only, and stripped a Russian or
+  // Chinese snippet down to nothing.
   const normalize = (value) =>
-    (value || "").toLowerCase().replace(/[^\w\s]/g, " ").replace(/\s+/g, " ").trim();
+    (value || "").toLowerCase().replace(/[^\p{L}\p{M}\p{N}\s]/gu, " ").replace(/\s+/g, " ").trim();
 
   const normalizedOf = (node) => {
     if (!normalCache.has(node)) normalCache.set(node, normalize(node.innerText));

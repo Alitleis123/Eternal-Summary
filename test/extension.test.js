@@ -365,6 +365,37 @@ describe("sources", () => {
     assert.equal(await evaluate("!!document.getElementById('es-toast')"), true);
     await evaluate("window.__reply = null");
   });
+
+  // Matching once dropped everything outside ASCII, so on a Russian, Hindi or
+  // Chinese page a snippet normalised to nothing and every footnote was dead.
+  test("a snippet in another script still finds its passage", async () => {
+    await reload();
+    await evaluate("window.__storage = {}");
+    await evaluate(`(() => {
+      const passages = {
+        ru: 'Александрийский маяк простоял почти шестнадцать веков, пока его не разрушили землетрясения.',
+        hi: 'प्रकाशस्तंभ ने हजारों वर्षों तक जहाजों को सुरक्षित किनारे तक पहुँचाया और रात भर लकड़ी जलाई।',
+        zh: '亚历山大灯塔高一百多米，在许多世纪里都是世界上最高的建筑之一。',
+      };
+      for (const [id, text] of Object.entries(passages)) {
+        const p = document.createElement('p');
+        p.id = id;
+        p.textContent = text;
+        document.querySelector('article').appendChild(p);
+      }
+      window.__reply = () => ({ ok: true, status: 200, text: () => Promise.resolve(JSON.stringify({
+        summary: 'A summary.',
+        sources: ['Александрийский маяк простоял почти шестнадцать веков', 'हजारों वर्षों तक जहाजों को सुरक्षित किनारे', '在许多世纪里都是世界上最高的建筑'],
+      })) });
+    })()`);
+    await openPanel();
+    assert.equal(await inPanel("s.querySelectorAll('.ref').length"), 3);
+    assert.equal(await inPanel("s.querySelectorAll('.ref.dead').length"), 0, "every snippet is on the page");
+    await inPanel("s.querySelectorAll('.ref')[2].click()");
+    await sleep(500);
+    assert.match(await evaluate("document.getElementById('zh').style.backgroundColor"), /123, 140, 255/);
+    await evaluate("window.__reply = null");
+  });
 });
 
 describe("caching", () => {
