@@ -1,0 +1,20 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Trusted Types</title>
+<!-- What YouTube, Gmail and Google Docs send. content.js runs in the page's
+     own world, so every innerHTML it writes is refused here. -->
+<meta http-equiv="Content-Security-Policy" content="require-trusted-types-for 'script'">
+<script>
+  // listener.js and background.js run outside the page's world in Chrome,
+  // where its policy does not reach. Here they share it, so script URLs are let
+  // through and nothing else is: an innerHTML write still throws.
+  trustedTypes.createPolicy("default", { createScriptURL: (url) => url });
+</script>
+</head>
+<body>
+<article>
+  <h1>A page that enforces Trusted Types</h1>
+  <p id="tt1">Lighthouses have guided ships safely to shore for thousands of years, beginning with the Pharos of Alexandria which stood over one hundred metres tall and burned wood through the night.</p>
+  <p id="tt2">Cras dapibus vivamus elementum semper nisi aenean vulputate eleifend tellus aenean leo ligula porttitor eu consequat vitae eleifend ac enim aliquam lorem ante dapibus in viverra quis feugiat a tellus.</p>
+</article>
+<script src="platform.js"></script>
+</body></html>

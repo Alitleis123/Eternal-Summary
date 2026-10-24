@@ -955,6 +955,37 @@ describe("long pages", () => {
   });
 });
 
+// YouTube, Gmail and Google Docs refuse any string written to innerHTML. The
+// panel runs in the page's own world, so one icon built that way threw before
+// the rail had a close button, and left the page inset beside nothing.
+describe("trusted types", () => {
+  const TT = `http://localhost:${PORT}/trusted-types.html`;
+
+  test("the panel builds on a page that enforces them", async () => {
+    await cdp.call("Page.navigate", { url: TT });
+    await sleep(700);
+    await evaluate("window.__boot()");
+    await sleep(400);
+    await evaluate("window.__late = null; window.addEventListener('error', (e) => (window.__late = String(e.message)));");
+    await openPanel();
+    assert.equal(await evaluate("window.__late"), null);
+    assert.equal(await inPanel("s.querySelectorAll('.head .icon-btn svg').length"), 2);
+    assert.match(await inPanel("s.querySelector('.wordmark .meta').textContent"), /^localhost · \d+ min read$/);
+    assert.match(await inPanel("s.textContent"), /tldr mode/);
+  });
+
+  test("so does the selection card", async () => {
+    await closePanel();
+    await select("tt1");
+    await sleep(500);
+    await inCard("s.querySelector('.trigger').click()");
+    await sleep(1600);
+    assert.equal(await evaluate("window.__late"), null);
+    assert.equal(await inCard("!!s.querySelector('.card .icon-btn svg')"), true);
+    assert.match(await inCard("s.querySelector('.card').textContent"), /tldr mode/);
+  });
+});
+
 describe("hygiene", () => {
   test("repeated opens do not strand elements on the page", async () => {
     await reload();

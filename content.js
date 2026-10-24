@@ -106,10 +106,13 @@
     return { host, shadow, root };
   };
 
-  const el = (tag, className, html) => {
+  // Children, never markup. This script runs in the page's own world, and
+  // YouTube, Gmail and Google Docs enforce Trusted Types: one innerHTML write
+  // throws there, and the panel never finishes building.
+  const el = (tag, className, ...children) => {
     const node = document.createElement(tag);
     if (className) node.className = className;
-    if (html != null) node.innerHTML = html;
+    node.append(...children);
     return node;
   };
 
@@ -535,12 +538,31 @@
   // =========================================================
   // Conversation surface, shared by the rail and the selection card
   // =========================================================
+  // Drawn node by node for the same reason el() takes no markup.
+  const SVG_NS = "http://www.w3.org/2000/svg";
   const ICONS = {
-    close: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>',
-    send: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>',
-    gear: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.05A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.05A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.55V3a2 2 0 1 1 4 0v.05A1.7 1.7 0 0 0 15 4.6a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9v0a1.7 1.7 0 0 0 1.55 1H21a2 2 0 1 1 0 4h-.05a1.7 1.7 0 0 0-1.55 1z"/></svg>',
-    back: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>',
-    down: '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M19 12l-7 7-7-7"/></svg>',
+    close: { size: 13, stroke: 2, d: "M18 6 6 18M6 6l12 12" },
+    send: { size: 15, stroke: 1.8, d: "M5 12h14M13 6l6 6-6 6" },
+    gear: { size: 14, stroke: 1.8, circle: 3.2, d: "M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.05A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.05A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.55V3a2 2 0 1 1 4 0v.05A1.7 1.7 0 0 0 15 4.6a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9v0a1.7 1.7 0 0 0 1.55 1H21a2 2 0 1 1 0 4h-.05a1.7 1.7 0 0 0-1.55 1z" },
+    back: { size: 13, stroke: 2, d: "M19 12H5M12 19l-7-7 7-7" },
+    down: { size: 10, stroke: 2.4, d: "M12 5v14M19 12l-7 7-7-7" },
+  };
+
+  const svgNode = (tag, attrs) => {
+    const node = document.createElementNS(SVG_NS, tag);
+    for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, String(v));
+    return node;
+  };
+
+  const icon = (name) => {
+    const { size, stroke, circle, d } = ICONS[name];
+    const svg = svgNode("svg", {
+      width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor",
+      "stroke-width": stroke, "stroke-linecap": "round", "stroke-linejoin": "round",
+    });
+    if (circle) svg.appendChild(svgNode("circle", { cx: 12, cy: 12, r: circle }));
+    svg.appendChild(svgNode("path", { d }));
+    return svg;
   };
 
   // The mark. An infinity for "eternal", carrying the one gradient the
@@ -568,7 +590,7 @@
     };
 
     const addJump = () => {
-      jump = el("button", "jump", `${ICONS.down}<span>Latest</span>`);
+      jump = el("button", "jump", icon("down"), el("span", null, "Latest"));
       jump.type = "button";
       jump.addEventListener("click", () => {
         pinned = true;
@@ -684,7 +706,7 @@
       // browser infer direction per entry from its own first strong character,
       // so a right-to-left answer is not laid out left-to-right.
       body.setAttribute("dir", "auto");
-      body.appendChild(el("span", "thinking", "<i></i><i></i><i></i>"));
+      body.appendChild(el("span", "thinking", el("i"), el("i"), el("i")));
       entry.append(head, body);
       stream.appendChild(entry);
       follow(true);
@@ -790,7 +812,7 @@
     const name = el("div", "name");
     name.textContent = "Selection";
     wordmark.appendChild(name);
-    const close = el("button", "icon-btn", ICONS.close);
+    const close = el("button", "icon-btn", icon("close"));
     close.type = "button";
     close.title = "Close";
     close.setAttribute("aria-label", "Close");
@@ -808,7 +830,7 @@
     input.placeholder = "Ask a follow-up";
     input.setAttribute("aria-label", "Ask a follow-up about the selection");
     field.appendChild(input);
-    const send = el("button", "send", ICONS.send);
+    const send = el("button", "send", icon("send"));
     send.type = "button";
     send.title = "Send";
     composer.append(field, send);
@@ -1120,18 +1142,17 @@
   name.textContent = "Eternal Summary";
   const meta = el("div", "meta");
   const minutes = readingMinutes(pageText);
-  meta.innerHTML = minutes
-    ? `${location.hostname} <b>&middot;</b> ${minutes} min read`
-    : location.hostname;
+  meta.append(location.hostname);
+  if (minutes) meta.append(" ", el("b", null, "\u00b7"), ` ${minutes} min read`);
   meta.title = document.title || location.hostname;
   wordmark.append(name, meta);
 
-  const gearBtn = el("button", "icon-btn gear", ICONS.gear);
+  const gearBtn = el("button", "icon-btn gear", icon("gear"));
   gearBtn.type = "button";
   gearBtn.title = "Settings";
   gearBtn.setAttribute("aria-label", "Settings");
 
-  const closeBtn = el("button", "icon-btn", ICONS.close);
+  const closeBtn = el("button", "icon-btn", icon("close"));
   closeBtn.type = "button";
   closeBtn.title = "Close";
   closeBtn.setAttribute("aria-label", "Close");
@@ -1248,7 +1269,7 @@
   input.placeholder = "Ask about this page";
   input.setAttribute("aria-label", "Ask about this page");
   field.appendChild(input);
-  const sendBtn = el("button", "send", ICONS.send);
+  const sendBtn = el("button", "send", icon("send"));
   sendBtn.type = "button";
   sendBtn.title = "Send";
   sendBtn.setAttribute("aria-label", "Send");
@@ -1347,7 +1368,7 @@
       putSettings({ [key]: field.value });
       onChange?.();
     });
-    wrap.append(field, el("span", "picker-mark", ICONS.down));
+    wrap.append(field, el("span", "picker-mark", icon("down")));
     return wrap;
   };
 
@@ -1457,7 +1478,7 @@
   const showSettings = (on) => {
     root.dataset.view = on ? "settings" : "stream";
     gearBtn.setAttribute("aria-expanded", String(on));
-    gearBtn.innerHTML = on ? ICONS.back : ICONS.gear;
+    gearBtn.replaceChildren(icon(on ? "back" : "gear"));
     gearBtn.title = on ? "Back" : "Settings";
     gearBtn.setAttribute("aria-label", on ? "Back to summary" : "Settings");
   };
