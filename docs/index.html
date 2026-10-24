@@ -19,7 +19,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap" rel="stylesheet">
-<script>document.documentElement.classList.add("js");</script>
+<script>if ("IntersectionObserver" in window) document.documentElement.classList.add("js");</script>
 <style>
 /* Eternal Summary, the site.
 
@@ -142,7 +142,8 @@ kbd {
 
 /* ============ the mark ============
    The same figure as the toolbar icon and the panel header. The big ones
-   draw themselves once, then a point of light runs round the loop. */
+   draw themselves once, then a point of light runs round the loop once.
+   Everything that moves on its own stops inside five seconds. */
 .mark { display: block; flex: none; overflow: visible; }
 .mark .draw { stroke-dasharray: 100; animation: draw 1.4s var(--ease) both; }
 .mark .run {
@@ -150,10 +151,13 @@ kbd {
   stroke-dasharray: 7 93;
   /* Hidden until the loop is drawn, then the keyframes show it. */
   opacity: 0;
-  animation: run 5s linear 1.4s infinite;
+  animation: run 3.4s linear 1.4s;
 }
+/* The closing mark is far down the page, so its lap waits until it is seen. */
+.js .get .run { animation: none; }
+.js .get.in .run { animation: run 3.4s linear 0.5s; }
 @keyframes draw { from { stroke-dashoffset: 100; } to { stroke-dashoffset: 0; } }
-@keyframes run { from { stroke-dashoffset: 100; opacity: 0.85; } to { stroke-dashoffset: 0; opacity: 0.85; } }
+@keyframes run { from { stroke-dashoffset: 100; opacity: 0.85; } 90% { opacity: 0.85; } to { stroke-dashoffset: 0; opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .mark .run { display: none; } }
 
 /* ============ side rail ============
@@ -221,6 +225,11 @@ kbd {
   .bar-name { margin-right: auto; }
   .bar-nav { display: none; }
   .bar-foot { margin-top: 0; }
+}
+/* Too narrow for the name and the whole label, so the button says Add and
+   the rest stays for screen readers. */
+@media (max-width: 380px) {
+  .bar-foot .more { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 }
 
 /* ============ buttons ============ */
@@ -328,13 +337,12 @@ h1 {
 .hero-meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.4rem 0;
+  gap: 0.4rem 1.4rem;
   margin-top: 2.2rem;
   color: var(--faint);
   font-size: 0.88rem;
   list-style: none;
 }
-.hero-meta li + li::before { content: "·"; margin: 0 0.7rem; color: var(--line); }
 
 /* The panel as it actually appears, turned a few degrees toward the reader
    and squared up when the pointer reaches it. */
@@ -456,7 +464,7 @@ h1 {
   border-radius: 999px;
   box-shadow: 0 0 0 4px rgba(123, 140, 255, 0.18);
   pointer-events: none;
-  animation: ping 2.4s var(--ease) infinite;
+  animation: ping 2.4s var(--ease) 2;
   transition: opacity 260ms ease;
 }
 @keyframes ping {
@@ -510,6 +518,7 @@ h1 {
 .swap img { grid-area: 1 / 1; transition: opacity 260ms ease; }
 .swap img[aria-hidden="true"] { opacity: 0; }
 .swap[data-show="card"] .spot { opacity: 0; }
+.js .reveal:not(.in) .spot { animation: none; }
 
 /* ============ tiles ============
    The small things, each shown in the panel's own type rather than described. */
@@ -631,7 +640,8 @@ h1 {
 .get .cta { margin-top: 2.2rem; }
 
 /* ============ footer ============ */
-footer { border-top: 1px solid var(--line-dim); padding: 3rem 0 4rem; }
+footer { border-top: 1px solid var(--line-dim); }
+footer.wrap { padding-top: 3rem; padding-bottom: 4rem; }
 .foot { display: flex; flex-wrap: wrap; gap: 1.5rem; align-items: center; justify-content: space-between; }
 .foot-links { display: flex; flex-wrap: wrap; gap: 1.5rem; }
 .foot a { color: var(--dim); text-decoration: none; font-size: 0.92rem; display: inline-flex; align-items: center; gap: 0.45rem; }
@@ -677,7 +687,7 @@ footer { border-top: 1px solid var(--line-dim); padding: 3rem 0 4rem; }
   </nav>
   <a class="cta cta-primary cta-sm bar-foot" href="https://chromewebstore.google.com/detail/eternal-summary/cpdeianknlpdhlbfdgckdcgfglbhkjbf">
     <svg width="17" height="17" aria-hidden="true"><use href="#chrome"/></svg>
-    Add to Chrome
+    <span>Add<span class="more"> to Chrome</span></span>
   </a>
 </header>
 
@@ -870,7 +880,7 @@ footer { border-top: 1px solid var(--line-dim); padding: 3rem 0 4rem; }
 
   <section id="about" class="about">
     <h2>Made by Ali Tleis.</h2>
-    <p>I built it because deciding whether a long article was worth reading meant reading it first. It's plain JavaScript, with no build step and no dependencies.</p>
+    <p>I built it because deciding whether a long article was worth reading meant reading it first.</p>
     <div class="cta-row">
       <a class="cta cta-ghost" href="https://github.com/Alitleis123/Eternal-Summary">
         <svg width="15" height="15" aria-hidden="true"><use href="#gh"/></svg>
@@ -879,7 +889,7 @@ footer { border-top: 1px solid var(--line-dim); padding: 3rem 0 4rem; }
     </div>
   </section>
 
-  <section id="install" class="get glow">
+  <section id="install" class="get glow reveal">
     <svg class="mark" width="96" height="56" viewBox="0 0 48 28" fill="none" aria-hidden="true">
       <use href="#es-infinity" stroke="url(#es-mark)" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
       <use class="run" href="#es-infinity" stroke-width="3" stroke-linecap="round"/>
@@ -910,7 +920,16 @@ footer { border-top: 1px solid var(--line-dim); padding: 3rem 0 4rem; }
 </footer>
 
 <script>
-const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+// Rise into place once, on first sight. Set up first, so nothing above it can
+// leave the blocks hidden.
+const rise = new IntersectionObserver((entries) => {
+  for (const entry of entries) {
+    if (!entry.isIntersecting) continue;
+    entry.target.classList.add("in");
+    rise.unobserve(entry.target);
+  }
+}, { rootMargin: "0px 0px -8% 0px" });
+for (const el of document.querySelectorAll(".reveal")) rise.observe(el);
 
 // Select or Summarize: show the page before or after the button is pressed.
 const swap = document.querySelector(".swap");
@@ -923,34 +942,26 @@ const show = (which) => {
     else img.setAttribute("aria-hidden", "true");
   }
 };
-let touched = false;
-for (const seg of segs) {
-  seg.addEventListener("click", () => {
-    touched = true;
-    show(seg.dataset.show);
-  });
-}
+for (const seg of segs) seg.addEventListener("click", () => show(seg.dataset.show));
 
 // The first time the block comes into view, play the two steps once: the
-// selection with its button, then the card. A click on the switch wins.
-if (!still) {
-  new IntersectionObserver((entries, obs) => {
-    if (!entries[0].isIntersecting || touched) return;
-    obs.disconnect();
-    show("trigger");
-    setTimeout(() => { if (!touched) show("card"); }, 2200);
-  }, { threshold: 0.6 }).observe(swap);
+// selection with its button, then the card. Reaching the switch by click or
+// keyboard stops it, so it never changes a control someone is on.
+const still = matchMedia("(prefers-reduced-motion: reduce)");
+let timer = 0;
+let touched = false;
+const block = swap.closest(".show");
+for (const type of ["pointerdown", "focusin"]) {
+  block.addEventListener(type, () => { touched = true; clearTimeout(timer); });
 }
-
-// Rise into place once, on first sight.
-const rise = new IntersectionObserver((entries) => {
-  for (const entry of entries) {
-    if (!entry.isIntersecting) continue;
-    entry.target.classList.add("in");
-    rise.unobserve(entry.target);
-  }
-}, { rootMargin: "0px 0px -8% 0px" });
-for (const el of document.querySelectorAll(".reveal")) rise.observe(el);
+const play = new IntersectionObserver((entries) => {
+  if (!entries.some((entry) => entry.isIntersecting)) return;
+  play.disconnect();
+  if (touched || still.matches) return;
+  show("trigger");
+  timer = setTimeout(() => { if (!touched && !still.matches) show("card"); }, 2200);
+}, { threshold: 0.6 });
+play.observe(swap);
 
 // Mark the section you are in. rootMargin pins the trigger near the top third
 // so a short section at the end of the page can still take the mark.
