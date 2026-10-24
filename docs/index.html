@@ -10,8 +10,11 @@
 <link rel="apple-touch-icon" href="eternal-summary-icon.png">
 <meta property="og:title" content="Eternal Summary">
 <meta property="og:description" content="Summarize any page or selection with one click, then ask follow-up questions without leaving the tab.">
-<meta property="og:image" content="shots/panel.png">
+<link rel="canonical" href="https://alitleis123.github.io/Eternal-Summary/">
+<meta property="og:url" content="https://alitleis123.github.io/Eternal-Summary/">
+<meta property="og:image" content="https://alitleis123.github.io/Eternal-Summary/shots/panel.png">
 <meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap" rel="stylesheet">
@@ -525,7 +528,7 @@ footer { border-top: 1px solid var(--line-dim); padding: 3rem 0 4rem; }
       </div>
       <div class="feature">
         <h3>Highlight anything</h3>
-        <p>Select text and a card opens anchored to it, summarizing just that passage. It is pinned in page coordinates, so scrolling carries the card and the passage together.</p>
+        <p>Select text, press the Summarize button beside it, and a card opens anchored to the passage with a summary of just that. It is pinned in page coordinates, so scrolling carries the card and the passage together.</p>
       </div>
       <div class="feature">
         <h3>Follow-up questions</h3>
@@ -627,7 +630,7 @@ footer { border-top: 1px solid var(--line-dim); padding: 3rem 0 4rem; }
       </li>
       <li>
         <h3>Open something worth reading</h3>
-        <p>Click the mark in your toolbar, or press <kbd>Cmd+Shift+S</kbd>. The panel opens beside the article.</p>
+        <p>Click the mark in your toolbar, or press <kbd>Cmd+Shift+S</kbd> on a Mac or <kbd>Ctrl+Shift+S</kbd> elsewhere. The panel opens beside the article.</p>
       </li>
     </ol>
 
@@ -702,7 +705,7 @@ for (const btn of document.querySelectorAll(".copy")) {
         delete btn.dataset.done;
       }, 1600);
     } catch {
-      btn.textContent = "Press Cmd C";
+      btn.textContent = /Mac/.test(navigator.platform) ? "Press Cmd C" : "Press Ctrl C";
       setTimeout(() => { btn.textContent = "Copy"; }, 1600);
     }
   });
