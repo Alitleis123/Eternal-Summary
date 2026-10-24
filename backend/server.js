@@ -4,7 +4,7 @@ import cors from "cors";
 import { readPayload, readVerdict, safeJsonParse } from "./payload.js";
 import { retryDelay, upstreamFailure } from "./upstream.js";
 
-// Fly.io injects secrets straight into the environment, so loading a .env file
+// Vercel injects secrets straight into the environment, so loading a .env file
 // in production could shadow them with stale values.
 if (process.env.NODE_ENV !== "production") {
   dotenv.config();
@@ -16,7 +16,7 @@ if (!process.env.GEMINI_API_KEY) {
       "",
       "ERROR: GEMINI_API_KEY is not set. Every summarize and ask request will fail.",
       "",
-      "  Fly.io:  fly secrets set GEMINI_API_KEY=your_key_here",
+      "  Vercel:  add it under Settings > Environment Variables, then redeploy",
       "  Local:   copy backend/.env.example to backend/.env and fill in your key",
       "",
     ].join("\n")
@@ -47,8 +47,9 @@ const MODE_INSTRUCTIONS = {
 const DEFAULT_MODE = "tldr";
 
 const app = express();
-// Fly terminates TLS in front of the app, so req.ip must come from the
-// forwarded header or every client would share one rate limit bucket.
+// Vercel terminates TLS in front of the app and overwrites X-Forwarded-For
+// with the client's address, so req.ip must come from that header or every
+// client would share one rate limit bucket.
 app.set("trust proxy", 1);
 // The extension calls from its service worker, which its host permission
 // exempts from CORS. Only web pages are held to this, and none should be let
@@ -59,13 +60,16 @@ app.use(express.json({ limit: "200kb" }));
 
 // Light per-IP throttle. The backend fronts a metered API key, so an open
 // endpoint without one is an easy way to burn quota.
+// Each Vercel instance keeps its own count, and Vercel runs more than one
+// under load, so the Firewall rule in the README is what holds across them.
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
 const RATE_LIMIT_MAX = 30;
 const hits = new Map();
 
 // Swept on a timer, not on the next request, so an address is gone within two
-// minutes of its window opening even if nobody else calls. The privacy policy
-// says so.
+// minutes of its window opening even if nobody else calls. Vercel can pause an
+// idle instance, timer and all, so the privacy policy says only that the
+// address is kept in memory, not for how long.
 setInterval(() => {
   const now = Date.now();
   for (const [ip, entry] of hits) {
@@ -119,7 +123,7 @@ const LANGUAGE_NAMES = {
   tr: "Turkish",
 };
 
-export const resolveLanguage = (value) => {
+const resolveLanguage = (value) => {
   const code = typeof value === "string" ? value.trim().toLowerCase() : "";
   return LANGUAGE_NAMES[code] || null;
 };

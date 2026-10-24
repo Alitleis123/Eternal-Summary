@@ -132,7 +132,7 @@ the need, which is what the answers above are written to avoid.
 
 ## Now that it is public
 
-Strangers call the Fly backend on the Gemini key behind it. The rate limit is 30
+Strangers call the backend on the Gemini key behind it. The rate limit is 30
 requests per minute per IP, which stops one abuser and not a thousand ordinary
 users. Keep a quota alert on the key, and decide in advance what happens if this
 gets popular.

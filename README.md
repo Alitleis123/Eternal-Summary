@@ -62,15 +62,18 @@ cp .env.example .env       # then put your Gemini API key in it
 npm start                  # listens on port 3000
 ```
 
-Deploying to Fly.io:
+Deploying to Vercel: import the repository, set the root directory to `backend`, and add `GEMINI_API_KEY` under Settings > Environment Variables. Vercel runs `server.js` as an Express app with no build step. From the command line instead:
 
 ```bash
-fly launch                                  # first time only
-fly secrets set GEMINI_API_KEY=your_key_here
-fly deploy
+cd backend
+vercel link                                  # pick the backend project
+vercel env add GEMINI_API_KEY production
+vercel deploy --prod
 ```
 
-Fly injects secrets as environment variables at runtime, and `.env` is excluded from the image by `.dockerignore`, so the key never ships in a build.
+`vercel.json` keeps the server in Washington, D.C. (`iad1`). Google decides what a key may do by where the request comes from, and a free-tier key is refused from some countries, so the server stays in one place instead of running near each reader. `.env` is listed in `.vercelignore`, so the key never ships in an upload.
+
+The server's own rate limit counts per instance, and Vercel runs more than one under load, so add a Firewall rule too: in the project's Firewall, a new rule where Request Path starts with `/api/`, then Rate Limit, 30 requests per 60 seconds, keyed by IP. Hobby includes one such rule.
 
 `GEMINI_API_KEY` is required. Without it the server still starts and serves `/healthz`, but every summarize and ask request fails with a clear message in the logs.
 
@@ -91,7 +94,7 @@ To point the extension at your own deployment, change `API_BASE` in `background.
 Real Chrome, driven over the DevTools Protocol. Only the `chrome.*` API surface and the network are stubbed, so the tests exercise the actual message path: the panel asks `background.js` over `chrome.runtime`, and the worker calls the backend.
 
 ```bash
-npm test        # 79 end-to-end tests in real Chrome
+npm test        # 83 end-to-end tests in real Chrome
 npm run check   # syntax check every entry point
 npm run shots   # regenerate the screenshots on the docs site
 npm run package # build the Chrome Web Store zip
