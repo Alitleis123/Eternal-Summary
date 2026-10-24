@@ -140,8 +140,9 @@ const resolveMode = (value) => {
   return MODE_INSTRUCTIONS[id] ? id : DEFAULT_MODE;
 };
 
-const geminiUrl = () =>
-  `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${process.env.GEMINI_API_KEY}`;
+// The key goes in a header, where Google's docs put it, so it never sits in a
+// URL that an error or a proxy might record.
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
 const callGemini = async (systemPrompt, messages, { schema = null, retries = 3 } = {}) => {
   const body = JSON.stringify({
@@ -163,9 +164,9 @@ const callGemini = async (systemPrompt, messages, { schema = null, retries = 3 }
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
     try {
-      const response = await fetch(geminiUrl(), {
+      const response = await fetch(GEMINI_URL, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-goog-api-key": process.env.GEMINI_API_KEY },
         body,
         signal: controller.signal,
       });
