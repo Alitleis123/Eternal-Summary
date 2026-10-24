@@ -693,7 +693,7 @@ footer.wrap { padding-top: 3rem; padding-bottom: 4rem; }
     <ol class="steps reveal">
       <li>
         <h3>Open it</h3>
-        <p>Click the icon or press <kbd data-mac="Cmd+Shift+S">Ctrl+Shift+S</kbd>.</p>
+        <p>Click the icon or press <kbd data-mac="Cmd+Shift+S">Ctrl+Shift+S</kbd>.<noscript> On a Mac, <kbd>Cmd+Shift+S</kbd>.</noscript></p>
       </li>
       <li>
         <h3>Highlight something</h3>
@@ -885,7 +885,7 @@ const rise = new IntersectionObserver((entries) => {
 }, { rootMargin: "0px 0px -8% 0px" });
 for (const el of document.querySelectorAll(".reveal")) rise.observe(el);
 
-// Show the shortcut for this computer. Without the script it reads Ctrl.
+// Show the shortcut for this computer. Without the script, a noscript line gives the Mac one.
 if (/mac/i.test(navigator.userAgentData?.platform ?? navigator.platform)) {
   for (const key of document.querySelectorAll("kbd[data-mac]")) key.textContent = key.dataset.mac;
 }
