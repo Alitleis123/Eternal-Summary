@@ -179,6 +179,14 @@
     });
   };
 
+  // A retry is sent again without being re-added only while its question is
+  // still the last turn. Once the reader has asked something else it becomes a
+  // new turn, or it would go out with the later conversation as its context.
+  const stillPending = (history, question) => {
+    const last = history[history.length - 1];
+    return last?.role === "user" && last.content === question;
+  };
+
   const writeCache = (value) => window.postMessage({ type: "ES_CACHE_SET", value }, "*");
   const writeModePref = (mode) => window.postMessage({ type: "ES_PREF_SET", mode }, "*");
 
@@ -953,14 +961,14 @@
       send.disabled = value;
     };
 
-    // A retry carries its question, which is already in the thread. The input
-    // was cleared when it was first sent, so it cannot be read back from there.
+    // A retry carries its question, since the input was cleared when it was
+    // first sent and cannot be read back from there.
     const ask = async (retry = "") => {
       const question = retry || input.value.trim();
       if (!question || busy) return;
       setBusy(true);
-      if (!retry) {
-        input.value = "";
+      if (!retry) input.value = "";
+      if (!(retry && stillPending(history, question))) {
         chat.addEntry("user", question);
         history.push({ role: "user", content: question });
       }
@@ -1569,13 +1577,12 @@
   };
   on(document, "selectionchange", refreshSelection);
 
-  // A retry is already in the thread, so it is sent again without being added.
   const ask = async (question, override, retry = false) => {
     const value = (question || input.value).trim();
     if (!value || busy) return;
 
-    if (!retry) {
-      input.value = "";
+    if (!retry) input.value = "";
+    if (!(retry && stillPending(history, value))) {
       chat.addEntry("user", value);
       history.push({ role: "user", content: value });
     }

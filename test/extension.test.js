@@ -664,6 +664,26 @@ describe("failures", () => {
     assert.match(await inPanel("s.textContent"), /Answer: What is the tallest lighthouse\?/);
   });
 
+  // Once a later question has been answered, retrying the earlier one is a new
+  // turn. Resent in place, it went out with the later answer as the last thing
+  // in the conversation.
+  test("retrying an earlier question after a later one asks it last", async () => {
+    await reload();
+    await evaluate("window.__storage = {}");
+    await openPanel();
+    await failAsks();
+    await ask("First question?");
+    await evaluate("window.__reply = null");
+    await ask("Second question?");
+
+    await evaluate("window.__requests.length = 0");
+    await inPanel("s.querySelector('.entry.warn .act').click()");
+    await sleep(1400);
+    const last = await evaluate("window.__requests[0].body.messages.slice(-1)[0]");
+    assert.deepEqual(last, { role: "user", content: "First question?" });
+    assert.match(await inPanel("[...s.querySelectorAll('.entry')].pop().textContent"), /Answer: First question\?/);
+  });
+
   // The card cleared its input before sending, and its retry read the input,
   // so Retry removed the error and did nothing else.
   test("retrying a failed follow-up in the card sends it again", async () => {
