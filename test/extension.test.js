@@ -422,6 +422,16 @@ describe("caching", () => {
     assert.equal(await evaluate("window.__requests.length"), 1);
   });
 
+  // The privacy policy says thirty minutes, so an old summary is deleted, not
+  // only passed over. Otherwise every URL ever summarized stays in storage.
+  test("deletes summaries older than the cache window", async () => {
+    await closePanel();
+    await evaluate("window.__storage['summary:https://example.com/old'] = { summary: 'Old.', mode: 'tldr', ts: Date.now() - 31 * 60 * 1000 };");
+    await openPanel();
+    assert.equal(await evaluate("'summary:https://example.com/old' in window.__storage"), false);
+    assert.equal(await evaluate("('summary:' + location.href) in window.__storage"), true);
+  });
+
   test("remembers the chosen mode across opens", async () => {
     await inPanel("[...s.querySelectorAll('.seg')].find(c => c.textContent === 'Key points').click()");
     await sleep(1600);

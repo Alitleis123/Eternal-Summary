@@ -53,10 +53,16 @@ if (window.__esListenerLoaded) {
     // Read everything: the settings view shows how many summaries are saved.
     chrome.storage.local.get(null, (res) => {
       settings = merge(res?.[SETTINGS_KEY]);
+      // Past thirty minutes a summary is deleted, not only passed over, or the
+      // store would keep every URL ever summarized.
+      const isFresh = (value) => Date.now() - (value?.ts || 0) < CACHE_TTL_MS;
+      const cached = Object.keys(res || {}).filter((k) => k.startsWith(CACHE_PREFIX));
+      const expired = cached.filter((k) => !isFresh(res[k]));
+      if (expired.length) chrome.storage.local.remove(expired);
+
       const entry = res?.[key];
-      const fresh =
-        settings.reuseSaved && entry && Date.now() - (entry.ts || 0) < CACHE_TTL_MS;
-      const saved = Object.keys(res || {}).filter((k) => k.startsWith(CACHE_PREFIX)).length;
+      const fresh = settings.reuseSaved && entry && isFresh(entry);
+      const saved = cached.length - expired.length;
 
       let cacheEl = document.getElementById("es-cache");
       if (!cacheEl) {
