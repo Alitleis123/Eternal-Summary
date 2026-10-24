@@ -94,7 +94,7 @@ To point the extension at your own deployment, change `API_BASE` in `background.
 Real Chrome, driven over the DevTools Protocol. Only the `chrome.*` API surface and the network are stubbed, so the tests exercise the actual message path: the panel asks `background.js` over `chrome.runtime`, and the worker calls the backend.
 
 ```bash
-npm test        # 79 end-to-end tests in real Chrome
+npm test        # 83 end-to-end tests in real Chrome
 npm run check   # syntax check every entry point
 npm run shots   # regenerate the screenshots on the docs site
 npm run package # build the Chrome Web Store zip
