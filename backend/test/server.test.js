@@ -52,6 +52,22 @@ describe("ask", () => {
   });
 });
 
+describe("language", () => {
+  // The stub echoes the instructions back as the summary.
+  test("with none chosen, the summary is asked for in the page's language", async () => {
+    const res = await post("/api/summarize", { text: "El Faro de Alejandría fue una torre construida en el siglo III a. C." });
+    const { summary } = await res.json();
+    assert.match(summary, /Write the summary in the language the page is written in\./);
+  });
+
+  test("a chosen language replaces that", async () => {
+    const res = await post("/api/summarize", { text: "El Faro de Alejandría fue una torre.", lang: "en" });
+    const { summary } = await res.json();
+    assert.match(summary, /Write the summary in English, whatever language the page is in\./);
+    assert.doesNotMatch(summary, /the language the page is written in/);
+  });
+});
+
 describe("cors", () => {
   const preflight = (origin) =>
     fetch(`${BASE}/api/summarize`, {

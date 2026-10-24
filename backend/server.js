@@ -131,6 +131,13 @@ const languageRule = (name, noun) =>
     ? `Write the ${noun} in ${name}, whatever language the page is in. Leave every source snippet exactly as it appears on the page, in the page's original language, untranslated.`
     : "";
 
+// With no language chosen the reader wants the page's own, and that has to be
+// said: left unsaid, the model summarized Spanish, Hindi and Chinese pages in
+// English. Answers need no such rule, since the reader expects one in the
+// language they asked in.
+const summaryLanguage = (name) =>
+  name ? languageRule(name, "summary") : "Write the summary in the language the page is written in.";
+
 const resolveMode = (value) => {
   const id = typeof value === "string" ? value.trim().toLowerCase() : "";
   return MODE_INSTRUCTIONS[id] ? id : DEFAULT_MODE;
@@ -218,7 +225,7 @@ const summarizePrompt = (mode, language) =>
     "summary is a string. sources is an array of 3 to 6 short snippets copied verbatim from the text.",
     "Copy source snippets exactly as they appear so they can be located on the page, at most 20 words each.",
     "A [...] marker means part of the page was left out to fit. Treat the text as an excerpt of something longer, and do not call the page short or thin on that basis.",
-    languageRule(language, "summary"),
+    summaryLanguage(language),
     "Never invent content.",
   ].filter(Boolean).join(" ");
 
@@ -236,7 +243,7 @@ const selectionPrompt = (mode, language) =>
     "If the passage carries nothing you could usefully condense, such as a bare filename, a label, a heading, or a fragment with no claim in it, return an empty summary rather than restating it in other words.",
     "Judge that on what the passage says, not on how long it is.",
     "sources is an array of up to 3 short snippets copied verbatim from the passage.",
-    languageRule(language, "summary"),
+    summaryLanguage(language),
     "Never invent content.",
   ].filter(Boolean).join(" ");
 
