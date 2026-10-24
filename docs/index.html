@@ -393,7 +393,7 @@ h1 em {
   font: inherit;
   font-size: 0.86rem;
   font-weight: 500;
-  color: var(--faint);
+  color: var(--dim);
   background: none;
   border: none;
   padding: 7px 18px;
@@ -402,7 +402,7 @@ h1 em {
   cursor: pointer;
   transition: color 160ms ease, background 200ms var(--ease);
 }
-.seg:hover { color: var(--dim); }
+.seg:hover { color: var(--ink); }
 .seg[aria-pressed="true"], .seg.on { color: var(--ink); background: var(--accent-wash); }
 .seg:focus-visible { outline-offset: -2px; }
 /* The tiles show the control at rest, not one to press. */
@@ -661,7 +661,7 @@ footer { border-top: 1px solid var(--line-dim); padding: 3rem 0 4rem; }
 
     <article class="show show-split">
       <div class="show-head">
-        <h3>Every summary shows its sources.</h3>
+        <h3>Every page summary shows its sources.</h3>
         <p>Click a number and the article scrolls to the quote.</p>
       </div>
       <div class="shot">
@@ -711,7 +711,7 @@ footer { border-top: 1px solid var(--line-dim); padding: 3rem 0 4rem; }
       </article>
       <article class="tile">
         <h3>Read, skim or skip.</h3>
-        <p>Each summary opens with a verdict and the reason for it.</p>
+        <p>Each page summary opens with a verdict and the reason for it.</p>
         <div class="tile-art">
           <ul class="verdicts" aria-label="Verdicts">
             <li class="read">Worth reading</li>
@@ -795,7 +795,7 @@ footer { border-top: 1px solid var(--line-dim); padding: 3rem 0 4rem; }
       </details>
       <details>
         <summary>What gets sent, and where?</summary>
-        <p>Nothing until you ask. Then the page text, your highlight or your question goes to a small server that passes it to Google's Gemini and keeps none of it. Summaries stay in your browser for 30 minutes. <a href="privacy.html">Read the privacy policy</a>.</p>
+        <p>Nothing until you ask. Then the page text, your highlight or your question goes to a small server that passes it to Google's Gemini and keeps none of it. Summaries are saved in your browser and reused for 30 minutes. Clear them from the gear in the panel. <a href="privacy.html">Read the privacy policy</a>.</p>
       </details>
       <details>
         <summary>Does it work in Firefox or Safari?</summary>
