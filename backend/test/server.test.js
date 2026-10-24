@@ -83,6 +83,14 @@ describe("logs", () => {
     assert.match(output, /unreadable reply/);
     assert.doesNotMatch(output, /secret-page-text-7731/);
   });
+
+  test("an upstream error is logged by its code, not its message", async () => {
+    const res = await post("/api/summarize", { text: "UPSTREAM400 secret-page-text-5519" });
+    assert.equal(res.status, 500);
+    await new Promise((r) => setTimeout(r, 100));
+    assert.match(output, /Gemini responded 400 INVALID_ARGUMENT/);
+    assert.doesNotMatch(output, /secret-page-text-5519/);
+  });
 });
 
 describe("gemini key", () => {

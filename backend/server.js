@@ -1,7 +1,7 @@
 import express from "express";
 import dotenv from "dotenv";
 import cors from "cors";
-import { readPayload, readVerdict } from "./payload.js";
+import { readPayload, readVerdict, safeJsonParse } from "./payload.js";
 import { retryDelay, upstreamFailure } from "./upstream.js";
 
 // Fly.io injects secrets straight into the environment, so loading a .env file
@@ -170,8 +170,11 @@ const callGemini = async (systemPrompt, messages, { schema = null, retries = 3 }
       }
       if (!response.ok) {
         // Carry the status so the route can tell a busy model apart from a
-        // fault of our own.
-        const error = new Error(`Gemini responded ${response.status}: ${text.slice(0, 300)}`);
+        // fault of our own. Only Google's error code goes in the message, never
+        // its text, which can quote the request: this message is logged, and
+        // the privacy policy says the logs never hold what the reader sent.
+        const code = String(safeJsonParse(text, null)?.error?.status || "").match(/^[A-Z_]{1,40}$/)?.[0];
+        const error = new Error(`Gemini responded ${response.status}${code ? ` ${code}` : ""}`);
         error.status = response.status;
         throw error;
       }

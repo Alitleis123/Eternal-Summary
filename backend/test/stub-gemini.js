@@ -15,6 +15,11 @@ globalThis.fetch = async (url, options) => {
   const body = JSON.parse(options.body);
   const prompt = body.system_instruction.parts[0].text;
   const user = body.contents.at(-1).parts[0].text;
+  // An upstream error whose message quotes the request, as a 400 can.
+  if (user.includes("UPSTREAM400")) {
+    const error = { code: 400, status: "INVALID_ARGUMENT", message: `Invalid value at ${user}` };
+    return new Response(JSON.stringify({ error }), { status: 400 });
+  }
   // An unreadable reply, for the logging test: prose shaped like JSON.
   const text = user.includes("UNREADABLE")
     ? `{"summary": broken ${user}`
