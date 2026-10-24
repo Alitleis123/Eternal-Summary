@@ -1,5 +1,5 @@
-// End-to-end tests. Real Chrome, real message protocol: the page posts to
-// listener.js, which forwards to background.js, which calls a stubbed backend.
+// End-to-end tests. Real Chrome, real message protocol: the panel asks
+// background.js over chrome.runtime, and background.js calls a stubbed backend.
 // Only the chrome.* API surface and the network are faked.
 import { test, before, after, describe } from "node:test";
 import assert from "node:assert/strict";
@@ -365,6 +365,37 @@ describe("sources", () => {
     assert.equal(await evaluate("!!document.getElementById('es-toast')"), true);
     await evaluate("window.__reply = null");
   });
+
+  // Matching once dropped everything outside ASCII, so on a Russian, Hindi or
+  // Chinese page a snippet normalised to nothing and every footnote was dead.
+  test("a snippet in another script still finds its passage", async () => {
+    await reload();
+    await evaluate("window.__storage = {}");
+    await evaluate(`(() => {
+      const passages = {
+        ru: 'Александрийский маяк простоял почти шестнадцать веков, пока его не разрушили землетрясения.',
+        hi: 'प्रकाशस्तंभ ने हजारों वर्षों तक जहाजों को सुरक्षित किनारे तक पहुँचाया और रात भर लकड़ी जलाई।',
+        zh: '亚历山大灯塔高一百多米，在许多世纪里都是世界上最高的建筑之一。',
+      };
+      for (const [id, text] of Object.entries(passages)) {
+        const p = document.createElement('p');
+        p.id = id;
+        p.textContent = text;
+        document.querySelector('article').appendChild(p);
+      }
+      window.__reply = () => ({ ok: true, status: 200, text: () => Promise.resolve(JSON.stringify({
+        summary: 'A summary.',
+        sources: ['Александрийский маяк простоял почти шестнадцать веков', 'हजारों वर्षों तक जहाजों को सुरक्षित किनारे', '在许多世纪里都是世界上最高的建筑'],
+      })) });
+    })()`);
+    await openPanel();
+    assert.equal(await inPanel("s.querySelectorAll('.ref').length"), 3);
+    assert.equal(await inPanel("s.querySelectorAll('.ref.dead').length"), 0, "every snippet is on the page");
+    await inPanel("s.querySelectorAll('.ref')[2].click()");
+    await sleep(500);
+    assert.match(await evaluate("document.getElementById('zh').style.backgroundColor"), /123, 140, 255/);
+    await evaluate("window.__reply = null");
+  });
 });
 
 describe("caching", () => {
@@ -389,6 +420,16 @@ describe("caching", () => {
     await evaluate("window.__requests.length = 0");
     await openPanel();
     assert.equal(await evaluate("window.__requests.length"), 1);
+  });
+
+  // The privacy policy says thirty minutes, so an old summary is deleted, not
+  // only passed over. Otherwise every URL ever summarized stays in storage.
+  test("deletes summaries older than the cache window", async () => {
+    await closePanel();
+    await evaluate("window.__storage['summary:https://example.com/old'] = { summary: 'Old.', mode: 'tldr', ts: Date.now() - 31 * 60 * 1000 };");
+    await openPanel();
+    assert.equal(await evaluate("'summary:https://example.com/old' in window.__storage"), false);
+    assert.equal(await evaluate("('summary:' + location.href) in window.__storage"), true);
   });
 
   test("remembers the chosen mode across opens", async () => {
@@ -599,6 +640,75 @@ describe("failures", () => {
     assert.match(await inPanel("s.querySelector('.entry.warn').textContent"), /Too many requests/);
     await evaluate("window.__reply = null");
   });
+
+  const failAsks = () =>
+    evaluate(`window.__reply = () => ({ ok: false, status: 500,
+      text: () => Promise.resolve(JSON.stringify({ error: 'Failed to answer question.' })) });`);
+
+  // Retry used to post the question a second time, so it showed twice and
+  // went to the model twice in the history.
+  test("retrying a failed question asks it once", async () => {
+    await reload();
+    await evaluate("window.__storage = {}");
+    await openPanel();
+    await failAsks();
+    await ask("What is the tallest lighthouse?");
+    assert.equal(await inPanel("!!s.querySelector('.entry.warn')"), true);
+
+    await evaluate("window.__reply = null; window.__requests.length = 0");
+    await inPanel("s.querySelector('.entry.warn .act').click()");
+    await sleep(1400);
+    assert.equal(await inPanel("s.querySelectorAll('.entry.ask').length"), 1);
+    const asked = await evaluate("window.__requests[0].body.messages.filter((m) => m.role === 'user').length");
+    assert.equal(asked, 1);
+    assert.match(await inPanel("s.textContent"), /Answer: What is the tallest lighthouse\?/);
+  });
+
+  // Once a later question has been answered, retrying the earlier one is a new
+  // turn. Resent in place, it went out with the later answer as the last thing
+  // in the conversation.
+  test("retrying an earlier question after a later one asks it last", async () => {
+    await reload();
+    await evaluate("window.__storage = {}");
+    await openPanel();
+    await failAsks();
+    await ask("First question?");
+    await evaluate("window.__reply = null");
+    await ask("Second question?");
+
+    await evaluate("window.__requests.length = 0");
+    await inPanel("s.querySelector('.entry.warn .act').click()");
+    await sleep(1400);
+    const last = await evaluate("window.__requests[0].body.messages.slice(-1)[0]");
+    assert.deepEqual(last, { role: "user", content: "First question?" });
+    assert.match(await inPanel("[...s.querySelectorAll('.entry')].pop().textContent"), /Answer: First question\?/);
+  });
+
+  // The card cleared its input before sending, and its retry read the input,
+  // so Retry removed the error and did nothing else.
+  test("retrying a failed follow-up in the card sends it again", async () => {
+    await closePanel();
+    await select("p1");
+    await sleep(500);
+    await inCard("s.querySelector('.trigger').click()");
+    await sleep(1600);
+    await failAsks();
+    await inCard(`(() => {
+      const input = s.querySelector('.card .field input');
+      input.value = 'When was it built?';
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    })()`);
+    await sleep(1400);
+    assert.equal(await inCard("!!s.querySelector('.entry.warn')"), true);
+
+    await evaluate("window.__reply = null");
+    await inCard("s.querySelector('.entry.warn .act').click()");
+    await sleep(1400);
+    assert.equal(await inCard("!!s.querySelector('.entry.warn')"), false);
+    assert.equal(await inCard("s.querySelectorAll('.entry.ask').length"), 1);
+    assert.match(await inCard("s.querySelector('.card').textContent"), /Answer: When was it built\?/);
+    await inCard("s.querySelector('.card .icon-btn').click()");
+  });
 });
 
 describe("settings", () => {
@@ -627,6 +737,22 @@ describe("settings", () => {
     await sleep(300);
     assert.equal(await inPanel("s.querySelector('.root').dataset.view"), "stream");
     assert.notEqual(await inPanel("getComputedStyle(s.querySelector('.composer')).display"), "none");
+  });
+
+  // The focus trap only knew buttons and inputs, so Shift+Tab from the
+  // language picker counted as leaving the dialog and jumped to the end.
+  test("shift+tab from the language picker stays where the browser puts it", async () => {
+    await gear();
+    await sleep(300);
+    const jumped = await inPanel(`(() => {
+      const picker = s.querySelector('.picker select');
+      picker.focus();
+      picker.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, composed: true }));
+      return s.activeElement !== picker;
+    })()`);
+    assert.equal(jumped, false);
+    await gear();
+    await sleep(300);
   });
 
   test("a switch writes through to storage", async () => {
@@ -952,6 +1078,123 @@ describe("long pages", () => {
     const sent = await evaluate("window.__requests.slice(-1)[0].body.text");
     assert.doesNotMatch(sent, /\[\.\.\.\]/, "a page under budget needs no sampling");
     assert.match(sent, /mollis pretium/, "the tail of a short page is simply included");
+  });
+});
+
+// YouTube, Gmail and Google Docs refuse any string written to innerHTML. The
+// panel runs in the page's own world, so one icon built that way threw before
+// the rail had a close button, and left the page inset beside nothing.
+describe("trusted types", () => {
+  const TT = `http://localhost:${PORT}/trusted-types.html`;
+
+  test("the panel builds on a page that enforces them", async () => {
+    await cdp.call("Page.navigate", { url: TT });
+    await sleep(700);
+    await evaluate("window.__boot()");
+    await sleep(400);
+    await evaluate("window.__late = null; window.addEventListener('error', (e) => (window.__late = String(e.message)));");
+    await openPanel();
+    assert.equal(await evaluate("window.__late"), null);
+    assert.equal(await inPanel("s.querySelectorAll('.head .icon-btn svg').length"), 2);
+    assert.match(await inPanel("s.querySelector('.wordmark .meta').textContent"), /^localhost · \d+ min read$/);
+    assert.match(await inPanel("s.textContent"), /tldr mode/);
+  });
+
+  test("so does the selection card", async () => {
+    await closePanel();
+    await select("tt1");
+    await sleep(500);
+    await inCard("s.querySelector('.trigger').click()");
+    await sleep(1600);
+    assert.equal(await evaluate("window.__late"), null);
+    assert.equal(await inCard("!!s.querySelector('.card .icon-btn svg')"), true);
+    assert.match(await inCard("s.querySelector('.card').textContent"), /tldr mode/);
+  });
+});
+
+describe("recovery", () => {
+  const ours = "document.querySelectorAll('[data-es-host=\"ai-overlay\"]')";
+
+  test("a page element using the panel's id does not block it", async () => {
+    await reload();
+    await evaluate("document.body.prepend(Object.assign(document.createElement('div'), { id: 'ai-overlay' }))");
+    await openPanel();
+    assert.equal(await evaluate(`${ours}.length`), 1);
+    assert.match(await evaluate(`${ours}[0].shadowRoot.textContent`), /tldr mode/);
+    await evaluate(`${ours}[0].__esClose(true); document.body.querySelector('#ai-overlay').remove()`);
+  });
+
+  // An update or reload of the extension strands an open panel: its world is
+  // gone, so it cannot close itself, and it used to swallow every later click.
+  test("a panel left by an earlier copy of the extension is cleared away", async () => {
+    await reload();
+    await evaluate(`(() => {
+      const stale = document.createElement('div');
+      stale.id = 'ai-overlay';
+      stale.dataset.esHost = 'ai-overlay';
+      stale.dataset.esInset = JSON.stringify([['margin-right', '', ''], ['margin-left', '', '']]);
+      document.documentElement.appendChild(stale);
+      document.documentElement.style.setProperty('margin-right', '430px', 'important');
+    })()`);
+    await openPanel();
+    assert.equal(await evaluate(`${ours}.length`), 1);
+    assert.match(await inPanel("s.textContent"), /tldr mode/);
+    await closePanel();
+    assert.equal(await evaluate("document.documentElement.style.marginRight"), "", "the stale inset should not outlive it");
+  });
+
+  test("so is a selection button left the same way", async () => {
+    await reload();
+    await evaluate(`(() => {
+      const stale = document.createElement('div');
+      stale.id = 'es-selection-popup';
+      stale.dataset.esHost = 'popup';
+      document.documentElement.appendChild(stale);
+    })()`);
+    await select("p1");
+    await sleep(500);
+    assert.equal(await evaluate("document.querySelectorAll('[data-es-host=\"popup\"]').length"), 1);
+    await inCard("s.querySelector('.trigger').click()");
+    await sleep(1600);
+    assert.match(await inCard("s.querySelector('.card').textContent"), /tldr mode/);
+    await inCard("s.querySelector('.card .icon-btn').click()");
+  });
+
+  // A single-page site can move to another article before the reply lands.
+  // The summary is of the page that was read, so that is where it is saved.
+  test("a summary is saved under the page it was read from", async () => {
+    await reload();
+    await evaluate(`(() => {
+      window.__storage = {};
+      window.__reply = () => new Promise((resolve) => {
+        window.__release = () => resolve({ ok: true, status: 200,
+          text: () => Promise.resolve(JSON.stringify({ summary: 'About the first page.', sources: [] })) });
+      });
+    })()`);
+    await openPanel();
+    await evaluate("history.pushState({}, '', '/article.html?next'); window.__release()");
+    await sleep(600);
+    const keys = await evaluate("Object.keys(window.__storage).filter((k) => k.startsWith('summary:'))");
+    assert.deepEqual(keys, [`summary:${PAGE}`]);
+    await evaluate("window.__reply = null");
+  });
+});
+
+// These messages were the bridge between the panel and the extension, and any
+// script on the page could post them: spend the API without a click, switch
+// settings off, or plant a summary. Nothing listens for them now.
+describe("isolation", () => {
+  test("a page cannot drive the extension with window messages", async () => {
+    await reload();
+    await evaluate("window.__storage = {}; window.__requests.length = 0");
+    await evaluate(`(() => {
+      window.postMessage({ type: 'ES_API_REQUEST', requestId: 'x', endpoint: 'summarize', payload: { text: 'spend the quota' } }, '*');
+      window.postMessage({ type: 'ES_SETTINGS_SET', patch: { selectionButton: false } }, '*');
+      window.postMessage({ type: 'ES_CACHE_SET', value: { summary: 'planted' } }, '*');
+    })()`);
+    await sleep(400);
+    assert.equal(await evaluate("window.__requests.length"), 0);
+    assert.deepEqual(await evaluate("Object.keys(window.__storage)"), []);
   });
 });
 

@@ -4,7 +4,7 @@ import { spawn } from "node:child_process";
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { extname, join } from "node:path";
+import { delimiter, extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
@@ -18,13 +18,15 @@ const CHROME_CANDIDATES = [
   "/usr/bin/google-chrome-stable",
   "/usr/bin/chromium",
   "/usr/bin/chromium-browser",
+  process.env.PROGRAMFILES && join(process.env.PROGRAMFILES, "Google/Chrome/Application/chrome.exe"),
+  process.env.LOCALAPPDATA && join(process.env.LOCALAPPDATA, "Google/Chrome/Application/chrome.exe"),
 ].filter(Boolean);
 
 const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".png": "image/png" };
 
 const fromPath = () => {
   // setup-chrome on CI puts the binary on PATH rather than a fixed location.
-  const dirs = (process.env.PATH || "").split(":").filter(Boolean);
+  const dirs = (process.env.PATH || "").split(delimiter).filter(Boolean);
   for (const name of ["chrome", "google-chrome", "google-chrome-stable", "chromium"]) {
     for (const dir of dirs) {
       const candidate = join(dir, name);

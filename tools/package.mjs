@@ -9,9 +9,11 @@ import { rm, mkdir, cp, readFile } from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const run = promisify(execFile);
-const ROOT = new URL("..", import.meta.url).pathname;
+// .pathname would give /C:/... on Windows, and %20 for every space.
+const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const BUILD = join(ROOT, "build");
 
 // Every file the extension needs at runtime. web_accessible_resources and the
@@ -61,11 +63,15 @@ for (const item of SHIP) {
 
 const zip = join(ROOT, `eternal-summary-${manifest.version}.zip`);
 await rm(zip, { force: true });
+// Windows has no zip. Its own tar, not the GNU one Git Bash puts first on the
+// PATH, writes a zip when the name ends in .zip.
+const winTar = process.platform === "win32" && join(process.env.SystemRoot, "System32", "tar.exe");
 // -r recurse, -q quiet, -X drop the resource forks and finder metadata macOS
 // would otherwise bury in the archive.
-await run("zip", ["-rqX", zip, ...SHIP], { cwd: BUILD });
+if (winTar) await run(winTar, ["-a", "-cf", zip, ...SHIP], { cwd: BUILD });
+else await run("zip", ["-rqX", zip, ...SHIP], { cwd: BUILD });
 await rm(BUILD, { recursive: true, force: true });
 
-const { stdout } = await run("unzip", ["-l", zip]);
+const { stdout } = winTar ? await run(winTar, ["-tvf", zip]) : await run("unzip", ["-l", zip]);
 console.log(stdout.trim());
 console.log(`\nready to upload: ${zip}`);
