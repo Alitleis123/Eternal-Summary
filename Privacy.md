@@ -13,7 +13,7 @@ Nothing is sent anywhere until you ask for something. When you open the panel, a
 - Asking a question sends your question, the recent messages in that conversation, the same page text the summary used, and any text you have highlighted on the page.
 - If you pick a summary language in the settings, its two-letter code goes with each request.
 
-The backend keeps none of this. Text is used to generate the response and is discarded when the request finishes. Its logs record the size, mode and language of each request and any error, never the text. Requests are rate limited per IP address, which is held in memory for one minute and never written down.
+The backend keeps none of this. Text is used to generate the response and is discarded when the request finishes. Its logs record the size, mode and language of each request and any error, never the text. Requests are rate limited per IP address, which is held in memory for at most two minutes and never written down.
 
 ## What stays on your device
 

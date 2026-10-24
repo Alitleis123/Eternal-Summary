@@ -63,13 +63,19 @@ const RATE_LIMIT_WINDOW_MS = 60 * 1000;
 const RATE_LIMIT_MAX = 30;
 const hits = new Map();
 
-const rateLimit = (req, res, next) => {
+// Swept on a timer, not on the next request, so an address is gone within two
+// minutes of its window opening even if nobody else calls. The privacy policy
+// says so.
+setInterval(() => {
   const now = Date.now();
-  const key = req.ip || "unknown";
-
   for (const [ip, entry] of hits) {
     if (now - entry.start > RATE_LIMIT_WINDOW_MS) hits.delete(ip);
   }
+}, RATE_LIMIT_WINDOW_MS).unref();
+
+const rateLimit = (req, res, next) => {
+  const now = Date.now();
+  const key = req.ip || "unknown";
 
   const entry = hits.get(key);
   if (!entry || now - entry.start > RATE_LIMIT_WINDOW_MS) {
