@@ -6,7 +6,7 @@
 // is stubbed below with text written for the demo article, so a rebuild does
 // not cost an API call and does not produce a different summary every time.
 import { writeFile, mkdir, rm } from "node:fs/promises";
-import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { launch, startServer, connect, sleep, findChrome } from "../test/driver.js";
 
 const PORT = 4192;
@@ -82,7 +82,7 @@ const shot = async (name, clip, dir = OUT) => {
     format: "png",
     ...(clip ? { clip: { ...clip, scale: 2 } } : {}),
   });
-  await writeFile(join(dir.pathname, `${name}.png`), Buffer.from(data, "base64"));
+  await writeFile(fileURLToPath(new URL(`${name}.png`, dir)), Buffer.from(data, "base64"));
   console.log(`  wrote ${dir === OUT ? "shots" : "store"}/${name}.png`);
 };
 
@@ -147,7 +147,7 @@ const promoPass = async () => {
       return JSON.stringify({ x: r.x + scrollX, y: r.y + scrollY, width: r.width, height: r.height });
     })()`));
     const { data } = await cdp.call("Page.captureScreenshot", { format: "png", clip: { ...box, scale: 1 } });
-    await writeFile(join(STORE_OUT.pathname, `${name}.png`), Buffer.from(data, "base64"));
+    await writeFile(fileURLToPath(new URL(`${name}.png`, STORE_OUT)), Buffer.from(data, "base64"));
     console.log(`  wrote store/${name}.png ${box.width}x${box.height}`);
   }
 };
