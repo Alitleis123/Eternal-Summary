@@ -1,5 +1,5 @@
-// End-to-end tests. Real Chrome, real message protocol: the page posts to
-// listener.js, which forwards to background.js, which calls a stubbed backend.
+// End-to-end tests. Real Chrome, real message protocol: the panel asks
+// background.js over chrome.runtime, and background.js calls a stubbed backend.
 // Only the chrome.* API surface and the network are faked.
 import { test, before, after, describe } from "node:test";
 import assert from "node:assert/strict";
@@ -1109,6 +1109,24 @@ describe("trusted types", () => {
     assert.equal(await evaluate("window.__late"), null);
     assert.equal(await inCard("!!s.querySelector('.card .icon-btn svg')"), true);
     assert.match(await inCard("s.querySelector('.card').textContent"), /tldr mode/);
+  });
+});
+
+// These messages were the bridge between the panel and the extension, and any
+// script on the page could post them: spend the API without a click, switch
+// settings off, or plant a summary. Nothing listens for them now.
+describe("isolation", () => {
+  test("a page cannot drive the extension with window messages", async () => {
+    await reload();
+    await evaluate("window.__storage = {}; window.__requests.length = 0");
+    await evaluate(`(() => {
+      window.postMessage({ type: 'ES_API_REQUEST', requestId: 'x', endpoint: 'summarize', payload: { text: 'spend the quota' } }, '*');
+      window.postMessage({ type: 'ES_SETTINGS_SET', patch: { selectionButton: false } }, '*');
+      window.postMessage({ type: 'ES_CACHE_SET', value: { summary: 'planted' } }, '*');
+    })()`);
+    await sleep(400);
+    assert.equal(await evaluate("window.__requests.length"), 0);
+    assert.deepEqual(await evaluate("Object.keys(window.__storage)"), []);
   });
 });
 

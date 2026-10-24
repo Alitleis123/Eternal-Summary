@@ -1,5 +1,6 @@
-// Content script. Bridges the page-context overlay to the extension, and owns
-// the floating "Summarize" button that follows a text selection.
+// Content script. Owns the floating "Summarize" button that follows a text
+// selection, keeps storage and settings, and opens the panel by importing
+// content.js into this same isolated world, out of the page's reach.
 
 if (window.__esListenerLoaded) {
   // Injected twice (manifest plus the background fallback). Nothing to do.
@@ -35,7 +36,7 @@ if (window.__esListenerLoaded) {
     if (!settings.selectionButton) hideTrigger();
   });
 
-  // One stylesheet, shared by the trigger here and the panel in page context.
+  // One stylesheet, shared by the trigger here and the panel.
   let cssPromise = null;
   const loadCss = () => {
     if (!cssPromise) {
@@ -47,8 +48,35 @@ if (window.__esListenerLoaded) {
   };
   loadCss();
 
-  const showOverlay = async () => {
-    const css = await loadCss();
+  // Everything the panel may do to storage, as plain calls. These were page
+  // messages once, and any script on the page could post them too.
+  const panelCalls = {
+    setSettings: (patch) => {
+      settings = merge({ ...settings, ...patch });
+      chrome.storage.local.set({ [SETTINGS_KEY]: settings });
+      // Take effect on the page immediately, not on the next load.
+      if (!settings.selectionButton) hideTrigger();
+    },
+    setMode: (mode) => {
+      if (typeof mode === "string" && mode) chrome.storage.local.set({ [MODE_KEY]: mode });
+    },
+    writeCache: (value) => {
+      if (!value?.summary || !settings.reuseSaved) return;
+      chrome.storage.local.set({ [cacheKey()]: { ...value, ts: Date.now() } });
+    },
+    clearCache: () => {
+      chrome.storage.local.get(null, (res) => {
+        const keys = Object.keys(res || {}).filter((k) => k.startsWith(CACHE_PREFIX));
+        if (keys.length) chrome.storage.local.remove(keys);
+      });
+    },
+    restorePopup: () => restoreSelectionPopup(),
+  };
+
+  // `selection` is set when the floating button asked for this, and absent for
+  // the toolbar and the shortcut.
+  const showOverlay = async (selection = null) => {
+    const [css, panel] = await Promise.all([loadCss(), import(chrome.runtime.getURL("content.js"))]);
     const key = cacheKey();
     // Read everything: the settings view shows how many summaries are saved.
     chrome.storage.local.get(null, (res) => {
@@ -62,25 +90,16 @@ if (window.__esListenerLoaded) {
 
       const entry = res?.[key];
       const fresh = settings.reuseSaved && entry && isFresh(entry);
-      const saved = cached.length - expired.length;
 
-      let cacheEl = document.getElementById("es-cache");
-      if (!cacheEl) {
-        cacheEl = document.createElement("div");
-        cacheEl.id = "es-cache";
-        cacheEl.style.display = "none";
-        document.documentElement.appendChild(cacheEl);
-      }
-      cacheEl.dataset.payload = JSON.stringify(fresh ? entry : {});
-      cacheEl.dataset.css = css;
-      cacheEl.dataset.mode = res?.[MODE_KEY] || "";
-      cacheEl.dataset.settings = JSON.stringify(settings);
-      cacheEl.dataset.saved = String(saved);
-
-      const script = document.createElement("script");
-      script.src = chrome.runtime.getURL("content.js");
-      script.onload = () => script.remove();
-      (document.head || document.documentElement).appendChild(script);
+      panel.open({
+        ...panelCalls,
+        css,
+        settings: { ...settings },
+        saved: cached.length - expired.length,
+        cached: fresh ? entry : null,
+        mode: res?.[MODE_KEY] || "",
+        selection,
+      });
     });
   };
 
@@ -93,71 +112,8 @@ if (window.__esListenerLoaded) {
     sendResponse({ ok: false });
   });
 
-  // === Page bridge ===
-  window.addEventListener("message", async (event) => {
-    if (event.source !== window) return;
-    const msg = event.data;
-    if (!msg || typeof msg.type !== "string") return;
-
-    if (msg.type === "ES_API_REQUEST") {
-      try {
-        const result = await chrome.runtime.sendMessage({
-          type: "ES_API_REQUEST",
-          endpoint: msg.endpoint,
-          payload: msg.payload,
-        });
-        window.postMessage({ type: "ES_API_RESPONSE", requestId: msg.requestId, result }, "*");
-      } catch (err) {
-        window.postMessage(
-          {
-            type: "ES_API_RESPONSE",
-            requestId: msg.requestId,
-            result: { ok: false, error: err?.message || String(err) },
-          },
-          "*"
-        );
-      }
-      return;
-    }
-
-    if (msg.type === "ES_PREF_SET") {
-      if (typeof msg.mode === "string" && msg.mode) chrome.storage.local.set({ [MODE_KEY]: msg.mode });
-      return;
-    }
-
-    if (msg.type === "ES_SETTINGS_SET") {
-      if (!msg.patch || typeof msg.patch !== "object") return;
-      settings = merge({ ...settings, ...msg.patch });
-      chrome.storage.local.set({ [SETTINGS_KEY]: settings });
-      // Take effect on the page immediately, not on the next load.
-      if (!settings.selectionButton) hideTrigger();
-      return;
-    }
-
-    if (msg.type === "ES_CACHE_CLEAR") {
-      chrome.storage.local.get(null, (res) => {
-        const keys = Object.keys(res || {}).filter((k) => k.startsWith(CACHE_PREFIX));
-        if (keys.length) chrome.storage.local.remove(keys);
-      });
-      return;
-    }
-
-    if (msg.type === "ES_CACHE_SET") {
-      if (!msg.value?.summary || !settings.reuseSaved) return;
-      chrome.storage.local.set({
-        [cacheKey()]: { ...msg.value, ts: Date.now() },
-      });
-      return;
-    }
-
-    if (msg.type === "ES_RESTORE_SELECTION_POPUP") {
-      restoreSelectionPopup();
-    }
-  });
-
   // === Floating selection button ===
   const POPUP_ID = "es-selection-popup";
-  const STORE_ID = "es-selection-store";
   let lastPointer = { x: 0, y: 0 };
   let lastRect = null;
   let hideTimer = null;
@@ -185,7 +141,7 @@ if (window.__esListenerLoaded) {
 
   const restoreSelectionPopup = () => {
     const popup = document.getElementById(POPUP_ID);
-    if (!popup?.shadowRoot) return;
+    if (!popup?.__esShadow) return;
     if (popup.__esCleanup) {
       popup.__esCleanup();
       popup.__esCleanup = null;
@@ -203,22 +159,11 @@ if (window.__esListenerLoaded) {
     })) {
       popup.style.setProperty(k, v, "important");
     }
-    wireTrigger(buildTrigger(popup.shadowRoot));
-  };
-
-  const ensureStore = () => {
-    let store = document.getElementById(STORE_ID);
-    if (!store) {
-      store = document.createElement("div");
-      store.id = STORE_ID;
-      store.style.setProperty("display", "none", "important");
-      document.documentElement.appendChild(store);
-    }
-    return store;
+    wireTrigger(buildTrigger(popup.__esShadow));
   };
 
   const markSelectionAnchor = (selection) => {
-    if (!selection?.rangeCount) return { anchorId: "", anchorOffset: "" };
+    if (!selection?.rangeCount) return { anchorId: "", anchorOffset: null };
     try {
       const range = selection.getRangeAt(0).cloneRange();
       const selectionRect = range.getBoundingClientRect();
@@ -243,14 +188,14 @@ if (window.__esListenerLoaded) {
       const anchorRect = anchor.getBoundingClientRect();
       return {
         anchorId,
-        anchorOffset: JSON.stringify({
+        anchorOffset: {
           top: selectionRect.top - anchorRect.top,
           bottom: selectionRect.bottom - anchorRect.top,
           left: selectionRect.left - anchorRect.left,
-        }),
+        },
       };
     } catch {
-      return { anchorId: "", anchorOffset: "" };
+      return { anchorId: "", anchorOffset: null };
     }
   };
 
@@ -265,13 +210,7 @@ if (window.__esListenerLoaded) {
       const selectedText = selection ? selection.toString().trim() : "";
       const { anchorId, anchorOffset } = markSelectionAnchor(selection);
 
-      const store = ensureStore();
-      store.dataset.text = selectedText;
-      store.dataset.mode = "selection";
-      store.dataset.rect = JSON.stringify(lastRect || {});
-      store.dataset.anchorId = anchorId;
-      store.dataset.anchorOffset = anchorOffset;
-      showOverlay();
+      showOverlay({ mode: "selection", text: selectedText, rect: lastRect || {}, anchorId, anchorOffset });
     });
   };
 
@@ -295,7 +234,10 @@ if (window.__esListenerLoaded) {
       popup.style.setProperty(k, v, "important");
     }
 
-    const shadow = popup.attachShadow({ mode: "open" });
+    // Closed, so the page cannot press the button for the reader. The root is
+    // kept on the host, which only this world and content.js can see.
+    const shadow = popup.attachShadow({ mode: "closed" });
+    popup.__esShadow = shadow;
     const style = document.createElement("style");
     style.textContent = await loadCss();
     shadow.appendChild(style);
@@ -309,7 +251,7 @@ if (window.__esListenerLoaded) {
   };
 
   const placeTrigger = (popup, rect) => {
-    const button = popup.shadowRoot?.querySelector(".trigger");
+    const button = popup.__esShadow?.querySelector(".trigger");
     if (!button) return;
     const gap = 8;
     const box = button.getBoundingClientRect();

@@ -88,10 +88,10 @@ To point the extension at your own deployment, change `API_BASE` in `background.
 
 ## Tests
 
-Real Chrome, driven over the DevTools Protocol. Only the `chrome.*` API surface and the network are stubbed, so the tests exercise the actual message path: the page posts to `listener.js`, which forwards to `background.js`, which calls the backend.
+Real Chrome, driven over the DevTools Protocol. Only the `chrome.*` API surface and the network are stubbed, so the tests exercise the actual message path: the panel asks `background.js` over `chrome.runtime`, and the worker calls the backend.
 
 ```bash
-npm test        # 77 end-to-end tests in real Chrome
+npm test        # 79 end-to-end tests in real Chrome
 npm run check   # syntax check every entry point
 npm run shots   # regenerate the screenshots on the docs site
 npm run package # build the Chrome Web Store zip
@@ -105,8 +105,8 @@ The fixture page ships deliberately hostile CSS (`* { line-height: 1 !important 
 Eternal-Summary/
 ├── manifest.json      Extension manifest (MV3)
 ├── background.js      Service worker. Owns the backend address and every network call.
-├── listener.js        Content script. Selection button, and the bridge to the page.
-├── content.js         The panel itself. Runs in page context, injected on demand.
+├── listener.js        Content script. Selection button, storage, and opening the panel.
+├── content.js         The panel itself. Imported into the content script's world on demand.
 ├── ui.css             Styles for the panel and the selection card
 ├── icons/             Extension icons, 16 through 512
 ├── test/              End-to-end tests and the CDP driver
@@ -115,7 +115,7 @@ Eternal-Summary/
 └── docs/              Project site, published with GitHub Pages
 ```
 
-Page-context code never sees the backend URL. It names an endpoint, `listener.js` forwards that to the service worker, and the worker rejects anything outside its allow list before making a request.
+The panel never sees the backend URL. It names an endpoint, the service worker rejects anything outside its allow list, and only then makes the request. The panel runs in the content script's isolated world, not the page's, and its shadow roots are closed, so a page script cannot press its buttons, read its replies or post requests on its behalf.
 
 The UI renders inside a shadow root, with `ui.css` loaded into it. Page stylesheets cannot cross that boundary, so a site rule like `* { line-height: 1 !important }` cannot collapse the panel's text, and the panel cannot leak styles onto the page either.
 

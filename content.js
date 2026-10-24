@@ -1,6 +1,12 @@
-(() => {
-  // Runs in the page's own context, injected by listener.js. It has no chrome.*
-  // access, so every network call and cache write goes through the bridge.
+// The panel and the selection card. listener.js imports this into the content
+// script's isolated world and calls open() each time one is wanted, handing
+// over the settings, the stylesheet and the calls that touch storage.
+//
+// It used to run in the page's own world and talk to listener.js through
+// window.postMessage. Any script on the page could post to that too: spend the
+// API with no click, rewrite the settings, clear the cache, or answer for the
+// model. A page cannot reach this world at all.
+export const open = (handoff) => {
   //
   // The whole UI lives in a shadow root. Page stylesheets cannot cross that
   // boundary, which matters: a site rule like `* { line-height: 1 !important }`
@@ -50,28 +56,20 @@
     { value: "tr", label: "Turkish" },
   ];
 
-  const cacheEl = document.getElementById("es-cache");
-
   // listener.js owns the defaults and hands them over already merged, so there
   // is no second copy here to drift out of step.
-  const settings = (() => {
-    try {
-      return JSON.parse(cacheEl?.dataset?.settings || "{}");
-    } catch {
-      return {};
-    }
-  })();
-  const savedSummaries = Number(cacheEl?.dataset?.saved || 0);
+  const settings = handoff.settings;
+  const savedSummaries = handoff.saved || 0;
   // One gate for every reveal, so the preference cannot be honoured in some
   // paths and missed in others.
   const animate = () => settings.animateText !== false;
   const putSettings = (patch) => {
     Object.assign(settings, patch);
-    window.postMessage({ type: "ES_SETTINGS_SET", patch }, "*");
+    handoff.setSettings(patch);
   };
 
-  // The stylesheet is fetched by listener.js and handed over on the cache node.
-  const UI_CSS = cacheEl?.dataset?.css || "";
+  // The stylesheet is fetched by listener.js and handed over with the rest.
+  const UI_CSS = handoff.css || "";
 
 
   // =========================================================
@@ -95,7 +93,10 @@
     };
     for (const [k, v] of Object.entries(base)) host.style.setProperty(k, v, "important");
 
-    const shadow = host.attachShadow({ mode: "open" });
+    // Closed, so the page cannot reach in and press our buttons. The root is
+    // kept on the host instead, where only this world can see it.
+    const shadow = host.attachShadow({ mode: "closed" });
+    host.__esShadow = shadow;
     const style = document.createElement("style");
     style.textContent = UI_CSS;
     shadow.appendChild(style);
@@ -106,9 +107,9 @@
     return { host, shadow, root };
   };
 
-  // Children, never markup. This script runs in the page's own world, and
-  // YouTube, Gmail and Google Docs enforce Trusted Types: one innerHTML write
-  // throws there, and the panel never finishes building.
+  // Children, never markup. When this ran in the page's own world, Trusted
+  // Types on YouTube, Gmail and Google Docs refused every innerHTML write, and
+  // the panel never finished building.
   const el = (tag, className, ...children) => {
     const node = document.createElement(tag);
     if (className) node.className = className;
@@ -141,26 +142,20 @@
     return lang && lang !== "page" ? { ...payload, lang } : payload;
   };
 
-  const api = (endpoint, payload, timeoutMs = REQUEST_TIMEOUT_MS) => {
-    const requestId = `es_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-    return new Promise((resolve) => {
+  const api = (endpoint, payload, timeoutMs = REQUEST_TIMEOUT_MS) =>
+    new Promise((resolve) => {
       let settled = false;
       const finish = (value) => {
         if (settled) return;
         settled = true;
         clearTimeout(timer);
-        window.removeEventListener("message", onMessage);
         resolve(value);
       };
       const timer = setTimeout(
         () => finish({ ok: false, error: { code: "timeout", message: "Request timed out" } }),
         timeoutMs
       );
-      const onMessage = (event) => {
-        if (event.source !== window) return;
-        const msg = event.data;
-        if (!msg || msg.type !== "ES_API_RESPONSE" || msg.requestId !== requestId) return;
-        const result = msg.result || {};
+      const onResult = (result = {}) => {
         if (result.ok && result.data) {
           finish({ ok: true, data: result.data });
           return;
@@ -174,10 +169,10 @@
           },
         });
       };
-      window.addEventListener("message", onMessage);
-      window.postMessage({ type: "ES_API_REQUEST", requestId, endpoint, payload }, "*");
+      chrome.runtime
+        .sendMessage({ type: "ES_API_REQUEST", endpoint, payload })
+        .then(onResult, (err) => onResult({ ok: false, error: err?.message || String(err) }));
     });
-  };
 
   // A retry is sent again without being re-added only while its question is
   // still the last turn. Once the reader has asked something else it becomes a
@@ -187,8 +182,8 @@
     return last?.role === "user" && last.content === question;
   };
 
-  const writeCache = (value) => window.postMessage({ type: "ES_CACHE_SET", value }, "*");
-  const writeModePref = (mode) => window.postMessage({ type: "ES_PREF_SET", mode }, "*");
+  const writeCache = (value) => handoff.writeCache(value);
+  const writeModePref = (mode) => handoff.setMode(mode);
 
   const friendlyError = (err) => {
     if (err?.code === "timeout") return "That took too long. Try again.";
@@ -512,7 +507,7 @@
 
   const showToast = (label) => {
     let host = document.getElementById(TOAST_ID);
-    let root = host?.shadowRoot?.querySelector(".root");
+    let root = host?.__esShadow?.querySelector(".root");
     if (!root) {
       host?.remove();
       const made = makeHost(TOAST_ID);
@@ -760,37 +755,17 @@
   };
 
   // =========================================================
-  // Selection store
+  // Selection request
   // =========================================================
-  const readSelectionStore = () => {
-    const store = document.getElementById("es-selection-store");
-    if (!store?.dataset) return null;
-    const parse = (value, fallback) => {
-      try {
-        return value ? JSON.parse(value) : fallback;
-      } catch {
-        return fallback;
-      }
-    };
-    const request = {
-      mode: store.dataset.mode || "",
-      text: store.dataset.text || "",
-      rect: parse(store.dataset.rect, {}),
-      anchorId: store.dataset.anchorId || "",
-      anchorOffset: parse(store.dataset.anchorOffset, null),
-    };
-    store.dataset.mode = "";
-    return request;
-  };
-
-  const selectionRequest = readSelectionStore();
+  // Present only when the floating button opened us, never for the toolbar.
+  const selectionRequest = handoff.selection || null;
 
   // =========================================================
   // Selection card
   // =========================================================
   const openSelectionCard = ({ text: selectedText, rect, anchorId, anchorOffset }) => {
     const popup = document.getElementById("es-selection-popup");
-    if (!popup?.shadowRoot) return false;
+    if (!popup?.__esShadow) return false;
 
     popup.dataset.expanded = "true";
     popup.style.setProperty("pointer-events", "none", "important");
@@ -808,7 +783,7 @@
       popup.style.setProperty(k, v, "important");
     }
 
-    const root = popup.shadowRoot.querySelector(".root");
+    const root = popup.__esShadow.querySelector(".root");
     if (!root) return false;
     root.replaceChildren();
 
@@ -949,7 +924,7 @@
       place();
     });
 
-    const closeCard = () => window.postMessage({ type: "ES_RESTORE_SELECTION_POPUP" }, "*");
+    const closeCard = () => handoff.restorePopup();
     close.addEventListener("click", closeCard);
     containKeys(card, closeCard);
 
@@ -1052,7 +1027,7 @@
   // beside it, so jumping to a source scrolls the page without closing
   // anything.
   // =========================================================
-  const { host, root } = makeHost("ai-overlay");
+  const { host, shadow, root } = makeHost("ai-overlay");
   host.setAttribute("role", "dialog");
   host.setAttribute("aria-label", "Eternal Summary");
   // documentElement rather than body: a transformed body would become the
@@ -1208,7 +1183,7 @@
   segments.appendChild(segTrack);
 
   const known = (id) => MODES.some((m) => m.id === id);
-  const savedMode = cacheEl?.dataset?.mode || "";
+  const savedMode = handoff.mode || "";
   const defaultMode = known(settings.format) ? settings.format : MODES[0].id;
   // Remembering is on by default, so this matches the old behaviour until the
   // reader turns it off and pins a format instead.
@@ -1479,7 +1454,7 @@
   };
   paintClear();
   clearBtn.addEventListener("click", () => {
-    window.postMessage({ type: "ES_CACHE_CLEAR" }, "*");
+    handoff.clearCache();
     savedLeft = 0;
     paintClear();
     showToast("Saved summaries cleared");
@@ -1511,14 +1486,7 @@
     segments.dataset.busy = String(value);
   };
 
-  const readCache = () => {
-    if (!cacheEl?.dataset?.payload) return null;
-    try {
-      return JSON.parse(cacheEl.dataset.payload);
-    } catch {
-      return null;
-    }
-  };
+  const readCache = () => handoff.cached || null;
 
   // Switching modes appends a new turn instead of wiping the thread, so the
   // conversation up to that point stays readable.
@@ -1644,7 +1612,7 @@
 
     const first = focusable[0];
     const last = focusable[focusable.length - 1];
-    const active = host.shadowRoot.activeElement;
+    const active = shadow.activeElement;
 
     if (e.shiftKey && (active === first || !focusable.includes(active))) {
       e.preventDefault();
@@ -1657,4 +1625,4 @@
 
   runSummary();
   setTimeout(() => input.focus(), 260);
-})();
+};

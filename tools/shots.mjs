@@ -166,7 +166,7 @@ const openPanel = async () => {
 };
 
 // Text animates in by default, which a screenshot catches mid-reveal.
-const stillText = "window.postMessage({ type: 'ES_SETTINGS_SET', patch: { animateText: false } }, '*')";
+const stillText = "window.__storage['es:settings'] = { ...window.__storage['es:settings'], animateText: false }";
 
 console.log("capturing:");
 
