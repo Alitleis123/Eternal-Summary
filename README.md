@@ -115,7 +115,7 @@ Eternal-Summary/
 └── docs/              Project site, published with GitHub Pages
 ```
 
-The panel never sees the backend URL. It names an endpoint, the service worker rejects anything outside its allow list, and only then makes the request. The panel runs in the content script's isolated world, not the page's, and its shadow roots are closed, so a page script cannot press its buttons, read its replies or post requests on its behalf.
+The panel never sees the backend URL. It names an endpoint, the service worker rejects anything outside its allow list, and only then makes the request. The panel runs in the content script's isolated world, not the page's, and its shadow roots are closed, so a page script cannot press its buttons, forge its replies or post requests on its behalf. Its text can still be found and selected from the page, like any text on screen.
 
 The UI renders inside a shadow root, with `ui.css` loaded into it. Page stylesheets cannot cross that boundary, so a site rule like `* { line-height: 1 !important }` cannot collapse the panel's text, and the panel cannot leak styles onto the page either.
 
