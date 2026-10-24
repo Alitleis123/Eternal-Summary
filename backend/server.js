@@ -260,7 +260,9 @@ app.post("/api/summarize", rateLimit, async (req, res) => {
         res.json({ summary: "", sources: [] });
         return;
       }
-      console.warn("summarize: unreadable reply: %s", String(content).slice(0, 200));
+      // Length only. The reply quotes the page, and the privacy policy says
+      // the backend keeps none of it.
+      console.warn("summarize: unreadable reply (%d chars)", String(content).length);
       res.status(502).json({ error: "No summary generated." });
       return;
     }
@@ -320,7 +322,9 @@ app.post("/api/ask", rateLimit, async (req, res) => {
     const content = await callGemini(systemPrompt, messages, { schema: replySchema("answer") });
     const { text: answer, sources } = readPayload(content, "answer");
     if (!answer) {
-      console.warn("ask: unreadable reply: %s", String(content).slice(0, 200));
+      // Length only. The reply quotes the page, and the privacy policy says
+      // the backend keeps none of it.
+      console.warn("ask: unreadable reply (%d chars)", String(content).length);
       res.status(502).json({ error: "No answer generated." });
       return;
     }

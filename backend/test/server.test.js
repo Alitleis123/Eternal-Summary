@@ -74,6 +74,17 @@ describe("cors", () => {
   });
 });
 
+describe("logs", () => {
+  // The privacy policy says the backend keeps none of the text it is sent.
+  test("an unreadable reply is logged without the page text in it", async () => {
+    const res = await post("/api/summarize", { text: "UNREADABLE secret-page-text-7731" });
+    assert.equal(res.status, 502);
+    await new Promise((r) => setTimeout(r, 100));
+    assert.match(output, /unreadable reply/);
+    assert.doesNotMatch(output, /secret-page-text-7731/);
+  });
+});
+
 describe("gemini key", () => {
   // The stub refuses a key in the query string, so any reply at all means it
   // went as a header.
