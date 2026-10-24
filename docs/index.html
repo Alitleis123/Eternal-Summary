@@ -181,6 +181,7 @@ kbd {
   animation: open 520ms var(--ease) 350ms both;
 }
 @keyframes open { from { transform: translateX(100%); } }
+@media (prefers-reduced-motion: reduce) { .bar { animation: none; } }
 
 .bar-name {
   display: flex;
@@ -258,14 +259,15 @@ kbd {
 .bar-foot .cta { width: 100%; justify-content: center; }
 
 /* What a source jump paints on the page, copied from content.js: a bright
-   flash, then a softer wash that clears after 2.4 seconds. */
+   flash for 190ms, then a softer wash that clears after 2.4 seconds. A
+   transition rather than an animation, so it never replaces the hero's. */
 .hit {
   background-color: rgba(123, 140, 255, 0.24);
   box-shadow: 0 0 0 6px rgba(123, 140, 255, 0.16);
   border-radius: 4px;
-  animation: hit 490ms ease;
+  transition: background-color 300ms ease;
 }
-@keyframes hit { 0%, 39% { background-color: rgba(123, 140, 255, 0.46); } }
+.hit.flash { background-color: rgba(123, 140, 255, 0.46); }
 /* Lands the passage near the middle of the screen, as the panel does. */
 [id^="src-"] { scroll-margin-top: 30vh; }
 
@@ -402,7 +404,7 @@ h1 {
   list-style: none;
 }
 
-/* One staggered entrance on load, the same lift the panel uses. */
+/* One staggered entrance on load, the same lift ui.css gives the panel's header. */
 @keyframes lift { from { opacity: 0; transform: translateY(10px); } }
 .hero-copy > * { animation: lift 600ms var(--ease) both; }
 .hero-copy > :nth-child(2) { animation-delay: 70ms; }
@@ -719,7 +721,7 @@ footer.wrap { padding-top: 3rem; padding-bottom: 4rem; }
     </svg>
     <div class="bar-word">
       <a href="#top" class="bar-title">Eternal Summary</a>
-      <span class="bar-meta">alitleis123.github.io <b>&middot;</b> 2 min read</span>
+      <span class="bar-meta">alitleis123.github.io <b>&middot;</b> 1 min read</span>
     </div>
   </div>
   <p class="bar-verdict"><b>Worth a skim</b> <span>The video shows most of it.</span></p>
@@ -729,10 +731,10 @@ footer.wrap { padding-top: 3rem; padding-bottom: 4rem; }
       <p class="bar-body">This page introduces Eternal Summary, a free Chrome extension that summarizes whatever page you're on. Each summary cites the passages it drew from, and you can ask follow-up questions about the page. It needs no account.</p>
       <p class="bar-refs">
         <span>Sources</span>
-        <a class="ref" href="#src-1" title="Jump to: One click summarizes the page you're on, with sources you can check.">1</a>
-        <a class="ref" href="#src-2" title="Jump to: Every page summary shows its sources.">2</a>
-        <a class="ref" href="#src-3" title="Jump to: Then ask it anything.">3</a>
-        <a class="ref" href="#src-4" title="Jump to: Is it free? Yes. There's no account to make and nothing to pay for.">4</a>
+        <a class="ref" href="#src-1" aria-label="Source 1, the opening line" title="Jump to: One click summarizes the page you're on, with sources you can check.">1</a>
+        <a class="ref" href="#src-2" aria-label="Source 2, every summary shows its sources" title="Jump to: Every page summary shows its sources.">2</a>
+        <a class="ref" href="#src-3" aria-label="Source 3, ask it anything" title="Jump to: Then ask it anything.">3</a>
+        <a class="ref" href="#src-4" aria-label="Source 4, is it free" title="Jump to: Is it free? Yes. There's no account to make and nothing to pay for.">4</a>
       </p>
     </div>
     <nav aria-label="Sections">
@@ -998,9 +1000,11 @@ for (const ref of document.querySelectorAll(".ref")) {
     if (!target) return;
     if (target.tagName === "DETAILS") target.open = true;
     clearTimeout(hits.get(target));
-    target.classList.remove("hit");
-    void target.offsetWidth;
+    // The flash is motion, so it is skipped when motion is reduced, as in the extension.
+    const flash = !matchMedia("(prefers-reduced-motion: reduce)").matches;
     target.classList.add("hit");
+    target.classList.toggle("flash", flash);
+    if (flash) setTimeout(() => target.classList.remove("flash"), 190);
     hits.set(target, setTimeout(() => target.classList.remove("hit"), 2400));
   });
 }
