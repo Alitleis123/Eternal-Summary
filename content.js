@@ -78,6 +78,8 @@ export const open = (handoff) => {
   const makeHost = (id, styles) => {
     const host = document.createElement("div");
     if (id) host.id = id;
+    // Found again by this, not by id, which a page may use for its own things.
+    host.dataset.esHost = id;
     // Set with priority so page rules targeting our element cannot move it.
     const base = {
       position: "fixed",
@@ -506,7 +508,7 @@ export const open = (handoff) => {
   let toastTimer = 0;
 
   const showToast = (label) => {
-    let host = document.getElementById(TOAST_ID);
+    let host = document.querySelector(`[data-es-host="${TOAST_ID}"]`);
     let root = host?.__esShadow?.querySelector(".root");
     if (!root) {
       host?.remove();
@@ -764,7 +766,7 @@ export const open = (handoff) => {
   // Selection card
   // =========================================================
   const openSelectionCard = ({ text: selectedText, rect, anchorId, anchorOffset }) => {
-    const popup = document.getElementById("es-selection-popup");
+    const popup = handoff.popup;
     if (!popup?.__esShadow) return false;
 
     popup.dataset.expanded = "true";
@@ -1010,12 +1012,30 @@ export const open = (handoff) => {
   // =========================================================
   // Route: selection card, or toggle the panel
   // =========================================================
-  const existing = document.getElementById("ai-overlay");
+  const existing = document.querySelector('[data-es-host="ai-overlay"]');
   const wantsSelection = selectionRequest?.mode === "selection" && selectionRequest.text;
 
-  if (existing) {
-    existing.__esClose?.(true);
+  if (existing?.__esClose) {
+    existing.__esClose(true);
     if (!wantsSelection) return;
+  } else if (existing) {
+    // Left open by an earlier copy of the extension, updated or reloaded
+    // since. Its world is gone, so it cannot close itself, and it used to
+    // swallow every click on the toolbar. Give the page its inset back first,
+    // so the new rail does not capture that inset as the page's own margin.
+    const doc = document.documentElement;
+    let inset = [];
+    try {
+      inset = JSON.parse(existing.dataset.esInset || "[]");
+    } catch {
+      /* nothing recorded */
+    }
+    for (const [name, value, priority] of inset) {
+      if (value) doc.style.setProperty(name, value, priority);
+      else doc.style.removeProperty(name);
+    }
+    doc.style.removeProperty("transition");
+    existing.remove();
   }
 
   if (wantsSelection && openSelectionCard(selectionRequest)) return;
@@ -1090,6 +1110,9 @@ export const open = (handoff) => {
       doc.style.getPropertyValue(name),
       doc.style.getPropertyPriority(name),
     ]);
+    // Kept on the host too, where a later copy of the extension can find it if
+    // this one is gone before it closes.
+    host.dataset.esInset = JSON.stringify(saved);
 
     fitPage = () => {
       const width = Math.round(rail.getBoundingClientRect().width);

@@ -1112,6 +1112,55 @@ describe("trusted types", () => {
   });
 });
 
+describe("recovery", () => {
+  const ours = "document.querySelectorAll('[data-es-host=\"ai-overlay\"]')";
+
+  test("a page element using the panel's id does not block it", async () => {
+    await reload();
+    await evaluate("document.body.prepend(Object.assign(document.createElement('div'), { id: 'ai-overlay' }))");
+    await openPanel();
+    assert.equal(await evaluate(`${ours}.length`), 1);
+    assert.match(await evaluate(`${ours}[0].shadowRoot.textContent`), /tldr mode/);
+    await evaluate(`${ours}[0].__esClose(true); document.body.querySelector('#ai-overlay').remove()`);
+  });
+
+  // An update or reload of the extension strands an open panel: its world is
+  // gone, so it cannot close itself, and it used to swallow every later click.
+  test("a panel left by an earlier copy of the extension is cleared away", async () => {
+    await reload();
+    await evaluate(`(() => {
+      const stale = document.createElement('div');
+      stale.id = 'ai-overlay';
+      stale.dataset.esHost = 'ai-overlay';
+      stale.dataset.esInset = JSON.stringify([['margin-right', '', ''], ['margin-left', '', '']]);
+      document.documentElement.appendChild(stale);
+      document.documentElement.style.setProperty('margin-right', '430px', 'important');
+    })()`);
+    await openPanel();
+    assert.equal(await evaluate(`${ours}.length`), 1);
+    assert.match(await inPanel("s.textContent"), /tldr mode/);
+    await closePanel();
+    assert.equal(await evaluate("document.documentElement.style.marginRight"), "", "the stale inset should not outlive it");
+  });
+
+  test("so is a selection button left the same way", async () => {
+    await reload();
+    await evaluate(`(() => {
+      const stale = document.createElement('div');
+      stale.id = 'es-selection-popup';
+      stale.dataset.esHost = 'popup';
+      document.documentElement.appendChild(stale);
+    })()`);
+    await select("p1");
+    await sleep(500);
+    assert.equal(await evaluate("document.querySelectorAll('[data-es-host=\"popup\"]').length"), 1);
+    await inCard("s.querySelector('.trigger').click()");
+    await sleep(1600);
+    assert.match(await inCard("s.querySelector('.card').textContent"), /tldr mode/);
+    await inCard("s.querySelector('.card .icon-btn').click()");
+  });
+});
+
 // These messages were the bridge between the panel and the extension, and any
 // script on the page could post them: spend the API without a click, switch
 // settings off, or plant a summary. Nothing listens for them now.

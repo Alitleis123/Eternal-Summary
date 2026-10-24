@@ -93,6 +93,7 @@ if (window.__esListenerLoaded) {
 
       panel.open({
         ...panelCalls,
+        popup: popupEl,
         css,
         settings: { ...settings },
         saved: cached.length - expired.length,
@@ -114,6 +115,8 @@ if (window.__esListenerLoaded) {
 
   // === Floating selection button ===
   const POPUP_ID = "es-selection-popup";
+  // Held here rather than looked up by id, which a page may use for its own.
+  let popupEl = null;
   let lastPointer = { x: 0, y: 0 };
   let lastRect = null;
   let hideTimer = null;
@@ -140,7 +143,7 @@ if (window.__esListenerLoaded) {
   };
 
   const restoreSelectionPopup = () => {
-    const popup = document.getElementById(POPUP_ID);
+    const popup = popupEl;
     if (!popup?.__esShadow) return;
     if (popup.__esCleanup) {
       popup.__esCleanup();
@@ -215,11 +218,14 @@ if (window.__esListenerLoaded) {
   };
 
   const ensurePopup = async () => {
-    let popup = document.getElementById(POPUP_ID);
-    if (popup) return popup;
+    if (popupEl?.isConnected) return popupEl;
+    // One left by an earlier copy of the extension, updated or reloaded since,
+    // cannot be driven from this world. Clear it away rather than reuse it.
+    for (const stale of document.querySelectorAll('[data-es-host="popup"]')) stale.remove();
 
-    popup = document.createElement("div");
+    const popup = document.createElement("div");
     popup.id = POPUP_ID;
+    popup.dataset.esHost = "popup";
     for (const [k, v] of Object.entries({
       position: "fixed",
       inset: "0",
@@ -247,6 +253,7 @@ if (window.__esListenerLoaded) {
 
     document.documentElement.appendChild(popup);
     wireTrigger(buildTrigger(shadow));
+    popupEl = popup;
     return popup;
   };
 
@@ -264,11 +271,14 @@ if (window.__esListenerLoaded) {
   };
 
   const hideTrigger = () => {
-    const popup = document.getElementById(POPUP_ID);
-    popup?.style.setProperty("display", "none", "important");
+    popupEl?.style.setProperty("display", "none", "important");
   };
 
   const updatePopup = async () => {
+    // An earlier copy of the extension, updated or reloaded since, keeps its
+    // listeners on pages that were already open. Everything it would call
+    // into is gone, so it stands down instead of offering a dead button.
+    if (!chrome.runtime?.id) return;
     if (!settings.selectionButton) {
       hideTrigger();
       return;

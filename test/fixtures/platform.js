@@ -20,6 +20,7 @@
 
   window.chrome = {
     runtime: {
+      id: "eternal-summary-test",
       lastError: undefined,
       getURL: (path) => `/${path}`,
       sendMessage: (msg) =>
