@@ -953,13 +953,17 @@
       send.disabled = value;
     };
 
-    const ask = async () => {
-      const question = input.value.trim();
+    // A retry carries its question, which is already in the thread. The input
+    // was cleared when it was first sent, so it cannot be read back from there.
+    const ask = async (retry = "") => {
+      const question = retry || input.value.trim();
       if (!question || busy) return;
       setBusy(true);
-      input.value = "";
-      chat.addEntry("user", question);
-      history.push({ role: "user", content: question });
+      if (!retry) {
+        input.value = "";
+        chat.addEntry("user", question);
+        history.push({ role: "user", content: question });
+      }
 
       const pending = chat.addPending("Answer");
       const { ok, data, error } = await api("ask", withLang({
@@ -974,14 +978,14 @@
         history.push({ role: "assistant", content: answer });
         chat.addEntry("assistant", answer, { label: "Answer", typing: animate(), sources: data.sources || [] });
       } else {
-        chat.addFailure(friendlyError(error), ask);
+        chat.addFailure(friendlyError(error), () => ask(question));
       }
       setBusy(false);
       place();
       input.focus();
     };
 
-    send.addEventListener("click", ask);
+    send.addEventListener("click", () => ask());
     input.addEventListener("keydown", (e) => {
       if (e.key === "Enter") ask();
     });
@@ -1565,13 +1569,16 @@
   };
   on(document, "selectionchange", refreshSelection);
 
-  const ask = async (question, override) => {
+  // A retry is already in the thread, so it is sent again without being added.
+  const ask = async (question, override, retry = false) => {
     const value = (question || input.value).trim();
     if (!value || busy) return;
 
-    input.value = "";
-    chat.addEntry("user", value);
-    history.push({ role: "user", content: value });
+    if (!retry) {
+      input.value = "";
+      chat.addEntry("user", value);
+      history.push({ role: "user", content: value });
+    }
     setBusy(true);
 
     const pending = chat.addPending("Answer");
@@ -1591,7 +1598,7 @@
       history.push({ role: "assistant", content: answer });
       chat.addEntry("assistant", answer, { label: "Answer", typing: animate(), sources: data.sources || [] });
     } else {
-      chat.addFailure(friendlyError(error), () => ask(value, override));
+      chat.addFailure(friendlyError(error), () => ask(value, override, true));
     }
     setBusy(false);
     input.focus();

@@ -630,6 +630,55 @@ describe("failures", () => {
     assert.match(await inPanel("s.querySelector('.entry.warn').textContent"), /Too many requests/);
     await evaluate("window.__reply = null");
   });
+
+  const failAsks = () =>
+    evaluate(`window.__reply = () => ({ ok: false, status: 500,
+      text: () => Promise.resolve(JSON.stringify({ error: 'Failed to answer question.' })) });`);
+
+  // Retry used to post the question a second time, so it showed twice and
+  // went to the model twice in the history.
+  test("retrying a failed question asks it once", async () => {
+    await reload();
+    await evaluate("window.__storage = {}");
+    await openPanel();
+    await failAsks();
+    await ask("What is the tallest lighthouse?");
+    assert.equal(await inPanel("!!s.querySelector('.entry.warn')"), true);
+
+    await evaluate("window.__reply = null; window.__requests.length = 0");
+    await inPanel("s.querySelector('.entry.warn .act').click()");
+    await sleep(1400);
+    assert.equal(await inPanel("s.querySelectorAll('.entry.ask').length"), 1);
+    const asked = await evaluate("window.__requests[0].body.messages.filter((m) => m.role === 'user').length");
+    assert.equal(asked, 1);
+    assert.match(await inPanel("s.textContent"), /Answer: What is the tallest lighthouse\?/);
+  });
+
+  // The card cleared its input before sending, and its retry read the input,
+  // so Retry removed the error and did nothing else.
+  test("retrying a failed follow-up in the card sends it again", async () => {
+    await closePanel();
+    await select("p1");
+    await sleep(500);
+    await inCard("s.querySelector('.trigger').click()");
+    await sleep(1600);
+    await failAsks();
+    await inCard(`(() => {
+      const input = s.querySelector('.card .field input');
+      input.value = 'When was it built?';
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    })()`);
+    await sleep(1400);
+    assert.equal(await inCard("!!s.querySelector('.entry.warn')"), true);
+
+    await evaluate("window.__reply = null");
+    await inCard("s.querySelector('.entry.warn .act').click()");
+    await sleep(1400);
+    assert.equal(await inCard("!!s.querySelector('.entry.warn')"), false);
+    assert.equal(await inCard("s.querySelectorAll('.entry.ask').length"), 1);
+    assert.match(await inCard("s.querySelector('.card').textContent"), /Answer: When was it built\?/);
+    await inCard("s.querySelector('.card .icon-btn').click()");
+  });
 });
 
 describe("settings", () => {
