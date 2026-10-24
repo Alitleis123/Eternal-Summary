@@ -123,7 +123,7 @@ const LANGUAGE_NAMES = {
   tr: "Turkish",
 };
 
-export const resolveLanguage = (value) => {
+const resolveLanguage = (value) => {
   const code = typeof value === "string" ? value.trim().toLowerCase() : "";
   return LANGUAGE_NAMES[code] || null;
 };
