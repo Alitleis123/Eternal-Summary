@@ -62,15 +62,15 @@ cp .env.example .env       # then put your Gemini API key in it
 npm start                  # listens on port 3000
 ```
 
-Deploying to Fly.io:
+Deploying to Vercel: import the repository, set the root directory to `backend`, and add `GEMINI_API_KEY` under Settings > Environment Variables. Vercel runs `server.js` as an Express app with no build step. From the command line instead:
 
 ```bash
-fly launch                                  # first time only
-fly secrets set GEMINI_API_KEY=your_key_here
-fly deploy
+cd backend
+vercel env add GEMINI_API_KEY production
+vercel deploy --prod
 ```
 
-Fly injects secrets as environment variables at runtime, and `.env` is excluded from the image by `.dockerignore`, so the key never ships in a build.
+`vercel.json` keeps the server in Washington, D.C. (`iad1`). Google decides what a key may do by where the request comes from, and a free-tier key is refused from some countries, so the server stays in one place instead of running near each reader. `.env` is listed in `.vercelignore`, so the key never ships in an upload.
 
 `GEMINI_API_KEY` is required. Without it the server still starts and serves `/healthz`, but every summarize and ask request fails with a clear message in the logs.
 

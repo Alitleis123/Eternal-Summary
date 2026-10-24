@@ -105,7 +105,7 @@ footer { border-top: 1px solid var(--line-dim); padding: 2rem 0 4rem; color: var
       <li>Asking a question sends your question, the recent messages in that conversation, the same page text the summary used, and any text you have highlighted on the page.</li>
       <li>If you pick a summary language in the settings, its two-letter code goes with each request.</li>
     </ul>
-    <p>The backend keeps none of this. Text is used to generate the response and is discarded when the request finishes. Its logs record the size, mode and language of each request and any error, never the text. Requests are rate limited per IP address, which is held in memory for at most two minutes and never written down.</p>
+    <p>The backend keeps none of this. Text is used to generate the response and is discarded when the request finishes. Its logs record the size, mode and language of each request and any error, never the text. Requests are rate limited per IP address, which is held only in the server's memory and never written down.</p>
 
     <h2>What stays on your device</h2>
     <p>Summaries are cached in your browser's extension storage for thirty minutes, so reopening a page you already summarized does not cost another request. Once a summary is older than that, it is deleted the next time you open the panel. Your settings are stored the same way. Neither leaves your device. Clear saved summaries from the gear in the panel header, or remove both by clearing the extension's data.</p>
@@ -117,7 +117,7 @@ footer { border-top: 1px solid var(--line-dim); padding: 2rem 0 4rem; color: var
     <p>The extension asks for access to all sites because it cannot know in advance which page you will want summarized, and the Summarize button has to already be there when you highlight something. Access is used only on the page in the tab you are acting on, and only when you click or press the shortcut. No page is read in the background.</p>
 
     <h2>Third parties</h2>
-    <p>The backend runs on Fly.io, so requests pass through Fly's servers on their way to it. Text you submit is processed by Google's Gemini API under Google's terms. No other third party receives it.</p>
+    <p>The backend runs on Vercel, so requests pass through Vercel's servers on their way to it. Text you submit is processed by Google's Gemini API under Google's terms. No other third party receives it.</p>
 
     <h2>Changes</h2>
     <p>If this policy changes, the revision will be dated here and in the <a href="https://github.com/Alitleis123/Eternal-Summary/blob/main/Privacy.md">copy kept in the repository</a>, whose history is public.</p>
