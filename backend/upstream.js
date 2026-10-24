@@ -3,10 +3,11 @@
 // Kept apart from server.js so the policy can be tested without starting a
 // listener, and so the two numbers that matter are visible in one place.
 
-// The panel gives up on a request after 25s, so every retry has to fit inside
+// The service worker gives up on a request after 20s (REQUEST_TIMEOUT_MS in
+// background.js), before the panel's own 25s, so every retry has to fit inside
 // that with the model calls themselves. A backoff that outlasts the client is
 // the same as no backoff: the reader sees a timeout either way.
-export const CLIENT_BUDGET_MS = 25000;
+export const CLIENT_BUDGET_MS = 20000;
 
 // 429 is our own quota and worth waiting on. A 5xx is upstream capacity, which
 // usually clears in well under a second, so it retries sooner and gives up
