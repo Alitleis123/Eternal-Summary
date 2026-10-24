@@ -52,6 +52,28 @@ describe("ask", () => {
   });
 });
 
+describe("cors", () => {
+  const preflight = (origin) =>
+    fetch(`${BASE}/api/summarize`, {
+      method: "OPTIONS",
+      headers: { Origin: origin, "Access-Control-Request-Method": "POST" },
+    });
+
+  // The service worker is exempt from CORS through its host permission. A web
+  // page is not, and an open policy let any site spend the key from its
+  // visitors' browsers, each on a fresh rate limit.
+  test("a web page is not allowed to call it", async () => {
+    const res = await preflight("https://example.com");
+    assert.equal(res.headers.get("access-control-allow-origin"), null);
+  });
+
+  test("an extension still is", async () => {
+    const origin = "chrome-extension://abcdefghijklmnopabcdefghijklmnop";
+    const res = await preflight(origin);
+    assert.equal(res.headers.get("access-control-allow-origin"), origin);
+  });
+});
+
 describe("gemini key", () => {
   // The stub refuses a key in the query string, so any reply at all means it
   // went as a header.

@@ -50,7 +50,11 @@ const app = express();
 // Fly terminates TLS in front of the app, so req.ip must come from the
 // forwarded header or every client would share one rate limit bucket.
 app.set("trust proxy", 1);
-app.use(cors());
+// The extension calls from its service worker, which its host permission
+// exempts from CORS. Only web pages are held to this, and none should be let
+// in: an open policy let any site spend the key from its visitors' browsers,
+// each one on a fresh rate limit.
+app.use(cors({ origin: /^chrome-extension:\/\// }));
 app.use(express.json({ limit: "200kb" }));
 
 // Light per-IP throttle. The backend fronts a metered API key, so an open
