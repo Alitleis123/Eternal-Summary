@@ -55,14 +55,12 @@
   --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 
   --gutter: clamp(1.3rem, 5vw, 4rem);
-  --side: 232px;
   --bar: 56px;
   --ease: cubic-bezier(0.32, 0.72, 0, 1);
 }
 
-/* Only the stacked layout has anything overhead to clear. */
-html { scroll-behavior: smooth; color-scheme: dark; }
-@media (max-width: 900px) { html { scroll-padding-top: calc(var(--bar) + 18px); } }
+/* Anchor jumps clear the bar. */
+html { scroll-behavior: smooth; color-scheme: dark; scroll-padding-top: calc(var(--bar) + 18px); }
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
@@ -160,29 +158,23 @@ kbd {
 @keyframes run { from { stroke-dashoffset: 100; opacity: 0.85; } 90% { opacity: 0.85; } to { stroke-dashoffset: 0; opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .mark .run { display: none; } }
 
-/* ============ side rail ============
-   A table of contents down the left, upright at a readable size. */
+/* ============ top bar ============
+   The name, three sections and the store button, out of the way at the top. */
 .bar {
-  position: fixed;
+  position: sticky;
   top: 0;
-  left: 0;
-  bottom: 0;
-  width: var(--side);
   z-index: 50;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2.4rem;
-  padding: 1.7rem 1.6rem;
-  background: var(--bg);
-  border-right: 1px solid var(--line-dim);
-  overflow-y: auto;
+  background: rgba(16, 15, 20, 0.86);
+  backdrop-filter: saturate(180%) blur(14px);
+  border-bottom: 1px solid var(--line-dim);
 }
+.bar-inner { display: flex; align-items: center; gap: 1.4rem; height: var(--bar); }
 
 .bar-name {
   display: flex;
   align-items: center;
   gap: 0.6rem;
+  margin-right: auto;
   text-decoration: none;
   font-family: var(--serif);
   font-size: 1.12rem;
@@ -190,42 +182,18 @@ kbd {
   white-space: nowrap;
 }
 
-.bar-nav { display: flex; flex-direction: column; gap: 0.15rem; width: 100%; }
+.bar-nav { display: flex; gap: 0.2rem; }
 .bar-nav a {
   text-decoration: none;
   color: var(--dim);
-  font-size: 0.94rem;
-  padding: 5px 0 5px 0.85rem;
-  border-left: 1px solid var(--line-dim);
-  transition: color 160ms ease, border-color 160ms ease;
+  font-size: 0.92rem;
+  padding: 6px 12px;
+  border-radius: 999px;
+  transition: color 160ms ease, background 160ms ease;
 }
-.bar-nav a:hover { color: var(--ink); border-left-color: rgba(237, 234, 228, 0.3); }
-.bar-nav a.active { color: var(--ink); border-left-color: var(--accent); }
-
-/* Pushes the store button to the foot of the rail. */
-.bar-foot { margin-top: auto; }
-
-/* No room for a column beside the text, so it lies back down across the top. */
-@media (max-width: 900px) {
-  .bar {
-    position: sticky;
-    inset: 0 0 auto 0;
-    width: auto;
-    height: var(--bar);
-    flex-direction: row;
-    align-items: center;
-    gap: 1rem;
-    padding: 0 var(--gutter);
-    border-right: none;
-    border-bottom: 1px solid var(--line-dim);
-    background: rgba(16, 15, 20, 0.86);
-    backdrop-filter: saturate(180%) blur(14px);
-    overflow: visible;
-  }
-  .bar-name { margin-right: auto; }
-  .bar-nav { display: none; }
-  .bar-foot { margin-top: 0; }
-}
+.bar-nav a:hover { color: var(--ink); background: var(--raise); }
+.bar-nav a.active { color: var(--ink); }
+@media (max-width: 900px) { .bar-nav { display: none; } }
 /* Too narrow for the name and the whole label, so the button says Add and
    the rest stays for screen readers. */
 @media (max-width: 380px) {
@@ -256,14 +224,6 @@ kbd {
 
 /* ============ rhythm ============ */
 .wrap { padding: 0 var(--gutter); max-width: 1180px; margin: 0 auto; }
-/* The rail is out of flow, so the page leaves room for it with padding, which
-   keeps the block centred in what is left. */
-@media (min-width: 901px) {
-  .wrap {
-    max-width: calc(1180px + var(--side));
-    padding-left: calc(var(--side) + var(--gutter));
-  }
-}
 
 section { padding: clamp(4.5rem, 10vw, 8rem) 0; border-top: 1px solid var(--line-dim); }
 section:first-of-type { border-top: none; }
@@ -672,23 +632,23 @@ footer.wrap { padding-top: 3rem; padding-bottom: 4rem; }
 </svg>
 
 <header class="bar">
-  <a href="#top" class="bar-name">
-    <svg class="mark" width="30" height="18" viewBox="0 0 48 28" fill="none" aria-hidden="true">
-      <use href="#es-infinity" stroke="url(#es-mark)" stroke-width="3.5" stroke-linejoin="round"/>
-    </svg>
-    Eternal Summary
-  </a>
-  <nav class="bar-nav" aria-label="Sections">
-    <a href="#watch">Watch it work</a>
-    <a href="#what">What it does</a>
-    <a href="#details">Details</a>
-    <a href="#about">About</a>
-    <a href="#install">Install</a>
-  </nav>
-  <a class="cta cta-primary cta-sm bar-foot" href="https://chromewebstore.google.com/detail/eternal-summary/cpdeianknlpdhlbfdgckdcgfglbhkjbf">
-    <svg width="17" height="17" aria-hidden="true"><use href="#chrome"/></svg>
-    <span>Add<span class="more"> to Chrome</span></span>
-  </a>
+  <div class="bar-inner wrap">
+    <a href="#top" class="bar-name">
+      <svg class="mark" width="30" height="18" viewBox="0 0 48 28" fill="none" aria-hidden="true">
+        <use href="#es-infinity" stroke="url(#es-mark)" stroke-width="3.5" stroke-linejoin="round"/>
+      </svg>
+      Eternal Summary
+    </a>
+    <nav class="bar-nav" aria-label="Sections">
+      <a href="#watch">Watch it work</a>
+      <a href="#what">What it does</a>
+      <a href="#details">Details</a>
+    </nav>
+    <a class="cta cta-primary cta-sm bar-foot" href="https://chromewebstore.google.com/detail/eternal-summary/cpdeianknlpdhlbfdgckdcgfglbhkjbf">
+      <svg width="17" height="17" aria-hidden="true"><use href="#chrome"/></svg>
+      <span>Add<span class="more"> to Chrome</span></span>
+    </a>
+  </div>
 </header>
 
 <main class="wrap" id="top">
