@@ -39,6 +39,19 @@ before(async () => {
 
 after(() => server?.kill());
 
+describe("ask", () => {
+  // The page text used to be cut into chunks and only the three that shared
+  // the most words with the question were kept, out of page order. A question
+  // in a script \W does not split on matched nothing, and lost the tail.
+  test("the model sees the whole page it was sent", async () => {
+    const text = `OPENING ${"filler words about lighthouses. ".repeat(180)} CLOSING`;
+    const res = await post("/api/ask", { text, messages: [{ role: "user", content: "Когда построили маяк?" }] });
+    assert.equal(res.status, 200);
+    const { answer } = await res.json();
+    assert.match(answer, /OPENING[\s\S]*CLOSING/);
+  });
+});
+
 describe("gemini key", () => {
   // The stub refuses a key in the query string, so any reply at all means it
   // went as a header.

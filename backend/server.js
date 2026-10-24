@@ -30,7 +30,6 @@ const MAX_INPUT_CHARS = 12000;
 const MAX_SELECTION_CHARS = 1500;
 const MAX_MESSAGE_CHARS = 800;
 const MAX_HISTORY = 6;
-const CHUNK_OVERLAP = 200;
 const REQUEST_TIMEOUT_MS = 20000;
 
 const MODE_INSTRUCTIONS = {
@@ -90,19 +89,6 @@ app.get("/healthz", (_req, res) => {
 const clampText = (value, maxChars) => {
   const str = typeof value === "string" ? value : "";
   return str.length > maxChars ? str.slice(0, maxChars) : str;
-};
-
-const chunkText = (text, maxChars, overlap = CHUNK_OVERLAP) => {
-  if (!text) return [];
-  const chunks = [];
-  let start = 0;
-  while (start < text.length) {
-    const end = Math.min(start + maxChars, text.length);
-    chunks.push(text.slice(start, end));
-    if (end === text.length) break;
-    start = Math.max(0, end - overlap);
-  }
-  return chunks;
 };
 
 // An allowlist, because this string lands in a prompt. An unknown code falls
@@ -286,29 +272,6 @@ app.post("/api/summarize", rateLimit, async (req, res) => {
   }
 });
 
-// Picks the parts of the page most likely to hold the answer, so long pages
-// do not push the useful text out of the prompt.
-const relevantExcerpt = (fullText, question) => {
-  const chunks = chunkText(fullText, 1800, 150);
-  if (chunks.length <= 1 || !question) return fullText;
-
-  const terms = question
-    .toLowerCase()
-    .split(/\W+/)
-    .filter((t) => t.length > 3);
-  if (!terms.length) return chunks.slice(0, 3).join("\n\n");
-
-  return chunks
-    .map((chunk) => {
-      const haystack = chunk.toLowerCase();
-      return { chunk, score: terms.reduce((n, t) => n + (haystack.includes(t) ? 1 : 0), 0) };
-    })
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 3)
-    .map((entry) => entry.chunk)
-    .join("\n\n");
-};
-
 app.post("/api/ask", rateLimit, async (req, res) => {
   try {
     const text = clampText(req.body?.text, MAX_INPUT_CHARS);
@@ -342,7 +305,11 @@ app.post("/api/ask", rateLimit, async (req, res) => {
       "Never invent or imply claims about what this page says.",
       "A [...] marker means part of the page was left out to fit, so absence from this text is not proof it is absent from the page.",
       languageRule(resolveLanguage(req.body?.lang), "answer"),
-      `\n\nPage text:\n${relevantExcerpt(text, lastQuestion)}`,
+      // All of it. MAX_INPUT_CHARS already keeps it small. Keeping only the
+      // three chunks that shared words with the question dropped part of the
+      // page and shuffled the rest, and a question in a non-Latin script
+      // matched no words at all, so it got the opening and never the end.
+      `\n\nPage text:\n${text}`,
       selection ? `\n\nThe user highlighted:\n${selection}` : "",
     ].join(" ");
 
