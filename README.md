@@ -32,7 +32,7 @@ A Chrome extension that summarizes the page you are reading, explains anything y
 
 ## Keyboard shortcut
 
-`Cmd+Shift+S` on macOS, `Ctrl+Shift+S` elsewhere. `Esc` or a click outside closes the panel. Reassign it at `chrome://extensions/shortcuts`.
+`Cmd+Shift+S` on macOS, `Ctrl+Shift+S` elsewhere. `Esc` or the close button closes the panel. Reassign it at `chrome://extensions/shortcuts`.
 
 ## Install
 
@@ -81,17 +81,17 @@ To point the extension at your own deployment, change `API_BASE` in `background.
 | Method | Path | Body | Returns |
 | --- | --- | --- | --- |
 | `GET` | `/healthz` | | `ok` |
-| `POST` | `/api/summarize` | `{ text, mode, scope }` | `{ summary, sources, verdict }` |
-| `POST` | `/api/ask` | `{ text, messages, selection }` | `{ answer, sources }` |
+| `POST` | `/api/summarize` | `{ text, mode, scope, lang }` | `{ summary, sources, verdict: { call, why } }` |
+| `POST` | `/api/ask` | `{ text, messages, selection, lang }` | `{ answer, sources }` |
 
-`mode` is one of `tldr`, `bullets`, `key-points`, or `simple`. `scope: "selection"` summarizes a highlighted passage: no verdict, and an empty summary when there is nothing to condense. Both endpoints are rate limited to 30 requests per minute per IP.
+`mode` is one of `tldr`, `bullets`, `key-points`, or `simple`. `scope: "selection"` summarizes a highlighted passage: no verdict, and an empty summary when there is nothing to condense. `lang` is an optional language code such as `es`; without it the reply stays in the page's language. The two endpoints share one limit of 30 requests per minute per IP.
 
 ## Tests
 
 Real Chrome, driven over the DevTools Protocol. Only the `chrome.*` API surface and the network are stubbed, so the tests exercise the actual message path: the page posts to `listener.js`, which forwards to `background.js`, which calls the backend.
 
 ```bash
-npm test        # 70 end-to-end tests in real Chrome
+npm test        # 77 end-to-end tests in real Chrome
 npm run check   # syntax check every entry point
 npm run shots   # regenerate the screenshots on the docs site
 npm run package # build the Chrome Web Store zip
