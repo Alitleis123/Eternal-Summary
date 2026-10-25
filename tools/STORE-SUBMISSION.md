@@ -59,9 +59,9 @@ Developer registration is done, it is a one time 5 USD fee at the
 > No account, no tracking, no analytics. Summaries are cached on your own device
 > for thirty minutes and can be cleared at any time.
 >
-> Source code: https://github.com/Alitleis123/Eternal-Summary
+> Source code: https://github.com/sidebandstudio/Eternal-Summary
 
-**Privacy policy URL.** https://alitleis123.github.io/Eternal-Summary/privacy.html
+**Privacy policy URL.** https://sidebandstudio.github.io/Eternal-Summary/privacy.html
 
 **Screenshots.** `docs/store/`, in order. Suggested captions:
 
