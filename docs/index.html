@@ -147,15 +147,35 @@ h1, h2, h3 { text-wrap: balance; }
 @media (prefers-reduced-motion: reduce) { .mark .run { display: none; } }
 
 /* ============ top bar ============
-   The name, three sections and the store button, out of the way at the top. */
-.bar {
-  position: sticky;
-  top: 0;
-  z-index: 50;
+   The name and the store button. The bar is clear at the top of the page and
+   frosts over once the page moves under it. Its bottom edge fills with the
+   mark's colours as you read down. Browsers without scroll timelines get the
+   frost from the start and no line. */
+.bar { position: sticky; top: 0; z-index: 50; }
+.bar::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
   background: rgba(16, 15, 20, 0.86);
   backdrop-filter: saturate(180%) blur(14px);
   border-bottom: 1px solid var(--line-dim);
 }
+.bar::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0;
+  height: 2px;
+  background: var(--mark);
+  clip-path: inset(0 100% 0 0);
+}
+@supports (animation-timeline: scroll()) {
+  .bar::before { animation: frost linear both; animation-timeline: scroll(); animation-range: 0 64px; }
+  .bar::after { animation: read linear both; animation-timeline: scroll(); }
+}
+@keyframes frost { from { opacity: 0; } }
+@keyframes read { to { clip-path: inset(0); } }
+
 .bar-inner { display: flex; align-items: center; gap: 1.4rem; height: var(--bar); }
 
 .bar-name {
@@ -170,18 +190,14 @@ h1, h2, h3 { text-wrap: balance; }
   white-space: nowrap;
 }
 
-.bar-nav { display: flex; gap: 0.2rem; }
-.bar-nav a {
-  text-decoration: none;
-  color: var(--dim);
-  font-size: 0.92rem;
-  padding: 6px 12px;
-  border-radius: 999px;
-  transition: color 160ms ease, background 160ms ease;
-}
-.bar-nav a:hover { color: var(--ink); background: var(--raise); }
-.bar-nav a.active { color: var(--ink); }
-@media (max-width: 900px) { .bar-nav { display: none; } }
+/* Pointing at the name sends the light once round its loop. */
+.bar-name .run { animation: none; }
+.bar-name:hover .run { animation: run 1.5s linear; }
+
+/* The button joins the bar only while no other Add to Chrome is on screen,
+   so the top of the page never shows two. It stays put while it has focus. */
+.js .bar-foot { transition: background 170ms ease, box-shadow 170ms ease, transform 260ms var(--ease), opacity 260ms ease, visibility 260ms; }
+.js .bar-foot.tucked:not(:focus) { opacity: 0; transform: translateY(-8px); visibility: hidden; }
 /* Too narrow for the name and the whole label, so the button says Add and
    the rest stays for screen readers. */
 @media (max-width: 380px) {
@@ -602,15 +618,11 @@ footer.wrap { padding-top: 3rem; padding-bottom: 4rem; }
     <a href="#top" class="bar-name">
       <svg class="mark" width="30" height="18" viewBox="0 0 48 28" fill="none" aria-hidden="true">
         <use href="#es-infinity" stroke="url(#es-mark)" stroke-width="3.5" stroke-linejoin="round"/>
+        <use class="run" href="#es-infinity" stroke-width="3.5" stroke-linecap="round"/>
       </svg>
       Eternal Summary
     </a>
-    <nav class="bar-nav" aria-label="Sections">
-      <a href="#watch">Watch it work</a>
-      <a href="#what">What it does</a>
-      <a href="#details">Details</a>
-    </nav>
-    <a class="cta cta-primary cta-sm bar-foot" href="https://chromewebstore.google.com/detail/eternal-summary/cpdeianknlpdhlbfdgckdcgfglbhkjbf">
+    <a class="cta cta-primary cta-sm bar-foot tucked" href="https://chromewebstore.google.com/detail/eternal-summary/cpdeianknlpdhlbfdgckdcgfglbhkjbf">
       <svg width="17" height="17" aria-hidden="true"><use href="#chrome"/></svg>
       <span>Add<span class="more"> to Chrome</span></span>
     </a>
@@ -841,6 +853,19 @@ const rise = new IntersectionObserver((entries) => {
 }, { rootMargin: "0px 0px -8% 0px" });
 for (const el of document.querySelectorAll(".reveal")) rise.observe(el);
 
+// Tuck the bar's button away while another Add to Chrome is in view. The top
+// margin is the bar's height, so a button scrolled under the bar counts as gone.
+const barCta = document.querySelector(".bar-foot");
+const inView = new Set();
+const others = new IntersectionObserver((entries) => {
+  for (const entry of entries) {
+    if (entry.isIntersecting) inView.add(entry.target);
+    else inView.delete(entry.target);
+  }
+  barCta.classList.toggle("tucked", inView.size > 0);
+}, { rootMargin: "-56px 0px 0px 0px" });
+for (const el of document.querySelectorAll("main .cta-primary")) others.observe(el);
+
 // Select or Summarize: show the page before or after the button is pressed.
 const swap = document.querySelector(".swap");
 const segs = [...document.querySelectorAll(".seg[data-show]")];
@@ -872,22 +897,6 @@ const play = new IntersectionObserver((entries) => {
   timer = setTimeout(() => { if (!touched && !still.matches) show("card"); }, 2200);
 }, { threshold: 0.6 });
 play.observe(swap);
-
-// Mark the section you are in. rootMargin pins the trigger near the top third
-// so a short section at the end of the page can still take the mark.
-const links = [...document.querySelectorAll(".bar-nav a")];
-const spy = new IntersectionObserver(
-  (entries) => {
-    for (const entry of entries) {
-      if (!entry.isIntersecting) continue;
-      for (const link of links) {
-        link.classList.toggle("active", link.getAttribute("href") === "#" + entry.target.id);
-      }
-    }
-  },
-  { rootMargin: "-25% 0px -65% 0px" }
-);
-for (const section of document.querySelectorAll("section[id]")) spy.observe(section);
 </script>
 
 </body>
