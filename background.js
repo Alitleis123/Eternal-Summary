@@ -1,7 +1,7 @@
 // Service worker: owns the backend address and brokers every network call.
-// Page-context code never sees a URL, it only names an endpoint.
+// The panel never sees a URL, it only names an endpoint.
 
-const API_BASE = "https://ai-extension-backend-twilight-forest-3247.fly.dev";
+const API_BASE = "https://eternal-summary.vercel.app";
 const ALLOWED_ENDPOINTS = new Set(["summarize", "ask"]);
 const REQUEST_TIMEOUT_MS = 20000;
 

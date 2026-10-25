@@ -4,6 +4,14 @@
   const backgroundHandlers = [];
   const contentHandlers = [];
 
+  // The extension closes its shadow roots so a page cannot reach in. The tests
+  // read them from the page, so here they open. In Chrome the extension runs
+  // in its own world, where a page's prototypes do not reach.
+  const attachShadow = Element.prototype.attachShadow;
+  Element.prototype.attachShadow = function (init) {
+    return attachShadow.call(this, { ...init, mode: "open" });
+  };
+
   window.__storage = {};
   window.__requests = [];
   window.__injections = [];
@@ -12,6 +20,7 @@
 
   window.chrome = {
     runtime: {
+      id: "eternal-summary-test",
       lastError: undefined,
       getURL: (path) => `/${path}`,
       sendMessage: (msg) =>

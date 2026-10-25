@@ -1,10 +1,10 @@
 import express from "express";
 import dotenv from "dotenv";
 import cors from "cors";
-import { readPayload, readVerdict } from "./payload.js";
+import { readPayload, readVerdict, safeJsonParse } from "./payload.js";
 import { retryDelay, upstreamFailure } from "./upstream.js";
 
-// Fly.io injects secrets straight into the environment, so loading a .env file
+// Vercel injects secrets straight into the environment, so loading a .env file
 // in production could shadow them with stale values.
 if (process.env.NODE_ENV !== "production") {
   dotenv.config();
@@ -16,7 +16,7 @@ if (!process.env.GEMINI_API_KEY) {
       "",
       "ERROR: GEMINI_API_KEY is not set. Every summarize and ask request will fail.",
       "",
-      "  Fly.io:  fly secrets set GEMINI_API_KEY=your_key_here",
+      "  Vercel:  add it under Settings > Environment Variables, then redeploy",
       "  Local:   copy backend/.env.example to backend/.env and fill in your key",
       "",
     ].join("\n")
@@ -30,7 +30,6 @@ const MAX_INPUT_CHARS = 12000;
 const MAX_SELECTION_CHARS = 1500;
 const MAX_MESSAGE_CHARS = 800;
 const MAX_HISTORY = 6;
-const CHUNK_OVERLAP = 200;
 const REQUEST_TIMEOUT_MS = 20000;
 
 const MODE_INSTRUCTIONS = {
@@ -48,25 +47,39 @@ const MODE_INSTRUCTIONS = {
 const DEFAULT_MODE = "tldr";
 
 const app = express();
-// Fly terminates TLS in front of the app, so req.ip must come from the
-// forwarded header or every client would share one rate limit bucket.
+// Vercel terminates TLS in front of the app and overwrites X-Forwarded-For
+// with the client's address, so req.ip must come from that header or every
+// client would share one rate limit bucket.
 app.set("trust proxy", 1);
-app.use(cors());
+// The extension calls from its service worker, which its host permission
+// exempts from CORS. Only web pages are held to this, and none should be let
+// in: an open policy let any site spend the key from its visitors' browsers,
+// each one on a fresh rate limit.
+app.use(cors({ origin: /^chrome-extension:\/\// }));
 app.use(express.json({ limit: "200kb" }));
 
 // Light per-IP throttle. The backend fronts a metered API key, so an open
 // endpoint without one is an easy way to burn quota.
+// Each Vercel instance keeps its own count, and Vercel runs more than one
+// under load, so the Firewall rule in the README is what holds across them.
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
 const RATE_LIMIT_MAX = 30;
 const hits = new Map();
 
-const rateLimit = (req, res, next) => {
+// Swept on a timer, not on the next request, so an address is gone within two
+// minutes of its window opening even if nobody else calls. Vercel can pause an
+// idle instance, timer and all, so the privacy policy says only that the
+// address is kept in memory, not for how long.
+setInterval(() => {
   const now = Date.now();
-  const key = req.ip || "unknown";
-
   for (const [ip, entry] of hits) {
     if (now - entry.start > RATE_LIMIT_WINDOW_MS) hits.delete(ip);
   }
+}, RATE_LIMIT_WINDOW_MS).unref();
+
+const rateLimit = (req, res, next) => {
+  const now = Date.now();
+  const key = req.ip || "unknown";
 
   const entry = hits.get(key);
   if (!entry || now - entry.start > RATE_LIMIT_WINDOW_MS) {
@@ -92,19 +105,6 @@ const clampText = (value, maxChars) => {
   return str.length > maxChars ? str.slice(0, maxChars) : str;
 };
 
-const chunkText = (text, maxChars, overlap = CHUNK_OVERLAP) => {
-  if (!text) return [];
-  const chunks = [];
-  let start = 0;
-  while (start < text.length) {
-    const end = Math.min(start + maxChars, text.length);
-    chunks.push(text.slice(start, end));
-    if (end === text.length) break;
-    start = Math.max(0, end - overlap);
-  }
-  return chunks;
-};
-
 // An allowlist, because this string lands in a prompt. An unknown code falls
 // back to the page's own language rather than being passed through.
 const LANGUAGE_NAMES = {
@@ -123,7 +123,7 @@ const LANGUAGE_NAMES = {
   tr: "Turkish",
 };
 
-export const resolveLanguage = (value) => {
+const resolveLanguage = (value) => {
   const code = typeof value === "string" ? value.trim().toLowerCase() : "";
   return LANGUAGE_NAMES[code] || null;
 };
@@ -135,13 +135,21 @@ const languageRule = (name, noun) =>
     ? `Write the ${noun} in ${name}, whatever language the page is in. Leave every source snippet exactly as it appears on the page, in the page's original language, untranslated.`
     : "";
 
+// With no language chosen the reader wants the page's own, and that has to be
+// said: left unsaid, the model summarized Spanish, Hindi and Chinese pages in
+// English. Answers need no such rule, since the reader expects one in the
+// language they asked in.
+const summaryLanguage = (name) =>
+  name ? languageRule(name, "summary") : "Write the summary in the language the page is written in.";
+
 const resolveMode = (value) => {
   const id = typeof value === "string" ? value.trim().toLowerCase() : "";
   return MODE_INSTRUCTIONS[id] ? id : DEFAULT_MODE;
 };
 
-const geminiUrl = () =>
-  `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${process.env.GEMINI_API_KEY}`;
+// The key goes in a header, where Google's docs put it, so it never sits in a
+// URL that an error or a proxy might record.
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
 const callGemini = async (systemPrompt, messages, { schema = null, retries = 3 } = {}) => {
   const body = JSON.stringify({
@@ -163,9 +171,9 @@ const callGemini = async (systemPrompt, messages, { schema = null, retries = 3 }
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
     try {
-      const response = await fetch(geminiUrl(), {
+      const response = await fetch(GEMINI_URL, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-goog-api-key": process.env.GEMINI_API_KEY },
         body,
         signal: controller.signal,
       });
@@ -179,8 +187,11 @@ const callGemini = async (systemPrompt, messages, { schema = null, retries = 3 }
       }
       if (!response.ok) {
         // Carry the status so the route can tell a busy model apart from a
-        // fault of our own.
-        const error = new Error(`Gemini responded ${response.status}: ${text.slice(0, 300)}`);
+        // fault of our own. Only Google's error code goes in the message, never
+        // its text, which can quote the request: this message is logged, and
+        // the privacy policy says the logs never hold what the reader sent.
+        const code = String(safeJsonParse(text, null)?.error?.status || "").match(/^[A-Z_]{1,40}$/)?.[0];
+        const error = new Error(`Gemini responded ${response.status}${code ? ` ${code}` : ""}`);
         error.status = response.status;
         throw error;
       }
@@ -218,7 +229,7 @@ const summarizePrompt = (mode, language) =>
     "summary is a string. sources is an array of 3 to 6 short snippets copied verbatim from the text.",
     "Copy source snippets exactly as they appear so they can be located on the page, at most 20 words each.",
     "A [...] marker means part of the page was left out to fit. Treat the text as an excerpt of something longer, and do not call the page short or thin on that basis.",
-    languageRule(language, "summary"),
+    summaryLanguage(language),
     "Never invent content.",
   ].filter(Boolean).join(" ");
 
@@ -236,7 +247,7 @@ const selectionPrompt = (mode, language) =>
     "If the passage carries nothing you could usefully condense, such as a bare filename, a label, a heading, or a fragment with no claim in it, return an empty summary rather than restating it in other words.",
     "Judge that on what the passage says, not on how long it is.",
     "sources is an array of up to 3 short snippets copied verbatim from the passage.",
-    languageRule(language, "summary"),
+    summaryLanguage(language),
     "Never invent content.",
   ].filter(Boolean).join(" ");
 
@@ -269,7 +280,9 @@ app.post("/api/summarize", rateLimit, async (req, res) => {
         res.json({ summary: "", sources: [] });
         return;
       }
-      console.warn("summarize: unreadable reply: %s", String(content).slice(0, 200));
+      // Length only. The reply quotes the page, and the privacy policy says
+      // the backend keeps none of it.
+      console.warn("summarize: unreadable reply (%d chars)", String(content).length);
       res.status(502).json({ error: "No summary generated." });
       return;
     }
@@ -284,29 +297,6 @@ app.post("/api/summarize", rateLimit, async (req, res) => {
     res.status(upstream?.status || 500).json({ error: upstream?.error || "Failed to summarize text." });
   }
 });
-
-// Picks the parts of the page most likely to hold the answer, so long pages
-// do not push the useful text out of the prompt.
-const relevantExcerpt = (fullText, question) => {
-  const chunks = chunkText(fullText, 1800, 150);
-  if (chunks.length <= 1 || !question) return fullText;
-
-  const terms = question
-    .toLowerCase()
-    .split(/\W+/)
-    .filter((t) => t.length > 3);
-  if (!terms.length) return chunks.slice(0, 3).join("\n\n");
-
-  return chunks
-    .map((chunk) => {
-      const haystack = chunk.toLowerCase();
-      return { chunk, score: terms.reduce((n, t) => n + (haystack.includes(t) ? 1 : 0), 0) };
-    })
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 3)
-    .map((entry) => entry.chunk)
-    .join("\n\n");
-};
 
 app.post("/api/ask", rateLimit, async (req, res) => {
   try {
@@ -341,14 +331,20 @@ app.post("/api/ask", rateLimit, async (req, res) => {
       "Never invent or imply claims about what this page says.",
       "A [...] marker means part of the page was left out to fit, so absence from this text is not proof it is absent from the page.",
       languageRule(resolveLanguage(req.body?.lang), "answer"),
-      `\n\nPage text:\n${relevantExcerpt(text, lastQuestion)}`,
+      // All of it. MAX_INPUT_CHARS already keeps it small. Keeping only the
+      // three chunks that shared words with the question dropped part of the
+      // page and shuffled the rest, and a question in a non-Latin script
+      // matched no words at all, so it got the opening and never the end.
+      `\n\nPage text:\n${text}`,
       selection ? `\n\nThe user highlighted:\n${selection}` : "",
     ].join(" ");
 
     const content = await callGemini(systemPrompt, messages, { schema: replySchema("answer") });
     const { text: answer, sources } = readPayload(content, "answer");
     if (!answer) {
-      console.warn("ask: unreadable reply: %s", String(content).slice(0, 200));
+      // Length only. The reply quotes the page, and the privacy policy says
+      // the backend keeps none of it.
+      console.warn("ask: unreadable reply (%d chars)", String(content).length);
       res.status(502).json({ error: "No answer generated." });
       return;
     }

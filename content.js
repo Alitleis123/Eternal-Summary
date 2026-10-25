@@ -1,6 +1,12 @@
-(() => {
-  // Runs in the page's own context, injected by listener.js. It has no chrome.*
-  // access, so every network call and cache write goes through the bridge.
+// The panel and the selection card. listener.js imports this into the content
+// script's isolated world and calls open() each time one is wanted, handing
+// over the settings, the stylesheet and the calls that touch storage.
+//
+// It used to run in the page's own world and talk to listener.js through
+// window.postMessage. Any script on the page could post to that too: spend the
+// API with no click, rewrite the settings, clear the cache, or answer for the
+// model. A page cannot reach this world at all.
+export const open = (handoff) => {
   //
   // The whole UI lives in a shadow root. Page stylesheets cannot cross that
   // boundary, which matters: a site rule like `* { line-height: 1 !important }`
@@ -50,28 +56,20 @@
     { value: "tr", label: "Turkish" },
   ];
 
-  const cacheEl = document.getElementById("es-cache");
-
   // listener.js owns the defaults and hands them over already merged, so there
   // is no second copy here to drift out of step.
-  const settings = (() => {
-    try {
-      return JSON.parse(cacheEl?.dataset?.settings || "{}");
-    } catch {
-      return {};
-    }
-  })();
-  const savedSummaries = Number(cacheEl?.dataset?.saved || 0);
+  const settings = handoff.settings;
+  const savedSummaries = handoff.saved || 0;
   // One gate for every reveal, so the preference cannot be honoured in some
   // paths and missed in others.
   const animate = () => settings.animateText !== false;
   const putSettings = (patch) => {
     Object.assign(settings, patch);
-    window.postMessage({ type: "ES_SETTINGS_SET", patch }, "*");
+    handoff.setSettings(patch);
   };
 
-  // The stylesheet is fetched by listener.js and handed over on the cache node.
-  const UI_CSS = cacheEl?.dataset?.css || "";
+  // The stylesheet is fetched by listener.js and handed over with the rest.
+  const UI_CSS = handoff.css || "";
 
 
   // =========================================================
@@ -80,6 +78,8 @@
   const makeHost = (id, styles) => {
     const host = document.createElement("div");
     if (id) host.id = id;
+    // Found again by this, not by id, which a page may use for its own things.
+    host.dataset.esHost = id;
     // Set with priority so page rules targeting our element cannot move it.
     const base = {
       position: "fixed",
@@ -95,7 +95,10 @@
     };
     for (const [k, v] of Object.entries(base)) host.style.setProperty(k, v, "important");
 
-    const shadow = host.attachShadow({ mode: "open" });
+    // Closed, so the page cannot reach in and press our buttons. The root is
+    // kept on the host instead, where only this world can see it.
+    const shadow = host.attachShadow({ mode: "closed" });
+    host.__esShadow = shadow;
     const style = document.createElement("style");
     style.textContent = UI_CSS;
     shadow.appendChild(style);
@@ -106,10 +109,13 @@
     return { host, shadow, root };
   };
 
-  const el = (tag, className, html) => {
+  // Children, never markup. When this ran in the page's own world, Trusted
+  // Types on YouTube, Gmail and Google Docs refused every innerHTML write, and
+  // the panel never finished building.
+  const el = (tag, className, ...children) => {
     const node = document.createElement(tag);
     if (className) node.className = className;
-    if (html != null) node.innerHTML = html;
+    node.append(...children);
     return node;
   };
 
@@ -138,26 +144,20 @@
     return lang && lang !== "page" ? { ...payload, lang } : payload;
   };
 
-  const api = (endpoint, payload, timeoutMs = REQUEST_TIMEOUT_MS) => {
-    const requestId = `es_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-    return new Promise((resolve) => {
+  const api = (endpoint, payload, timeoutMs = REQUEST_TIMEOUT_MS) =>
+    new Promise((resolve) => {
       let settled = false;
       const finish = (value) => {
         if (settled) return;
         settled = true;
         clearTimeout(timer);
-        window.removeEventListener("message", onMessage);
         resolve(value);
       };
       const timer = setTimeout(
         () => finish({ ok: false, error: { code: "timeout", message: "Request timed out" } }),
         timeoutMs
       );
-      const onMessage = (event) => {
-        if (event.source !== window) return;
-        const msg = event.data;
-        if (!msg || msg.type !== "ES_API_RESPONSE" || msg.requestId !== requestId) return;
-        const result = msg.result || {};
+      const onResult = (result = {}) => {
         if (result.ok && result.data) {
           finish({ ok: true, data: result.data });
           return;
@@ -171,13 +171,21 @@
           },
         });
       };
-      window.addEventListener("message", onMessage);
-      window.postMessage({ type: "ES_API_REQUEST", requestId, endpoint, payload }, "*");
+      chrome.runtime
+        .sendMessage({ type: "ES_API_REQUEST", endpoint, payload })
+        .then(onResult, (err) => onResult({ ok: false, error: err?.message || String(err) }));
     });
+
+  // A retry is sent again without being re-added only while its question is
+  // still the last turn. Once the reader has asked something else it becomes a
+  // new turn, or it would go out with the later conversation as its context.
+  const stillPending = (history, question) => {
+    const last = history[history.length - 1];
+    return last?.role === "user" && last.content === question;
   };
 
-  const writeCache = (value) => window.postMessage({ type: "ES_CACHE_SET", value }, "*");
-  const writeModePref = (mode) => window.postMessage({ type: "ES_PREF_SET", mode }, "*");
+  const writeCache = (value) => handoff.writeCache(value);
+  const writeModePref = (mode) => handoff.setMode(mode);
 
   const friendlyError = (err) => {
     if (err?.code === "timeout") return "That took too long. Try again.";
@@ -402,8 +410,10 @@
   const SOURCE_SELECTOR = "p, li, blockquote, td, pre, dd, figcaption, h1, h2, h3, h4, h5, h6";
   const normalCache = new WeakMap();
 
+  // Letters and marks in any script. \w is ASCII only, and stripped a Russian or
+  // Chinese snippet down to nothing.
   const normalize = (value) =>
-    (value || "").toLowerCase().replace(/[^\w\s]/g, " ").replace(/\s+/g, " ").trim();
+    (value || "").toLowerCase().replace(/[^\p{L}\p{M}\p{N}\s]/gu, " ").replace(/\s+/g, " ").trim();
 
   const normalizedOf = (node) => {
     if (!normalCache.has(node)) normalCache.set(node, normalize(node.innerText));
@@ -498,8 +508,8 @@
   let toastTimer = 0;
 
   const showToast = (label) => {
-    let host = document.getElementById(TOAST_ID);
-    let root = host?.shadowRoot?.querySelector(".root");
+    let host = document.querySelector(`[data-es-host="${TOAST_ID}"]`);
+    let root = host?.__esShadow?.querySelector(".root");
     if (!root) {
       host?.remove();
       const made = makeHost(TOAST_ID);
@@ -535,12 +545,31 @@
   // =========================================================
   // Conversation surface, shared by the rail and the selection card
   // =========================================================
+  // Drawn node by node for the same reason el() takes no markup.
+  const SVG_NS = "http://www.w3.org/2000/svg";
   const ICONS = {
-    close: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>',
-    send: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>',
-    gear: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.05A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.05A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.55V3a2 2 0 1 1 4 0v.05A1.7 1.7 0 0 0 15 4.6a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9v0a1.7 1.7 0 0 0 1.55 1H21a2 2 0 1 1 0 4h-.05a1.7 1.7 0 0 0-1.55 1z"/></svg>',
-    back: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>',
-    down: '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M19 12l-7 7-7-7"/></svg>',
+    close: { size: 13, stroke: 2, d: "M18 6 6 18M6 6l12 12" },
+    send: { size: 15, stroke: 1.8, d: "M5 12h14M13 6l6 6-6 6" },
+    gear: { size: 14, stroke: 1.8, circle: 3.2, d: "M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.05A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.05A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.55V3a2 2 0 1 1 4 0v.05A1.7 1.7 0 0 0 15 4.6a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9v0a1.7 1.7 0 0 0 1.55 1H21a2 2 0 1 1 0 4h-.05a1.7 1.7 0 0 0-1.55 1z" },
+    back: { size: 13, stroke: 2, d: "M19 12H5M12 19l-7-7 7-7" },
+    down: { size: 10, stroke: 2.4, d: "M12 5v14M19 12l-7 7-7-7" },
+  };
+
+  const svgNode = (tag, attrs) => {
+    const node = document.createElementNS(SVG_NS, tag);
+    for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, String(v));
+    return node;
+  };
+
+  const icon = (name) => {
+    const { size, stroke, circle, d } = ICONS[name];
+    const svg = svgNode("svg", {
+      width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor",
+      "stroke-width": stroke, "stroke-linecap": "round", "stroke-linejoin": "round",
+    });
+    if (circle) svg.appendChild(svgNode("circle", { cx: 12, cy: 12, r: circle }));
+    svg.appendChild(svgNode("path", { d }));
+    return svg;
   };
 
   // The mark. An infinity for "eternal", carrying the one gradient the
@@ -568,7 +597,7 @@
     };
 
     const addJump = () => {
-      jump = el("button", "jump", `${ICONS.down}<span>Latest</span>`);
+      jump = el("button", "jump", icon("down"), el("span", null, "Latest"));
       jump.type = "button";
       jump.addEventListener("click", () => {
         pinned = true;
@@ -684,7 +713,7 @@
       // browser infer direction per entry from its own first strong character,
       // so a right-to-left answer is not laid out left-to-right.
       body.setAttribute("dir", "auto");
-      body.appendChild(el("span", "thinking", "<i></i><i></i><i></i>"));
+      body.appendChild(el("span", "thinking", el("i"), el("i"), el("i")));
       entry.append(head, body);
       stream.appendChild(entry);
       follow(true);
@@ -728,37 +757,17 @@
   };
 
   // =========================================================
-  // Selection store
+  // Selection request
   // =========================================================
-  const readSelectionStore = () => {
-    const store = document.getElementById("es-selection-store");
-    if (!store?.dataset) return null;
-    const parse = (value, fallback) => {
-      try {
-        return value ? JSON.parse(value) : fallback;
-      } catch {
-        return fallback;
-      }
-    };
-    const request = {
-      mode: store.dataset.mode || "",
-      text: store.dataset.text || "",
-      rect: parse(store.dataset.rect, {}),
-      anchorId: store.dataset.anchorId || "",
-      anchorOffset: parse(store.dataset.anchorOffset, null),
-    };
-    store.dataset.mode = "";
-    return request;
-  };
-
-  const selectionRequest = readSelectionStore();
+  // Present only when the floating button opened us, never for the toolbar.
+  const selectionRequest = handoff.selection || null;
 
   // =========================================================
   // Selection card
   // =========================================================
   const openSelectionCard = ({ text: selectedText, rect, anchorId, anchorOffset }) => {
-    const popup = document.getElementById("es-selection-popup");
-    if (!popup?.shadowRoot) return false;
+    const popup = handoff.popup;
+    if (!popup?.__esShadow) return false;
 
     popup.dataset.expanded = "true";
     popup.style.setProperty("pointer-events", "none", "important");
@@ -776,7 +785,7 @@
       popup.style.setProperty(k, v, "important");
     }
 
-    const root = popup.shadowRoot.querySelector(".root");
+    const root = popup.__esShadow.querySelector(".root");
     if (!root) return false;
     root.replaceChildren();
 
@@ -790,7 +799,7 @@
     const name = el("div", "name");
     name.textContent = "Selection";
     wordmark.appendChild(name);
-    const close = el("button", "icon-btn", ICONS.close);
+    const close = el("button", "icon-btn", icon("close"));
     close.type = "button";
     close.title = "Close";
     close.setAttribute("aria-label", "Close");
@@ -808,7 +817,7 @@
     input.placeholder = "Ask a follow-up";
     input.setAttribute("aria-label", "Ask a follow-up about the selection");
     field.appendChild(input);
-    const send = el("button", "send", ICONS.send);
+    const send = el("button", "send", icon("send"));
     send.type = "button";
     send.title = "Send";
     composer.append(field, send);
@@ -917,7 +926,7 @@
       place();
     });
 
-    const closeCard = () => window.postMessage({ type: "ES_RESTORE_SELECTION_POPUP" }, "*");
+    const closeCard = () => handoff.restorePopup();
     close.addEventListener("click", closeCard);
     containKeys(card, closeCard);
 
@@ -929,13 +938,17 @@
       send.disabled = value;
     };
 
-    const ask = async () => {
-      const question = input.value.trim();
+    // A retry carries its question, since the input was cleared when it was
+    // first sent and cannot be read back from there.
+    const ask = async (retry = "") => {
+      const question = retry || input.value.trim();
       if (!question || busy) return;
       setBusy(true);
-      input.value = "";
-      chat.addEntry("user", question);
-      history.push({ role: "user", content: question });
+      if (!retry) input.value = "";
+      if (!(retry && stillPending(history, question))) {
+        chat.addEntry("user", question);
+        history.push({ role: "user", content: question });
+      }
 
       const pending = chat.addPending("Answer");
       const { ok, data, error } = await api("ask", withLang({
@@ -950,14 +963,14 @@
         history.push({ role: "assistant", content: answer });
         chat.addEntry("assistant", answer, { label: "Answer", typing: animate(), sources: data.sources || [] });
       } else {
-        chat.addFailure(friendlyError(error), ask);
+        chat.addFailure(friendlyError(error), () => ask(question));
       }
       setBusy(false);
       place();
       input.focus();
     };
 
-    send.addEventListener("click", ask);
+    send.addEventListener("click", () => ask());
     input.addEventListener("keydown", (e) => {
       if (e.key === "Enter") ask();
     });
@@ -999,12 +1012,30 @@
   // =========================================================
   // Route: selection card, or toggle the panel
   // =========================================================
-  const existing = document.getElementById("ai-overlay");
+  const existing = document.querySelector('[data-es-host="ai-overlay"]');
   const wantsSelection = selectionRequest?.mode === "selection" && selectionRequest.text;
 
-  if (existing) {
-    existing.__esClose?.(true);
+  if (existing?.__esClose) {
+    existing.__esClose(true);
     if (!wantsSelection) return;
+  } else if (existing) {
+    // Left open by an earlier copy of the extension, updated or reloaded
+    // since. Its world is gone, so it cannot close itself, and it used to
+    // swallow every click on the toolbar. Give the page its inset back first,
+    // so the new rail does not capture that inset as the page's own margin.
+    const doc = document.documentElement;
+    let inset = [];
+    try {
+      inset = JSON.parse(existing.dataset.esInset || "[]");
+    } catch {
+      /* nothing recorded */
+    }
+    for (const [name, value, priority] of inset) {
+      if (value) doc.style.setProperty(name, value, priority);
+      else doc.style.removeProperty(name);
+    }
+    doc.style.removeProperty("transition");
+    existing.remove();
   }
 
   if (wantsSelection && openSelectionCard(selectionRequest)) return;
@@ -1016,7 +1047,7 @@
   // beside it, so jumping to a source scrolls the page without closing
   // anything.
   // =========================================================
-  const { host, root } = makeHost("ai-overlay");
+  const { host, shadow, root } = makeHost("ai-overlay");
   host.setAttribute("role", "dialog");
   host.setAttribute("aria-label", "Eternal Summary");
   // documentElement rather than body: a transformed body would become the
@@ -1079,6 +1110,9 @@
       doc.style.getPropertyValue(name),
       doc.style.getPropertyPriority(name),
     ]);
+    // Kept on the host too, where a later copy of the extension can find it if
+    // this one is gone before it closes.
+    host.dataset.esInset = JSON.stringify(saved);
 
     fitPage = () => {
       const width = Math.round(rail.getBoundingClientRect().width);
@@ -1120,18 +1154,17 @@
   name.textContent = "Eternal Summary";
   const meta = el("div", "meta");
   const minutes = readingMinutes(pageText);
-  meta.innerHTML = minutes
-    ? `${location.hostname} <b>&middot;</b> ${minutes} min read`
-    : location.hostname;
+  meta.append(location.hostname);
+  if (minutes) meta.append(" ", el("b", null, "\u00b7"), ` ${minutes} min read`);
   meta.title = document.title || location.hostname;
   wordmark.append(name, meta);
 
-  const gearBtn = el("button", "icon-btn gear", ICONS.gear);
+  const gearBtn = el("button", "icon-btn gear", icon("gear"));
   gearBtn.type = "button";
   gearBtn.title = "Settings";
   gearBtn.setAttribute("aria-label", "Settings");
 
-  const closeBtn = el("button", "icon-btn", ICONS.close);
+  const closeBtn = el("button", "icon-btn", icon("close"));
   closeBtn.type = "button";
   closeBtn.title = "Close";
   closeBtn.setAttribute("aria-label", "Close");
@@ -1173,7 +1206,7 @@
   segments.appendChild(segTrack);
 
   const known = (id) => MODES.some((m) => m.id === id);
-  const savedMode = cacheEl?.dataset?.mode || "";
+  const savedMode = handoff.mode || "";
   const defaultMode = known(settings.format) ? settings.format : MODES[0].id;
   // Remembering is on by default, so this matches the old behaviour until the
   // reader turns it off and pins a format instead.
@@ -1248,7 +1281,7 @@
   input.placeholder = "Ask about this page";
   input.setAttribute("aria-label", "Ask about this page");
   field.appendChild(input);
-  const sendBtn = el("button", "send", ICONS.send);
+  const sendBtn = el("button", "send", icon("send"));
   sendBtn.type = "button";
   sendBtn.title = "Send";
   sendBtn.setAttribute("aria-label", "Send");
@@ -1347,7 +1380,7 @@
       putSettings({ [key]: field.value });
       onChange?.();
     });
-    wrap.append(field, el("span", "picker-mark", ICONS.down));
+    wrap.append(field, el("span", "picker-mark", icon("down")));
     return wrap;
   };
 
@@ -1444,7 +1477,7 @@
   };
   paintClear();
   clearBtn.addEventListener("click", () => {
-    window.postMessage({ type: "ES_CACHE_CLEAR" }, "*");
+    handoff.clearCache();
     savedLeft = 0;
     paintClear();
     showToast("Saved summaries cleared");
@@ -1457,7 +1490,7 @@
   const showSettings = (on) => {
     root.dataset.view = on ? "settings" : "stream";
     gearBtn.setAttribute("aria-expanded", String(on));
-    gearBtn.innerHTML = on ? ICONS.back : ICONS.gear;
+    gearBtn.replaceChildren(icon(on ? "back" : "gear"));
     gearBtn.title = on ? "Back" : "Settings";
     gearBtn.setAttribute("aria-label", on ? "Back to summary" : "Settings");
   };
@@ -1476,14 +1509,7 @@
     segments.dataset.busy = String(value);
   };
 
-  const readCache = () => {
-    if (!cacheEl?.dataset?.payload) return null;
-    try {
-      return JSON.parse(cacheEl.dataset.payload);
-    } catch {
-      return null;
-    }
-  };
+  const readCache = () => handoff.cached || null;
 
   // Switching modes appends a new turn instead of wiping the thread, so the
   // conversation up to that point stays readable.
@@ -1542,13 +1568,15 @@
   };
   on(document, "selectionchange", refreshSelection);
 
-  const ask = async (question, override) => {
+  const ask = async (question, override, retry = false) => {
     const value = (question || input.value).trim();
     if (!value || busy) return;
 
-    input.value = "";
-    chat.addEntry("user", value);
-    history.push({ role: "user", content: value });
+    if (!retry) input.value = "";
+    if (!(retry && stillPending(history, value))) {
+      chat.addEntry("user", value);
+      history.push({ role: "user", content: value });
+    }
     setBusy(true);
 
     const pending = chat.addPending("Answer");
@@ -1568,7 +1596,7 @@
       history.push({ role: "assistant", content: answer });
       chat.addEntry("assistant", answer, { label: "Answer", typing: animate(), sources: data.sources || [] });
     } else {
-      chat.addFailure(friendlyError(error), () => ask(value, override));
+      chat.addFailure(friendlyError(error), () => ask(value, override, true));
     }
     setBusy(false);
     input.focus();
@@ -1601,13 +1629,13 @@
   rail.addEventListener("keydown", (e) => {
     if (e.key !== "Tab") return;
     const focusable = Array.from(
-      rail.querySelectorAll("button:not([disabled]), input:not([disabled])")
+      rail.querySelectorAll("button:not([disabled]), input:not([disabled]), select:not([disabled])")
     ).filter((node) => node.getClientRects().length > 0);
     if (focusable.length < 2) return;
 
     const first = focusable[0];
     const last = focusable[focusable.length - 1];
-    const active = host.shadowRoot.activeElement;
+    const active = shadow.activeElement;
 
     if (e.shiftKey && (active === first || !focusable.includes(active))) {
       e.preventDefault();
@@ -1620,4 +1648,4 @@
 
   runSummary();
   setTimeout(() => input.focus(), 260);
-})();
+};

@@ -59,16 +59,16 @@ Developer registration is done, it is a one time 5 USD fee at the
 > No account, no tracking, no analytics. Summaries are cached on your own device
 > for thirty minutes and can be cleared at any time.
 >
-> Open source: https://github.com/Alitleis123/Eternal-Summary
+> Source code: https://github.com/Alitleis123/Eternal-Summary
 
 **Privacy policy URL.** https://alitleis123.github.io/Eternal-Summary/privacy.html
 
 **Screenshots.** `docs/store/`, in order. Suggested captions:
 
-1. `1-panel.png` - A summary beside the article, with the passages it drew on.
-2. `2-bullets.png` - Four styles. Switching re-reads the page.
-3. `3-highlight.png` - Select any passage and the Summarize button comes to it.
-4. `4-selection.png` - The card is about that passage alone.
+1. `1-panel.png`: A summary beside the article, with the passages it drew on.
+2. `2-bullets.png`: Four styles. Switching re-reads the page.
+3. `3-highlight.png`: Select any passage and the Summarize button comes to it.
+4. `4-selection.png`: The card is about that passage alone.
 
 ---
 
@@ -132,7 +132,7 @@ the need, which is what the answers above are written to avoid.
 
 ## Now that it is public
 
-Strangers call the Fly backend on the Gemini key behind it. The rate limit is 30
+Strangers call the backend on the Gemini key behind it. The rate limit is 30
 requests per minute per IP, which stops one abuser and not a thousand ordinary
 users. Keep a quota alert on the key, and decide in advance what happens if this
 gets popular.
