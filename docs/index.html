@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Eternal Summary, an AI reading instrument for the browser</title>
-<meta name="description" content="A Chrome extension that summarizes the page you are reading, answers questions about it, and shows you the passages it drew on.">
+<title>Eternal Summary: summarize any page in Chrome</title>
+<meta name="description" content="A Chrome extension that summarizes the page you're on, answers questions about it, and shows the passages it drew on.">
 <link rel="icon" type="image/png" sizes="32x32" href="es-icon-32.png">
 <link rel="icon" type="image/png" sizes="128x128" href="eternal-summary-icon.png">
 <link rel="apple-touch-icon" href="eternal-summary-icon.png">
@@ -15,17 +15,23 @@
 <meta property="og:image" content="https://alitleis123.github.io/Eternal-Summary/shots/panel.png">
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#100F14">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap" rel="stylesheet">
+<script>if ("IntersectionObserver" in window) document.documentElement.classList.add("js");</script>
 <style>
 /* Eternal Summary, the site.
 
-   The direction is taken from the product's own stylesheet rather than
-   invented here: an editorial reading instrument, warm near-black, warm
-   off-white ink, soft geometry, no hard boxes, and exactly one gradient,
-   carried by the mark. The page this replaced was indigo and purple
-   glassmorphism set in Inter, which described some other piece of software. */
+   The look comes from the extension's own stylesheet: warm near-black, warm
+   off-white ink, the reading face for anything worth reading, and the mark's
+   three colours. Those colours also light the page from behind, faintly, so
+   it is not one flat grey from top to bottom.
+
+   The words follow one rule. A section gets a headline that is a whole
+   sentence and at most one short line under it, and the screenshot does the
+   explaining. Anything that needs a paragraph goes in the details at the
+   bottom, closed until someone asks for it. */
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -40,24 +46,24 @@
   --line: rgba(237, 234, 228, 0.11);
   --line-dim: rgba(237, 234, 228, 0.06);
   --accent: #7B8CFF;
-  --accent-wash: rgba(123, 140, 255, 0.13);
+  --accent-wash: rgba(123, 140, 255, 0.14);
+  --warn: #F2777A;
+  --mark: linear-gradient(100deg, #38BDF8, #7B8CFF 45%, #C084FC);
 
   --serif: "Newsreader", Iowan Old Style, Charter, Georgia, serif;
   --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 
-  --measure: 62ch;
   --gutter: clamp(1.3rem, 5vw, 4rem);
-  --side: 232px;
   --bar: 56px;
+  --ease: cubic-bezier(0.32, 0.72, 0, 1);
 }
 
-/* Only the stacked layout has anything overhead to clear. */
-html { scroll-behavior: smooth; }
-@media (max-width: 900px) { html { scroll-padding-top: calc(var(--bar) + 18px); } }
+/* Anchor jumps clear the bar. */
+html { scroll-behavior: smooth; color-scheme: dark; scroll-padding-top: calc(var(--bar) + 18px); }
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
-  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
 }
 
 body {
@@ -65,613 +71,759 @@ body {
   color: var(--ink);
   font-family: var(--sans);
   font-size: 16.5px;
-  line-height: 1.65;
+  line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  overflow-x: clip;
+}
+/* A little grain, so the near-black reads as paper in a dark room rather
+   than an empty screen. Behind everything, so it never dulls a screenshot. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.05;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
+img, video { display: block; max-width: 100%; }
 a { color: inherit; }
-kbd {
-  font-family: var(--mono);
-  font-size: 0.85em;
-  color: var(--ink);
-  background: var(--raise-2);
-  border: 1px solid var(--line-dim);
-  border-radius: 5px;
-  padding: 1px 6px;
-  white-space: nowrap;
-}
-/* A chord is one thing to read, so it breaks as one or not at all. */
-.chord { white-space: nowrap; }
+p { text-wrap: pretty; }
+h1, h2, h3 { text-wrap: balance; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 3px; }
 
-/* ============ the mark ============
-   The same figure as the toolbar icon and the panel header. */
-.mark { display: block; flex: none; }
-
-/* ============ side rail ============
-   Down the left rather than across the top: the sections are a table of
-   contents, and a column can hold them upright at a readable size where a row
-   has to shrink them to fit beside everything else. The same treatment as
-   before, turned ninety degrees. */
-.bar {
-  position: fixed;
-  top: 0;
-  left: 0;
-  bottom: 0;
-  width: var(--side);
-  z-index: 50;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2.4rem;
-  padding: 1.7rem 1.6rem;
-  background: var(--bg);
-  border-right: 1px solid var(--line-dim);
-  overflow-y: auto;
+.visually-hidden {
+  position: absolute;
+  width: 1px; height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
+.skip-link {
+  position: fixed;
+  top: 0.8rem;
+  left: 0.8rem;
+  z-index: 100;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: #14131A;
+  font-weight: 500;
+  text-decoration: none;
+  transform: translateY(-160%);
+}
+.skip-link:focus { transform: none; }
+
+/* The words a headline turns on: italic, in the mark's colours. */
+.lit {
+  font-style: italic;
+  background: var(--mark);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  padding-right: 0.05em;
+}
+
+/* ============ the mark ============
+   The same figure as the toolbar icon and the panel header. The big ones
+   draw themselves once, then a point of light runs round the loop once.
+   Everything that moves on its own stops inside five seconds. */
+.mark { display: block; flex: none; overflow: visible; }
+.mark .draw { stroke-dasharray: 100; animation: draw 1.4s var(--ease) both; }
+.mark .run {
+  stroke: #FFFDF8;
+  stroke-dasharray: 7 93;
+  /* Hidden until the loop is drawn, then the keyframes show it. */
+  opacity: 0;
+  animation: run 3.4s linear 1.4s;
+}
+/* The closing mark is far down the page, so its lap waits until it is seen. */
+.js .get .run { animation: none; }
+.js .get.in .run { animation: run 3.4s linear 0.5s; }
+@keyframes draw { from { stroke-dashoffset: 100; } to { stroke-dashoffset: 0; } }
+@keyframes run { from { stroke-dashoffset: 100; opacity: 0.85; } 90% { opacity: 0.85; } to { stroke-dashoffset: 0; opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .mark .run { display: none; } }
+
+/* ============ top bar ============
+   The name and the store button. The bar is clear at the top of the page and
+   frosts over once the page moves under it. Its bottom edge fills with the
+   mark's colours as you read down. Browsers without scroll timelines, and
+   readers who ask for less motion, get the frost from the start and no line. */
+.bar { position: sticky; top: 0; z-index: 50; }
+.bar::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: rgba(16, 15, 20, 0.86);
+  backdrop-filter: saturate(180%) blur(14px);
+  border-bottom: 1px solid var(--line-dim);
+}
+.bar::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0;
+  height: 2px;
+  background: var(--mark);
+  clip-path: inset(0 100% 0 0);
+}
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: scroll()) {
+    .bar::before { animation: frost linear both; animation-timeline: scroll(); animation-range: 0 64px; }
+    .bar::after { animation: read linear both; animation-timeline: scroll(); }
+  }
+}
+@keyframes frost { from { opacity: 0; } }
+@keyframes read { to { clip-path: inset(0); } }
+
+.bar-inner { display: flex; align-items: center; gap: 1.4rem; height: var(--bar); }
 
 .bar-name {
   display: flex;
   align-items: center;
   gap: 0.6rem;
+  margin-right: auto;
   text-decoration: none;
   font-family: var(--serif);
   font-size: 1.12rem;
   letter-spacing: 0.01em;
+  white-space: nowrap;
 }
 
-.bar-nav { display: flex; flex-direction: column; gap: 0.15rem; width: 100%; }
-.bar-nav a {
-  text-decoration: none;
-  color: var(--dim);
-  font-size: 0.94rem;
-  padding: 5px 0 5px 0.85rem;
-  border-left: 1px solid var(--line-dim);
-  transition: color 160ms ease, border-color 160ms ease;
-}
-.bar-nav a:hover { color: var(--ink); border-left-color: rgba(237, 234, 228, 0.3); }
-.bar-nav a.active { color: var(--ink); border-left-color: var(--accent); }
+/* Pointing at the name sends the light once round its loop. */
+.bar-name .run { animation: none; }
+.bar-name:hover .run { animation: run 1.5s linear; }
 
-/* Pushes GitHub to the foot of the rail, where the old sidebar kept it. */
-.bar-foot { margin-top: auto; }
-
-/* No room for a column beside the text, so it lies back down across the top. */
-@media (max-width: 900px) {
-  .bar {
-    position: sticky;
-    inset: 0 0 auto 0;
-    width: auto;
-    height: var(--bar);
-    flex-direction: row;
-    align-items: center;
-    gap: 1.5rem;
-    padding: 0 var(--gutter);
-    border-right: none;
-    border-bottom: 1px solid var(--line-dim);
-    background: rgba(16, 15, 20, 0.86);
-    backdrop-filter: saturate(180%) blur(14px);
-    overflow: visible;
-  }
-  .bar-name { margin-right: auto; }
-  .bar-nav { display: none; }
-  .bar-foot { margin-top: 0; }
+/* The button joins the bar only while no other Add to Chrome is on screen,
+   so the top of the page never shows two. It stays put while it has focus. */
+.js .bar-foot { transition: background 170ms ease, box-shadow 170ms ease, transform 260ms var(--ease), opacity 260ms ease, visibility 260ms; }
+.js .bar-foot.tucked:not(:focus) { opacity: 0; transform: translateY(-8px); visibility: hidden; }
+/* Too narrow for the name and the whole label, so the button says Add and
+   the rest stays for screen readers. */
+@media (max-width: 380px) {
+  .bar-foot .more { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 }
 
-.gh {
+/* ============ buttons ============ */
+.cta {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.6rem;
   text-decoration: none;
-  font-size: 0.9rem;
-  color: var(--dim);
-  padding: 6px 12px 6px 10px;
-  border: 1px solid var(--line);
+  font-size: 0.96rem;
+  padding: 11px 20px;
   border-radius: 999px;
-  transition: color 160ms ease, border-color 160ms ease, background 160ms ease;
+  border: 1px solid transparent;
+  white-space: nowrap;
+  transition: background 170ms ease, border-color 170ms ease, transform 170ms var(--ease), box-shadow 170ms ease;
 }
-.gh:hover { color: var(--ink); border-color: rgba(237, 234, 228, 0.28); background: var(--raise); }
+.cta svg { flex: none; }
+.cta-primary { background: var(--ink); color: #14131A; font-weight: 500; }
+.cta-primary:hover { transform: translateY(-1px); background: #FFFDF8; box-shadow: 0 8px 28px rgba(123, 140, 255, 0.28); }
+.cta-ghost { border-color: var(--line); color: var(--ink); }
+.cta-ghost:hover { background: var(--raise); border-color: rgba(237, 234, 228, 0.28); }
+.cta-sm { font-size: 0.88rem; padding: 7px 14px 7px 11px; gap: 0.5rem; }
+.cta-lg { font-size: 1.06rem; padding: 14px 26px 14px 22px; }
+.cta-row { display: flex; flex-wrap: wrap; gap: 0.8rem; }
 
 /* ============ rhythm ============ */
 .wrap { padding: 0 var(--gutter); max-width: 1180px; margin: 0 auto; }
-/* The rail is out of flow, so the page has to leave room for it. Padding
-   rather than a margin, so the block still centres: pinning the left edge to
-   the rail and letting margin-right take up the slack pushed every section
-   left and collected the leftover space in one dead strip on the right. */
-@media (min-width: 901px) {
-  .wrap {
-    max-width: calc(1180px + var(--side));
-    padding-left: calc(var(--side) + var(--gutter));
-  }
-}
 
-section { padding: clamp(4rem, 9vw, 7.5rem) 0; border-top: 1px solid var(--line-dim); }
+section { padding: clamp(4.5rem, 10vw, 8rem) 0; border-top: 1px solid var(--line-dim); }
 section:first-of-type { border-top: none; }
 
-.eyebrow {
-  font-size: 0.82rem;
-  color: var(--faint);
-  margin-bottom: 1.1rem;
-}
-
+/* Headlines carry the page, so they are big and short. */
 h2 {
   font-family: var(--serif);
   font-weight: 400;
-  font-size: clamp(1.9rem, 4vw, 2.7rem);
-  line-height: 1.16;
-  letter-spacing: -0.012em;
-  max-width: 20ch;
+  font-size: clamp(2.2rem, 4.6vw, 3.6rem);
+  line-height: 1.04;
+  letter-spacing: -0.025em;
+  max-width: 18ch;
 }
 
-.lede {
-  color: var(--dim);
-  max-width: var(--measure);
-  margin-top: 1rem;
-  font-size: 1.02rem;
+/* Blocks rise into place the first time they scroll into view. Gated on the
+   script, so without it nothing waits on an observer that never runs. */
+.js .reveal { opacity: 0; transform: translateY(18px); transition: opacity 700ms var(--ease), transform 700ms var(--ease); }
+.js .reveal.in { opacity: 1; transform: none; }
+
+/* Light from behind, in the mark's colours. Each glow sits under its own
+   block, so it scrolls with the thing it is lighting. */
+.glow { position: relative; isolation: isolate; }
+.glow::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: -18% -14%;
+  background:
+    radial-gradient(closest-side at 62% 40%, rgba(123, 140, 255, 0.36), transparent 72%),
+    radial-gradient(closest-side at 28% 72%, rgba(56, 189, 248, 0.2), transparent 72%),
+    radial-gradient(closest-side at 82% 82%, rgba(192, 132, 252, 0.2), transparent 72%);
+  filter: blur(36px);
+  pointer-events: none;
 }
 
 /* ============ hero ============ */
 .hero {
-  padding: clamp(3.5rem, 8vw, 6.5rem) 0 clamp(3.5rem, 7vw, 6rem);
+  padding: clamp(3.5rem, 8vw, 6rem) 0 clamp(4rem, 8vw, 6.5rem);
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.02fr);
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
   gap: clamp(2rem, 5vw, 4.5rem);
   align-items: center;
 }
 /* Below this the shot would be a thumbnail rather than evidence, so it goes. */
 @media (max-width: 1000px) {
   .hero { grid-template-columns: 1fr; }
-  .hero-shot { display: none; }
+  .hero-visual { display: none; }
 }
 
 .hero-mark { margin-bottom: 2.2rem; }
 
-/* The panel as it actually appears, rather than an illustration of it. */
-.hero-shot {
-  border-radius: 12px;
-  border: 1px solid var(--line);
-  overflow: hidden;
-  background: var(--raise);
-  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55);
-}
-.hero-shot img { width: 100%; display: block; }
-.hero-shot { max-width: 430px; margin-left: auto; }
-
 h1 {
   font-family: var(--serif);
   font-weight: 400;
-  /* Sized against the column left after the rail, not the window. At the old
-     size it broke into three lines and left "it." alone on the last. */
-  font-size: clamp(2.5rem, 4.4vw, 4.05rem);
-  line-height: 1.06;
-  letter-spacing: -0.021em;
-}
-h1 em {
-  font-style: italic;
-  /* The one gradient, and only on the word the whole thing turns on. */
-  background: linear-gradient(100deg, #38BDF8, #7B8CFF 45%, #C084FC);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  font-size: clamp(2.9rem, 5.6vw, 5rem);
+  line-height: 1;
+  letter-spacing: -0.03em;
 }
 
-.hero p {
+.lead {
   color: var(--dim);
-  max-width: 54ch;
+  max-width: 30ch;
   margin-top: 1.5rem;
-  font-size: 1.1rem;
+  font-family: var(--serif);
+  font-size: clamp(1.25rem, 1.8vw, 1.5rem);
+  line-height: 1.4;
 }
 
-.cta-row { display: flex; flex-wrap: wrap; gap: 0.8rem; margin-top: 2.4rem; }
-
-.cta {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.55rem;
-  text-decoration: none;
-  font-size: 0.96rem;
-  padding: 11px 20px;
-  border-radius: 999px;
-  border: 1px solid transparent;
-  transition: background 170ms ease, border-color 170ms ease, transform 170ms cubic-bezier(0.32, 0.72, 0, 1);
-}
-.cta-primary { background: var(--ink); color: #14131A; font-weight: 500; }
-.cta-primary:hover { transform: translateY(-1px); background: #FFFDF8; }
-.cta-ghost { border-color: var(--line); color: var(--ink); }
-.cta-ghost:hover { background: var(--raise); border-color: rgba(237, 234, 228, 0.28); }
+.hero .cta-row { margin-top: 2.4rem; }
 
 .hero-meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 1.4rem;
-  margin-top: 2.6rem;
+  gap: 0.4rem 1.4rem;
+  margin-top: 2.2rem;
   color: var(--faint);
-  font-size: 0.86rem;
-}
-.hero-meta span { display: inline-flex; align-items: center; gap: 0.45rem; }
-.hero-meta code { font-family: var(--mono); font-size: 0.82rem; color: var(--dim); }
-
-/* ============ features ============
-   A list set in rules, not a grid of boxes. The product's own stylesheet says
-   no hard boxes, and nine rounded cards with an emoji apiece was the loudest
-   thing on the old page. */
-.features { margin-top: 3.2rem; display: grid; grid-template-columns: repeat(2, 1fr); gap: 0 4rem; }
-@media (max-width: 800px) { .features { grid-template-columns: 1fr; gap: 0; } }
-
-.feature { padding: 1.6rem 0; border-top: 1px solid var(--line-dim); }
-.feature h3 {
-  font-family: var(--serif);
-  font-weight: 500;
-  font-size: 1.17rem;
-  letter-spacing: -0.005em;
-  margin-bottom: 0.4rem;
-}
-.feature p { color: var(--dim); font-size: 0.97rem; max-width: 46ch; }
-
-/* ============ steps ============ */
-/* Three abreast. Stacked, each step used a third of the width and left a
-   hairline rule running out into nothing beside it. */
-.steps { margin-top: 3rem; display: grid; grid-template-columns: repeat(3, 1fr); gap: 0 3rem; }
-.step {
-  padding: 1.9rem 0 0;
-  border-top: 1px solid var(--line-dim);
-}
-.step-n {
-  font-family: var(--serif);
-  font-size: 2.4rem;
-  line-height: 1;
-  color: var(--faint);
-  font-variant-numeric: lining-nums;
-  margin-bottom: 0.7rem;
-}
-.step h3 { font-size: 1.06rem; font-weight: 600; margin-bottom: 0.45rem; }
-.step p { color: var(--dim); font-size: 0.97rem; }
-@media (max-width: 900px) {
-  .steps { grid-template-columns: 1fr 1fr; gap: 0 2.5rem; }
-}
-@media (max-width: 620px) {
-  .steps { grid-template-columns: 1fr; }
-  .step-n { font-size: 1.7rem; margin-bottom: 0.4rem; }
+  font-size: 0.88rem;
+  list-style: none;
 }
 
-/* ============ shots ============ */
-.shots { margin-top: 3rem; display: grid; grid-template-columns: repeat(2, 1fr); gap: 2rem; }
-@media (max-width: 760px) { .shots { grid-template-columns: 1fr; } }
-.shots figure { display: flex; flex-direction: column; gap: 0.85rem; }
-.shots img {
-  width: 100%;
-  display: block;
-  border-radius: 11px;
+/* The panel as it actually appears, turned a few degrees toward the reader
+   and squared up when the pointer reaches it. */
+.hero-visual { perspective: 1600px; }
+.hero-shot {
+  max-width: 400px;
+  margin-left: auto;
+  border-radius: 12px;
   border: 1px solid var(--line);
+  overflow: hidden;
   background: var(--raise);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
+  transform: rotateY(-9deg) rotateX(3deg);
+  transition: transform 700ms var(--ease);
 }
-.shots figcaption { color: var(--faint); font-size: 0.89rem; line-height: 1.5; }
+.hero-visual:hover .hero-shot { transform: none; }
+.hero-shot img { width: 100%; }
+
+/* One staggered entrance on load, the same lift the panel uses. */
+@keyframes lift { from { opacity: 0; transform: translateY(10px); } }
+.hero-copy > * { animation: lift 600ms var(--ease) both; }
+.hero-copy > :nth-child(2) { animation-delay: 70ms; }
+.hero-copy > :nth-child(3) { animation-delay: 140ms; }
+.hero-copy > :nth-child(4) { animation-delay: 210ms; }
+.hero-copy > :nth-child(5) { animation-delay: 280ms; }
+.hero-visual { animation: lift 900ms var(--ease) 200ms both; }
+
+/* ============ watch ============ */
+.video-frame { margin-top: clamp(2.2rem, 4vw, 3.2rem); }
+.video-frame::before { inset: -6% -4%; opacity: 0.8; }
 .demo-video {
   width: 100%;
   aspect-ratio: 16 / 9;
-  margin-top: 3rem;
-  border-radius: 11px;
+  border-radius: 12px;
   border: 1px solid var(--line);
   background: var(--raise);
-  display: block;
 }
-.demo-video + .shots { margin-top: 2rem; }
 
-/* ============ install ============ */
-.install { margin-top: 3rem; display: grid; grid-template-columns: 1fr 1fr; gap: 0 4rem; counter-reset: step; }
-.install li { min-width: 0; list-style: none; padding: 1.7rem 0; border-top: 1px solid var(--line-dim); }
-@media (max-width: 760px) { .install { grid-template-columns: 1fr; } }
-.install h3 {
-  font-size: 1.02rem;
-  font-weight: 600;
-  margin-bottom: 0.4rem;
-  counter-increment: step;
-}
-.install h3::before {
-  content: counter(step);
-  font-family: var(--mono);
-  font-size: 0.78rem;
-  color: var(--faint);
-  margin-right: 0.75rem;
-}
-.install p { color: var(--dim); font-size: 0.97rem; max-width: var(--measure); }
 
-/* The source route, under the store one. Its own heading rather than more
-   numbered steps, so the count restarts without reading as step five. */
-.sub {
-  font-family: var(--serif);
-  font-weight: 400;
-  font-size: 1.5rem;
-  letter-spacing: -0.008em;
-  margin-top: 4rem;
-  padding-top: 3rem;
+/* ============ what it does ============
+   One claim per block, each with the screenshot that proves it. */
+.show {
+  padding: clamp(3.5rem, 7vw, 6rem) 0;
   border-top: 1px solid var(--line-dim);
 }
-.install-note { color: var(--dim); font-size: 0.97rem; max-width: var(--measure); margin-top: 0.8rem; }
+.show:first-of-type { border-top: none; padding-top: 0; }
 
+.show h3 {
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: clamp(1.9rem, 3.4vw, 2.75rem);
+  line-height: 1.06;
+  letter-spacing: -0.022em;
+  max-width: 16ch;
+}
+.show-head p {
+  color: var(--dim);
+  margin-top: 0.9rem;
+  max-width: 32ch;
+  font-size: 1.1rem;
+}
 
-.code {
-  display: flex;
+.show-split {
+  display: grid;
+  grid-template-columns: minmax(0, 0.72fr) minmax(0, 1.28fr);
+  gap: clamp(2rem, 5vw, 4rem);
   align-items: center;
-  gap: 1rem;
-  margin-top: 0.95rem;
-  background: var(--raise);
+}
+.show-split.flip { grid-template-columns: minmax(0, 1.28fr) minmax(0, 0.72fr); }
+.show-split.flip .show-head { order: 2; }
+@media (max-width: 900px) {
+  .show-split, .show-split.flip { grid-template-columns: 1fr; }
+  .show-split.flip .show-head { order: 0; }
+}
+
+.shot {
+  position: relative;
+  border-radius: 12px;
   border: 1px solid var(--line);
-  border-radius: 9px;
-  padding: 0.7rem 0.7rem 0.7rem 1rem;
-  max-width: var(--measure);
+  overflow: hidden;
+  background: var(--raise);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.4);
 }
-.code code {
-  font-family: var(--mono);
-  font-size: 0.86rem;
-  color: var(--ink);
-  overflow-x: auto;
-  white-space: nowrap;
-  flex: 1;
+.shot img { width: 100%; }
+
+/* A ring over the one control the headline tells you to use. It points; the
+   screenshot underneath is untouched. Positions are fractions of the shot. */
+.spot {
+  position: absolute;
+  left: var(--x);
+  top: var(--y);
+  width: var(--w);
+  height: var(--h);
+  transform: translate(-50%, -50%);
+  border: 2px solid var(--accent);
+  border-radius: 999px;
+  box-shadow: 0 0 0 4px rgba(123, 140, 255, 0.18);
+  pointer-events: none;
+  animation: ping 2.4s var(--ease) 2;
+  transition: opacity 260ms ease;
 }
-.copy {
+@keyframes ping {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(123, 140, 255, 0.22); }
+  50% { box-shadow: 0 0 0 9px rgba(123, 140, 255, 0); }
+}
+
+/* The selection block: a heading row with the switch at its end, then the
+   two shots stacked in one cell so the card lands on the same paragraph. */
+.show-wide .show-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1.5rem 3rem;
+  margin-bottom: clamp(1.8rem, 3vw, 2.6rem);
+}
+
+/* The same segmented control as the panel's modes, so the site's one switch
+   behaves like the thing it is selling. */
+.segments {
+  position: relative;
+  display: inline-grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  list-style: none;
+  padding: 3px;
+  background: rgba(237, 234, 228, 0.045);
+  border-radius: 999px;
+}
+.seg {
   font: inherit;
-  font-size: 0.82rem;
+  font-size: 0.86rem;
+  font-weight: 500;
   color: var(--dim);
   background: none;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 4px 10px;
+  border: none;
+  padding: 7px 18px;
+  border-radius: 999px;
+  white-space: nowrap;
   cursor: pointer;
-  flex: none;
-  transition: color 150ms ease, border-color 150ms ease;
+  transition: color 160ms ease, background 200ms var(--ease);
 }
-.copy:hover { color: var(--ink); border-color: rgba(237, 234, 228, 0.3); }
-.copy[data-done="true"] { color: var(--accent); border-color: var(--accent-wash); }
+.seg:hover { color: var(--ink); }
+.seg[aria-pressed="true"], .seg.on { color: var(--ink); background: var(--accent-wash); }
+.seg:focus-visible { outline-offset: -2px; }
+/* The tiles show the control at rest, not one to press. */
+.segments-static .seg { cursor: default; }
+
+.swap { display: grid; }
+.swap img { grid-area: 1 / 1; transition: opacity 260ms ease; }
+.swap img[aria-hidden="true"] { opacity: 0; }
+.swap[data-show="card"] .spot { opacity: 0; }
+.js .reveal:not(.in) .spot { animation: none; }
+
+/* ============ tiles ============
+   The small things, each shown in the panel's own type rather than described. */
+.tiles {
+  margin-top: clamp(1rem, 2vw, 2rem);
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.2rem;
+}
+@media (max-width: 1100px) { .tiles { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 700px) { .tiles { grid-template-columns: 1fr; } }
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 1.6rem 1.6rem 1.7rem;
+  border-radius: 14px;
+  background: var(--raise);
+  box-shadow: inset 0 1px 0 rgba(237, 234, 228, 0.05);
+  transition: transform 300ms var(--ease), box-shadow 300ms ease;
+}
+.tile:hover { transform: translateY(-3px); box-shadow: inset 0 1px 0 rgba(237, 234, 228, 0.07), 0 16px 40px rgba(0, 0, 0, 0.35); }
+.tile h3 {
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: 1.55rem;
+  line-height: 1.12;
+  letter-spacing: -0.015em;
+}
+.tile p { color: var(--dim); font-size: 0.95rem; }
+.tile-art { margin-top: auto; padding-top: 1.1rem; }
+/* Four labels don't fit across a tile, so the control folds into two rows. */
+.tile .segments { display: grid; width: 100%; grid-auto-flow: row; grid-template-columns: 1fr 1fr; gap: 3px; border-radius: 18px; }
+.tile .seg { padding: 8px 6px; font-size: 0.82rem; text-align: center; }
+
+.verdicts { list-style: none; display: grid; gap: 0.5rem; font-size: 0.9rem; font-weight: 600; }
+.verdicts li {
+  padding: 0.55rem 0.8rem;
+  border-radius: 9px;
+  background: rgba(237, 234, 228, 0.035);
+}
+.verdicts .read { color: var(--accent); }
+.verdicts .skim { color: var(--dim); }
+.verdicts .skip { color: var(--warn); }
+
+.langs {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  font-size: 0.86rem;
+  color: var(--dim);
+}
+.langs li {
+  padding: 3px 10px;
+  border: 1px solid var(--line-dim);
+  border-radius: 999px;
+}
+
+/* ============ details ============
+   Where the paragraphs went. Closed, so they cost nothing until asked for. */
+.faq { margin-top: clamp(2rem, 4vw, 3rem); max-width: 780px; border-top: 1px solid var(--line); }
+.faq details { border-bottom: 1px solid var(--line); }
+.faq summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 1.15rem 0.2rem;
+  font-family: var(--serif);
+  font-size: 1.22rem;
+  cursor: pointer;
+  list-style: none;
+  transition: color 150ms ease;
+}
+.faq summary::-webkit-details-marker { display: none; }
+.faq summary::after {
+  content: "";
+  flex: none;
+  width: 16px;
+  height: 16px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23A8A3AE' stroke-width='1.5' stroke-linecap='round'%3E%3Cpath d='M8 2.5v11M2.5 8h11'/%3E%3C/svg%3E") no-repeat center / contain;
+  transition: transform 220ms var(--ease);
+}
+.faq details[open] summary::after { transform: rotate(45deg); }
+.faq summary:hover { color: #FFFDF8; }
+.faq details > p { padding: 0 0.2rem 1.3rem; max-width: 62ch; color: var(--dim); font-size: 0.98rem; }
+.faq a, .about p a { color: var(--ink); text-decoration-color: rgba(237, 234, 228, 0.35); text-underline-offset: 0.18em; }
+.faq a:hover, .about p a:hover { text-decoration-color: var(--accent); }
 
 /* ============ about ============ */
-.about { margin-top: 2.6rem; display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 4rem; }
-@media (max-width: 800px) { .about { grid-template-columns: 1fr; gap: 2.5rem; } }
-.about p { color: var(--dim); max-width: var(--measure); }
-.about p + p { margin-top: 1.1rem; }
+.about p {
+  color: var(--dim);
+  max-width: 46ch;
+  margin-top: 1.2rem;
+  font-family: var(--serif);
+  font-size: clamp(1.15rem, 1.6vw, 1.35rem);
+  line-height: 1.45;
+}
+.about .cta-row { margin-top: 2rem; }
 
-.facts { display: grid; gap: 0; align-content: start; }
-.fact { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; padding: 0.85rem 0; border-top: 1px solid var(--line-dim); }
-.fact dt { color: var(--faint); font-size: 0.9rem; }
-.fact dd { font-family: var(--mono); font-size: 0.86rem; color: var(--ink); text-align: right; }
+/* ============ install ============
+   The last thing on the page, and the loudest after the hero. */
+.get {
+  text-align: center;
+  padding: clamp(5rem, 11vw, 9rem) 0;
+}
+.get::before {
+  inset: 4% 8%;
+  background:
+    radial-gradient(closest-side at 50% 46%, rgba(123, 140, 255, 0.3), transparent 78%),
+    radial-gradient(closest-side at 36% 60%, rgba(56, 189, 248, 0.16), transparent 78%),
+    radial-gradient(closest-side at 64% 60%, rgba(192, 132, 252, 0.16), transparent 78%);
+}
+.get .mark { margin: 0 auto 2.2rem; }
+.get h2 { margin: 0 auto; max-width: 14ch; font-size: clamp(2.5rem, 5.4vw, 4.2rem); }
+.get p { color: var(--dim); margin-top: 1.1rem; font-size: 1.08rem; }
+.get .cta { margin-top: 2.2rem; }
 
 /* ============ footer ============ */
-footer { border-top: 1px solid var(--line-dim); padding: 3rem 0 4rem; }
+footer { border-top: 1px solid var(--line-dim); }
+footer.wrap { padding-top: 3rem; padding-bottom: 4rem; }
 .foot { display: flex; flex-wrap: wrap; gap: 1.5rem; align-items: center; justify-content: space-between; }
 .foot-links { display: flex; flex-wrap: wrap; gap: 1.5rem; }
 .foot a { color: var(--dim); text-decoration: none; font-size: 0.92rem; display: inline-flex; align-items: center; gap: 0.45rem; }
 .foot a:hover { color: var(--ink); }
 .foot p { color: var(--faint); font-size: 0.86rem; }
+.foot p a { display: inline; font-size: inherit; }
 </style>
 </head>
 <body>
 
-<!-- The mark, defined once and referenced wherever it appears. -->
+<a class="skip-link" href="#top">Skip to content</a>
+
+<!-- Every figure, defined once and referenced wherever it appears. -->
 <svg width="0" height="0" aria-hidden="true" style="position:absolute">
   <defs>
     <linearGradient id="es-mark" x1="4" y1="5" x2="44" y2="23" gradientUnits="userSpaceOnUse">
       <stop stop-color="#38BDF8"/><stop offset=".5" stop-color="#7B8CFF"/><stop offset="1" stop-color="#C084FC"/>
     </linearGradient>
-    <path id="es-infinity" d="M13 5c9 0 13 18 22 18 9 0 11-18 0-18-9 0-13 18-22 18-9 0-11-18 0-18z"/>
+    <path id="es-infinity" pathLength="100" d="M13 5c9 0 13 18 22 18 9 0 11-18 0-18-9 0-13 18-22 18-9 0-11-18 0-18z"/>
+    <symbol id="gh" viewBox="0 0 16 16"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></symbol>
+    <symbol id="chrome" viewBox="0 0 48 48">
+      <path fill="#EA4335" d="M24 14H43.6A22 22 0 0 0 5.54 12.03L15.34 29A10 10 0 0 1 24 14Z"/>
+      <path fill="#FBBC04" d="M24 14H43.6A22 22 0 0 1 22.86 45.97L32.66 29A10 10 0 0 0 24 14Z"/>
+      <path fill="#34A853" d="M32.66 29L22.86 45.97A22 22 0 0 1 5.54 12.03L15.34 29A10 10 0 0 0 32.66 29Z"/>
+      <circle cx="24" cy="24" r="10" fill="#fff"/>
+      <circle cx="24" cy="24" r="8" fill="#1A73E8"/>
+    </symbol>
   </defs>
 </svg>
 
 <header class="bar">
-  <a href="#top" class="bar-name">
-    <svg class="mark" width="30" height="18" viewBox="0 0 48 28" fill="none" aria-hidden="true">
-      <use href="#es-infinity" stroke="url(#es-mark)" stroke-width="3.5" stroke-linejoin="round"/>
-    </svg>
-    Eternal Summary
-  </a>
-  <nav class="bar-nav">
-    <a href="#what">What it does</a>
-    <a href="#look">A look</a>
-    <a href="#use">How to use it</a>
-    <a href="#install">Install</a>
-    <a href="#about">About</a>
-  </nav>
-  <a class="gh bar-foot" href="https://github.com/Alitleis123/Eternal-Summary">
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
-    GitHub
-  </a>
+  <div class="bar-inner wrap">
+    <a href="#top" class="bar-name">
+      <svg class="mark" width="30" height="18" viewBox="0 0 48 28" fill="none" aria-hidden="true">
+        <use href="#es-infinity" stroke="url(#es-mark)" stroke-width="3.5" stroke-linejoin="round"/>
+        <use class="run" href="#es-infinity" stroke-width="3.5" stroke-linecap="round"/>
+      </svg>
+      Eternal Summary
+    </a>
+    <a class="cta cta-primary cta-sm bar-foot tucked" href="https://chromewebstore.google.com/detail/eternal-summary/cpdeianknlpdhlbfdgckdcgfglbhkjbf">
+      <svg width="17" height="17" aria-hidden="true"><use href="#chrome"/></svg>
+      <span>Add<span class="more"> to Chrome</span></span>
+    </a>
+  </div>
 </header>
 
 <main class="wrap" id="top">
 
   <section class="hero">
-    <div>
-    <svg class="mark hero-mark" width="88" height="52" viewBox="0 0 48 28" fill="none" aria-hidden="true">
-      <use href="#es-infinity" stroke="url(#es-mark)" stroke-width="3.2" stroke-linejoin="round"/>
-    </svg>
-    <h1>Read the page,<br><em>not all of it</em>.</h1>
-    <p>
-      A Chrome extension that summarizes whatever you are reading, answers questions
-      about it, and shows you the passages it drew on. It opens beside the
-      article instead of on top of it, so you never lose your place.
-    </p>
-    <div class="cta-row">
-      <a class="cta cta-primary" href="https://chromewebstore.google.com/detail/eternal-summary/cpdeianknlpdhlbfdgckdcgfglbhkjbf">Add to Chrome</a>
-      <a class="cta cta-ghost" href="https://github.com/Alitleis123/Eternal-Summary">
-        <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
-        Read the source
-      </a>
-    </div>
-    <div class="hero-meta">
-      <span>Chrome, Edge, Brave, Arc, any Chromium browser</span>
-      <span>No account</span>
-      <span>Manifest <code>v3</code></span>
+    <div class="hero-copy">
+      <svg class="mark hero-mark" width="88" height="52" viewBox="0 0 48 28" fill="none" aria-hidden="true">
+        <use class="draw" href="#es-infinity" stroke="url(#es-mark)" stroke-width="3.2" stroke-linejoin="round" stroke-linecap="round"/>
+        <use class="run" href="#es-infinity" stroke-width="3.2" stroke-linecap="round"/>
+      </svg>
+      <h1>Read the page,<br><span class="lit">not all of it</span>.</h1>
+      <p class="lead">One click summarizes the page you're on, with sources you can check.</p>
+      <div class="cta-row">
+        <a class="cta cta-primary" href="https://chromewebstore.google.com/detail/eternal-summary/cpdeianknlpdhlbfdgckdcgfglbhkjbf">
+          <svg width="18" height="18" aria-hidden="true"><use href="#chrome"/></svg>
+          Add to Chrome
+        </a>
+        <a class="cta cta-ghost" href="#watch">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M4 2.5v11l9-5.5z"/></svg>
+          Watch it work
+        </a>
       </div>
+      <ul class="hero-meta">
+        <li>Free</li>
+        <li>No account</li>
+      </ul>
     </div>
 
-    <div class="hero-shot">
-      <img src="shots/hero.png" alt="The Eternal Summary panel open beside an article, showing a summary, a worth reading verdict, and numbered sources">
+    <div class="hero-visual glow">
+      <div class="hero-shot">
+        <img src="shots/hero.png" alt="The Eternal Summary panel open beside an article, showing a summary, a worth reading verdict, and numbered sources">
+      </div>
+    </div>
+  </section>
+
+  <section id="watch">
+    <h2>Watch it read a page.</h2>
+
+    <div class="video-frame glow">
+      <video class="demo-video" src="demo.mp4" poster="shots/demo-poster.jpg" controls playsinline preload="metadata" aria-label="Eternal Summary in use: opening a page summary from the toolbar, asking a follow-up, jumping to the passage the answer came from, and summarizing a highlighted paragraph, with music and sound effects"></video>
     </div>
   </section>
 
   <section id="what">
-    <p class="eyebrow">What it does</p>
-    <h2>A reading instrument, not a chatbot in a drawer.</h2>
-    <p class="lede">The page stays in front of you, and the summary is answerable to it.</p>
+    <h2 class="visually-hidden">What it does</h2>
 
-    <div class="features">
-      <div class="feature">
-        <h3>The whole page, not its opening</h3>
-        <p>Long pages are sampled across three windows, beginning, middle and end, so a piece that starts slowly is not mistaken for padding and a live feed is not summarized from its oldest entries.</p>
+    <article class="show show-split reveal">
+      <div class="show-head">
+        <h3>Every page summary shows its <em>sources</em>.</h3>
+        <p>Click a number and the article scrolls to the quote.</p>
       </div>
-      <div class="feature">
-        <h3>Numbered sources you can jump to</h3>
-        <p>Each summary carries footnotes quoting the page verbatim. Click one and the article scrolls to that passage and highlights it. A snippet that cannot be found says so rather than pretending.</p>
-      </div>
-      <div class="feature">
-        <h3>Worth reading, or not</h3>
-        <p>Alongside the summary it tells you whether the page is worth your time, read, skim or skip, with one short clause saying what decides it.</p>
-      </div>
-      <div class="feature">
-        <h3>Highlight anything</h3>
-        <p>Select text, press the Summarize button beside it, and a card opens anchored to the passage with a summary of just that. It is pinned in page coordinates, so scrolling carries the card and the passage together.</p>
-      </div>
-      <div class="feature">
-        <h3>Follow-up questions</h3>
-        <p>Every turn is kept. Switching summary modes adds to the conversation instead of clearing it, and questions the page does not cover are answered from general knowledge, marked as such.</p>
-      </div>
-      <div class="feature">
-        <h3>Four ways to be summarized</h3>
-        <p>Summary, bullets, key points, or plain English. Switching re-reads the page in the style you picked, and the panel can remember your choice or open on a fixed default.</p>
-      </div>
-      <div class="feature">
-        <h3>In your language</h3>
-        <p>Answer in any of thirteen languages while the source snippets stay in the page's own words, which is what keeps them findable on the page.</p>
-      </div>
-      <div class="feature">
-        <h3>Yours to arrange</h3>
-        <p>Panel on either side at three widths, selection card at three sizes. The floating button, the passage highlight, the text animation and the thirty minute cache all turn off.</p>
-      </div>
-      <div class="feature">
-        <h3>Untouchable by the page</h3>
-        <p>The interface renders in a shadow root, so a site's stylesheet cannot squash or recolour it, and keystrokes typed into it never reach the page's own keyboard shortcuts.</p>
-      </div>
-      <div class="feature">
-        <h3>Nothing stored anywhere but here</h3>
-        <p>Summaries are cached in extension storage on your machine for thirty minutes and can be cleared from the gear. There is no account and no profile.</p>
-      </div>
-    </div>
-  </section>
-
-  <section id="look">
-    <p class="eyebrow">A look</p>
-    <h2>Beside the article, never over it.</h2>
-    <p class="lede">The page is inset by the width of the panel rather than covered, which is why jumping to a source can scroll the article without closing anything.</p>
-
-    <video class="demo-video" src="demo.mp4" poster="shots/demo-poster.jpg" controls playsinline preload="metadata" aria-label="Eternal Summary in use: opening a page summary from the toolbar, asking a follow-up, jumping to the passage the answer came from, and summarizing a highlighted paragraph, with music and sound effects"></video>
-
-    <div class="shots" id="gallery">
-      <figure>
+      <div class="shot">
         <img src="shots/panel.png" alt="The panel open beside an article, showing a summary with numbered sources" loading="lazy">
-        <figcaption>One click, and the page comes back summarized with the passages it drew on.</figcaption>
-      </figure>
-      <figure>
-        <img src="shots/bullets.png" alt="Bullets mode rendering a real list" loading="lazy">
-        <figcaption>Four styles. Switching re-reads the page and adds to the thread.</figcaption>
-      </figure>
-      <figure>
-        <img src="shots/trigger.png" alt="A paragraph selected on the page with a Summarize button beside it" loading="lazy">
-        <figcaption>Select anything and the button comes to it.</figcaption>
-      </figure>
-      <figure>
-        <img src="shots/selection.png" alt="The selection card anchored beside a highlighted paragraph" loading="lazy">
-        <figcaption>The card is about that passage alone, and stays with it as you scroll.</figcaption>
-      </figure>
+        <span class="spot" style="--x: 77.8%; --y: 66.9%; --w: 7%; --h: 4.6%" aria-hidden="true"></span>
+      </div>
+    </article>
+
+    <article class="show show-wide reveal" id="highlight">
+      <div class="show-head">
+        <div>
+          <h3>Highlight a paragraph. Summarize <em>just that</em>.</h3>
+          <p>The card stays beside the passage as you scroll.</p>
+        </div>
+        <div class="segments" role="group" aria-label="Show the page">
+          <button class="seg" type="button" data-show="trigger" aria-pressed="false">Select</button>
+          <button class="seg" type="button" data-show="card" aria-pressed="true">Summarize</button>
+        </div>
+      </div>
+      <div class="shot swap" data-show="card">
+        <img src="shots/trigger.png" data-shot="trigger" aria-hidden="true" alt="A paragraph selected on the page with a Summarize button beside it" loading="lazy">
+        <img src="shots/selection.png" data-shot="card" alt="The selection card anchored beside the highlighted paragraph" loading="lazy">
+        <span class="spot" style="--x: 31.1%; --y: 38%; --w: 10.4%; --h: 5.8%" aria-hidden="true"></span>
+      </div>
+    </article>
+
+    <article class="show show-split flip reveal">
+      <div class="show-head">
+        <h3>Then ask it <em>anything</em>.</h3>
+        <p>If the page doesn't cover it, the answer says so.</p>
+      </div>
+      <div class="shot">
+        <img src="shots/chat.png" alt="The panel in Bullets mode with a follow-up question and its answer, each with sources" loading="lazy">
+        <span class="spot" style="--x: 86.4%; --y: 61.4%; --w: 26.5%; --h: 6%" aria-hidden="true"></span>
+      </div>
+    </article>
+
+    <div class="tiles reveal">
+      <article class="tile">
+        <h3>Four ways to read it.</h3>
+        <p>Switch any time. The thread keeps every answer.</p>
+        <div class="tile-art">
+          <ul class="segments segments-static" aria-label="Summary modes">
+            <li class="seg on">Summary</li>
+            <li class="seg">Bullets</li>
+            <li class="seg">Key points</li>
+            <li class="seg">Plain English</li>
+          </ul>
+        </div>
+      </article>
+      <article class="tile">
+        <h3>Read, skim or skip.</h3>
+        <p>Each page summary opens with a verdict and the reason for it.</p>
+        <div class="tile-art">
+          <ul class="verdicts" aria-label="Verdicts">
+            <li class="read">Worth reading</li>
+            <li class="skim">Worth a skim</li>
+            <li class="skip">Probably skippable</li>
+          </ul>
+        </div>
+      </article>
+      <article class="tile">
+        <h3>Read it in 13 languages.</h3>
+        <p>Quotes stay in the page's own words, so you can still find them.</p>
+        <div class="tile-art">
+          <ul class="langs" aria-label="Languages">
+            <li lang="en">English</li>
+            <li lang="es">Español</li>
+            <li lang="fr">Français</li>
+            <li lang="de">Deutsch</li>
+            <li lang="pt">Português</li>
+            <li lang="it">Italiano</li>
+            <li lang="ar">العربية</li>
+            <li lang="hi">हिन्दी</li>
+            <li lang="zh-Hans">简体中文</li>
+            <li lang="ja">日本語</li>
+            <li lang="ko">한국어</li>
+            <li lang="ru">Русский</li>
+            <li lang="tr">Türkçe</li>
+          </ul>
+        </div>
+      </article>
     </div>
   </section>
 
-  <section id="use">
-    <p class="eyebrow">How to use it</p>
-    <h2>Three ways in.</h2>
+  <section id="details">
+    <h2>The details.</h2>
 
-    <div class="steps">
-      <div class="step">
-        <div class="step-n">1</div>
-        <div>
-          <h3>Summarize the page</h3>
-          <p>Click the icon in the toolbar, or press <span class="chord"><kbd>Cmd</kbd> <kbd>Shift</kbd> <kbd>S</kbd></span> on a Mac, <span class="chord"><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>S</kbd></span> elsewhere. The panel opens beside the article and the summary arrives with its sources. Escape closes it.</p>
-        </div>
-      </div>
-      <div class="step">
-        <div class="step-n">2</div>
-        <div>
-          <h3>Summarize a highlight</h3>
-          <p>Select any text and a Summarize button appears next to it. The card that opens is about that passage alone, and it holds its own conversation, separate from the panel's.</p>
-        </div>
-      </div>
-      <div class="step">
-        <div class="step-n">3</div>
-        <div>
-          <h3>Ask about what you read</h3>
-          <p>Type into the composer at the bottom of either one. Answers cite the page where the page answers, and say plainly when they are drawing on general knowledge instead.</p>
-        </div>
-      </div>
+    <div class="faq reveal">
+      <details>
+        <summary>Is it free?</summary>
+        <p>Yes. There's no account to make and nothing to pay for.</p>
+      </details>
+      <details>
+        <summary>Is there a keyboard shortcut?</summary>
+        <p>Ctrl+Shift+S opens it. On a Mac it's Cmd+Shift+S.</p>
+      </details>
+      <details>
+        <summary>Does it read the whole page?</summary>
+        <p>It reads the beginning, middle and end of long pages, so a slow opening doesn't skew the summary.</p>
+      </details>
+      <details>
+        <summary>What if a source isn't on the page?</summary>
+        <p>The panel tells you it couldn't find the quote instead of jumping somewhere wrong.</p>
+      </details>
+      <details>
+        <summary>What if the page doesn't answer my question?</summary>
+        <p>It answers from general knowledge, says so, and shows no sources for that answer.</p>
+      </details>
+      <details>
+        <summary>Can I change how it looks?</summary>
+        <p>The panel goes on either side at three widths, and the selection card opens at three sizes. You can turn off the floating button, the passage highlight, the text animation and saved summaries. It's all behind the gear in the panel.</p>
+      </details>
+      <details>
+        <summary>Can a website mess with the panel?</summary>
+        <p>The panel sits in a shadow root, so a site's styles can't restyle it. Keys you type into it don't trigger the site's shortcuts.</p>
+      </details>
+      <details>
+        <summary>What gets sent, and where?</summary>
+        <p>Nothing until you ask. Then the page text, your highlight or your question goes to a small server that passes it to Google's Gemini and keeps none of it. Summaries are saved in your browser and reused for 30 minutes. Clear them from the gear in the panel. <a href="privacy.html">Read the privacy policy</a>.</p>
+      </details>
     </div>
   </section>
 
-  <section id="install">
-    <p class="eyebrow">Install</p>
-    <h2>Two clicks, and it is in your toolbar.</h2>
-    <p class="lede">Add it the way you add anything else, and it keeps itself up to date. No account, nothing to configure.</p>
-
+  <section id="about" class="about">
+    <h2>Made by a small studio.</h2>
+    <p><a href="https://sideband.studio">Sideband Studio</a> makes Eternal Summary. We built it because deciding whether a long article was worth reading meant reading it first.</p>
     <div class="cta-row">
-      <a class="cta cta-primary" href="https://chromewebstore.google.com/detail/eternal-summary/cpdeianknlpdhlbfdgckdcgfglbhkjbf">Add to Chrome</a>
-      <a class="cta cta-ghost" href="#source">Run it from source</a>
+      <a class="cta cta-ghost" href="https://github.com/Alitleis123/Eternal-Summary">
+        <svg width="15" height="15" aria-hidden="true"><use href="#gh"/></svg>
+        See it on GitHub
+      </a>
     </div>
-
-    <ol class="install">
-      <li>
-        <h3>Add it to Chrome</h3>
-        <p>From the store page. Chrome, Edge, Brave, Arc, and any other Chromium browser.</p>
-      </li>
-      <li>
-        <h3>Open something worth reading</h3>
-        <p>Click the mark in your toolbar, or press <kbd>Cmd+Shift+S</kbd> on a Mac or <kbd>Ctrl+Shift+S</kbd> elsewhere. The panel opens beside the article.</p>
-      </li>
-    </ol>
-
-    <h3 class="sub" id="source">Or run it from source</h3>
-    <p class="install-note">Every line of what the store ships is in the repository. Load your own copy to read it first, or to try a change. Chrome treats the two as separate extensions, so both can sit in the toolbar at once.</p>
-
-    <ol class="install">
-      <li>
-        <h3>Clone the repository</h3>
-        <div class="code">
-          <code id="clone">git clone https://github.com/Alitleis123/Eternal-Summary.git</code>
-          <button class="copy" type="button" data-copy="clone">Copy</button>
-        </div>
-      </li>
-      <li>
-        <h3>Load it unpacked</h3>
-        <p>At <kbd>chrome://extensions</kbd>, turn on <strong>Developer mode</strong>, then click <strong>Load unpacked</strong> and choose the folder you cloned.</p>
-      </li>
-    </ol>
   </section>
 
-  <section id="about">
-    <p class="eyebrow">About</p>
-    <h2>Built by Ali Tleis.</h2>
-
-    <div class="about">
-      <div>
-        <p>Eternal Summary began with a small annoyance: deciding whether a long article was worth reading meant reading it first. I wanted something that could answer that question in the tab I was already in, and show its work.</p>
-        <p>The extension is vanilla JavaScript with no build step and no dependencies. The interface lives entirely in a shadow root so that no site can interfere with it. A small Node and Express service on Vercel holds the API key and talks to Gemini, so nothing is called directly from the page.</p>
-        <p>The site takes its palette and type from the extension's own stylesheet, so the two are the same object.</p>
-      </div>
-      <dl class="facts">
-        <div class="fact"><dt>Version</dt><dd>1.7.0</dd></div>
-        <div class="fact"><dt>Manifest</dt><dd>v3</dd></div>
-        <div class="fact"><dt>Dependencies</dt><dd>none</dd></div>
-        <div class="fact"><dt>Build step</dt><dd>none</dd></div>
-        <div class="fact"><dt>Accounts</dt><dd>none</dd></div>
-        <div class="fact"><dt>Model</dt><dd>Gemini</dd></div>
-        <div class="fact"><dt>Cache</dt><dd>30 min, local</dd></div>
-      </dl>
-    </div>
+  <section id="install" class="get glow reveal">
+    <svg class="mark" width="96" height="56" viewBox="0 0 48 28" fill="none" aria-hidden="true">
+      <use href="#es-infinity" stroke="url(#es-mark)" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+      <use class="run" href="#es-infinity" stroke-width="3" stroke-linecap="round"/>
+    </svg>
+    <h2>Try it on your next <span class="lit">long read</span>.</h2>
+    <p>Free. No account.</p>
+    <a class="cta cta-primary cta-lg" href="https://chromewebstore.google.com/detail/eternal-summary/cpdeianknlpdhlbfdgckdcgfglbhkjbf">
+      <svg width="20" height="20" aria-hidden="true"><use href="#chrome"/></svg>
+      Add to Chrome
+    </a>
   </section>
 
 </main>
@@ -680,52 +832,73 @@ footer { border-top: 1px solid var(--line-dim); padding: 3rem 0 4rem; }
   <div class="foot">
     <div class="foot-links">
       <a href="https://github.com/Alitleis123/Eternal-Summary">
-        <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+        <svg width="15" height="15" aria-hidden="true"><use href="#gh"/></svg>
         Repository
       </a>
       <a href="https://chromewebstore.google.com/detail/eternal-summary/cpdeianknlpdhlbfdgckdcgfglbhkjbf">Chrome Web Store</a>
       <a href="privacy.html">Privacy</a>
       <a href="https://github.com/Alitleis123/Eternal-Summary/blob/main/LICENSE">License</a>
     </div>
-    <p>Ali Tleis, CS at Northeastern University</p>
+    <p>Version 1.7.0. Built by <a href="https://sideband.studio">Sideband Studio</a>.</p>
   </div>
 </footer>
 
 <script>
-// Copy the clone line.
-for (const btn of document.querySelectorAll(".copy")) {
-  btn.addEventListener("click", async () => {
-    const text = document.getElementById(btn.dataset.copy).textContent.trim();
-    try {
-      await navigator.clipboard.writeText(text);
-      btn.textContent = "Copied";
-      btn.dataset.done = "true";
-      setTimeout(() => {
-        btn.textContent = "Copy";
-        delete btn.dataset.done;
-      }, 1600);
-    } catch {
-      btn.textContent = /Mac/.test(navigator.platform) ? "Press Cmd C" : "Press Ctrl C";
-      setTimeout(() => { btn.textContent = "Copy"; }, 1600);
-    }
-  });
-}
+// Rise into place once, on first sight. Set up first, so nothing above it can
+// leave the blocks hidden.
+const rise = new IntersectionObserver((entries) => {
+  for (const entry of entries) {
+    if (!entry.isIntersecting) continue;
+    entry.target.classList.add("in");
+    rise.unobserve(entry.target);
+  }
+}, { rootMargin: "0px 0px -8% 0px" });
+for (const el of document.querySelectorAll(".reveal")) rise.observe(el);
 
-// Mark the section you are in. rootMargin pins the trigger near the top third
-// so a short section at the end of the page can still take the mark.
-const links = [...document.querySelectorAll(".bar-nav a")];
-const spy = new IntersectionObserver(
-  (entries) => {
-    for (const entry of entries) {
-      if (!entry.isIntersecting) continue;
-      for (const link of links) {
-        link.classList.toggle("active", link.getAttribute("href") === "#" + entry.target.id);
-      }
-    }
-  },
-  { rootMargin: "-25% 0px -65% 0px" }
-);
-for (const section of document.querySelectorAll("section[id]")) spy.observe(section);
+// Tuck the bar's button away while another Add to Chrome is in view. The top
+// margin is the bar's height, so a button scrolled under the bar counts as gone.
+const barCta = document.querySelector(".bar-foot");
+const inView = new Set();
+const others = new IntersectionObserver((entries) => {
+  for (const entry of entries) {
+    if (entry.isIntersecting) inView.add(entry.target);
+    else inView.delete(entry.target);
+  }
+  barCta.classList.toggle("tucked", inView.size > 0);
+}, { rootMargin: "-56px 0px 0px 0px" });
+for (const el of document.querySelectorAll("main .cta-primary")) others.observe(el);
+
+// Select or Summarize: show the page before or after the button is pressed.
+const swap = document.querySelector(".swap");
+const segs = [...document.querySelectorAll(".seg[data-show]")];
+const show = (which) => {
+  swap.dataset.show = which;
+  for (const seg of segs) seg.setAttribute("aria-pressed", String(seg.dataset.show === which));
+  for (const img of swap.querySelectorAll("img")) {
+    if (img.dataset.shot === which) img.removeAttribute("aria-hidden");
+    else img.setAttribute("aria-hidden", "true");
+  }
+};
+for (const seg of segs) seg.addEventListener("click", () => show(seg.dataset.show));
+
+// The first time the block comes into view, play the two steps once: the
+// selection with its button, then the card. Reaching the switch by click or
+// keyboard stops it, so it never changes a control someone is on.
+const still = matchMedia("(prefers-reduced-motion: reduce)");
+let timer = 0;
+let touched = false;
+const block = swap.closest(".show");
+for (const type of ["pointerdown", "focusin"]) {
+  block.addEventListener(type, () => { touched = true; clearTimeout(timer); });
+}
+const play = new IntersectionObserver((entries) => {
+  if (!entries.some((entry) => entry.isIntersecting)) return;
+  play.disconnect();
+  if (touched || still.matches) return;
+  show("trigger");
+  timer = setTimeout(() => { if (!touched && !still.matches) show("card"); }, 2200);
+}, { threshold: 0.6 });
+play.observe(swap);
 </script>
 
 </body>
