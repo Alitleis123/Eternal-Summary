@@ -149,8 +149,8 @@ h1, h2, h3 { text-wrap: balance; }
 /* ============ top bar ============
    The name and the store button. The bar is clear at the top of the page and
    frosts over once the page moves under it. Its bottom edge fills with the
-   mark's colours as you read down. Browsers without scroll timelines get the
-   frost from the start and no line. */
+   mark's colours as you read down. Browsers without scroll timelines, and
+   readers who ask for less motion, get the frost from the start and no line. */
 .bar { position: sticky; top: 0; z-index: 50; }
 .bar::before {
   content: "";
@@ -169,9 +169,11 @@ h1, h2, h3 { text-wrap: balance; }
   background: var(--mark);
   clip-path: inset(0 100% 0 0);
 }
-@supports (animation-timeline: scroll()) {
-  .bar::before { animation: frost linear both; animation-timeline: scroll(); animation-range: 0 64px; }
-  .bar::after { animation: read linear both; animation-timeline: scroll(); }
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: scroll()) {
+    .bar::before { animation: frost linear both; animation-timeline: scroll(); animation-range: 0 64px; }
+    .bar::after { animation: read linear both; animation-timeline: scroll(); }
+  }
 }
 @keyframes frost { from { opacity: 0; } }
 @keyframes read { to { clip-path: inset(0); } }
