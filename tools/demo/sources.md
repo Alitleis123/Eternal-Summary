@@ -55,7 +55,7 @@ optional arguments. `review.mjs` takes a review directory.
 2. The recorder pauses virtual time, advances two steps of 1/60 second, and
    captures each 30 fps frame with `HeadlessExperimental.beginFrame`. This
    keeps the product's text reveal speed. The 22.7 second recording has
-   682 frames and no browser console errors.
+   681 frames and no browser console errors.
 3. Chrome acknowledges input only when virtual time advances. Awaiting each
    dispatch stalled for about 10 seconds and once dropped the Summarize
    click, so the recorder sends input without waiting and Chrome handles it
@@ -109,7 +109,7 @@ the point in full white. Each enters over 0.28 seconds and fades out over
 | 5.75 to 11.55 | Get answers without leaving the page. | Input click at 6.3, typing 6.5 to 7.6, Enter at 7.9, answer done at 8.93 |
 | 11.55 to 15.4 | See exactly where the answer came from. | Source click at 12.27, the page scrolls to the passage, close at 15.4 |
 | 15.4 to 22.7 | Only need one paragraph? Highlight it. | Scroll, select from 16.5 to 17.33, Summarize button shown, click at 18.9, card done at 20.2 |
-| 22.35 to 26.4 | Eternal Summary. Add to Chrome. | Outro with the icon, an "Add to Chrome" button and "Works in Chrome, Brave, Edge and Arc." |
+| 22.35 to 26.4 | Eternal Summary. Add to Chrome. | Outro with the icon and an "Add to Chrome" button |
 
 ## Camera and focus
 
@@ -213,7 +213,7 @@ the stems in the review directory.
 | Music stem | -20.04 target | -19.9 | -10.0 |
 | SFX stem after the lift | | -26.8 | -4.4 |
 | Round 5 final | -21.95 | -21.9 | -3.83 |
-| Final after AAC | -19.93 | -19.7 | -2.72 |
+| Final after AAC | -19.92 | -19.7 | -2.74 |
 
 The music excerpt starts at source time 6.7756 seconds, so the strong cue
 lands on the toolbar click at 1.967. Its constant gain after filtering and
@@ -223,20 +223,20 @@ limiter keeps 192 kHz oversampling, 5 ms attack, 80 ms release and no
 makeup gain. All 22 keystroke cues match the action log with zero timing
 error and no immediate sample repeats.
 
-The delivered file is 7,037,300 bytes, 26.4 seconds and 792 frames,
-1920 by 1080 at 30 fps, H.264 yuv420p. Video averages about 1.86 Mbps and
-the 4K master about 12.2 Mbps. Audio is AAC stereo at 48 kHz, about
-262 kbps. `moov` comes before `mdat`. The video stream SHA256 is
-`2a17e2388c876b4e003ee6efdd3b40139652d44d229b44e78410091f5de06c4c`, the
+The delivered file is 6,945,857 bytes, 26.4 seconds and 792 frames,
+1920 by 1080 at 30 fps, H.264 yuv420p. Video averages about 1.83 Mbps and
+the 4K master about 12.0 Mbps. Audio is AAC stereo at 48 kHz, about
+261 kbps. `moov` comes before `mdat`. The video stream SHA256 is
+`bc6608dd531b96b8adb5b4f57b9df13a6360b0330ef3d890543890d5715c2ffc`, the
 same before and after the audio mix.
 
 The recording took under two minutes. The 4K Hyperframes render took
-about 3 minutes 30 seconds with two workers on the VM's GPU. A crop of the
+about 3 minutes 50 seconds with two workers on the VM's GPU. A crop of the
 summary text at 5 seconds now matches the raw 3x capture's sharpness. The
 1080p render path was visibly softer at the same frame. `hyperframes check`
 passes with zero runtime, layout, motion and contrast findings. Two
 non-blocking lint warnings suggest sub-compositions for the toolbar and
-outro. All 70 repo tests pass, along with `npm run check`, syntax checks
+outro. All 83 repo tests pass, along with `npm run check`, syntax checks
 on the demo scripts and `git diff --check`.
 
 The contact sheets and transition frames were viewed. At 390 pixels wide,
@@ -244,8 +244,8 @@ the captions, summary, answer, passage and card text read. Frames around
 each spotlight change were checked one by one, for the cursor at the top
 edge after the toolbar click, the crop over reflowing text after the
 panel closes, and the empty box before the card fades in. The sheets are
-`%TEMP%\es-demo-review-6\contact-phone.jpg` and
-`%TEMP%\es-demo-review-6\contact-full.jpg`.
+`%TEMP%\es-demo-review-7\contact-phone.jpg` and
+`%TEMP%\es-demo-review-7\contact-full.jpg`.
 
 ## Included dependencies
 
